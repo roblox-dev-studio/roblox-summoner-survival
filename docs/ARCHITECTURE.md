@@ -5,7 +5,7 @@
 
 | 기능 영역 | 수정할 곳 | 범위 |
 | --- | --- | --- |
-| 전투·소환 | `src/server/combat/`, `src/client/combat/` | 마법, 골렘, 피해, 대시, 입력, 전투 효과 |
+| 전투·마법 | `src/server/combat/`, `src/client/combat/` | 마법, 골렘, 피해, 대시, 입력, 전투 효과 |
 | 적·웨이브·월드 | `src/server/world/`, `src/client/world/`, `arena.luau` | 적 생성·추적·접촉 피해, 전장, 카메라 |
 | 성장·게임 흐름 | `src/server/flow/`, `src/client/flow/`, `src/client/Theme.luau` | 경험치, 카드, 시작·종료·재시작, HUD |
 | 공동 연결부 | 루트 진입점, `src/server/shared/`, `tools/`, `.github/` | 의존성 연결, 공통 모델·조회, 설치·검사 |
@@ -15,6 +15,9 @@
 이는 입력 문자열을 영문 키보드로 환산한 값이며 마지막 아이디와 역할 배정은 확인이 필요합니다.
 아직 CODEOWNERS를 설정하지 않았습니다. 존재하는 계정이라도 저장소 권한 확인 없이
 필수 리뷰어로 지정하지 않습니다.
+
+이 표는 현재 코드 구조다. [새 기획](design/FIRST_VERSION.md)에서 소환수는 후속으로 미뤘으며,
+현재 골렘 사용처를 기본 루프에서 분리하는 작업은 M0에 남아 있다.
 
 ## Studio 설치 결과
 
@@ -44,7 +47,7 @@ Workspace
 
 모듈은 생성 함수에 의존성을 전달합니다. `server.luau`가 같은 상태 테이블과 난수
 생성기를 연결합니다. 참조 중인 테이블을 다른 테이블로 교체하지 말고 `table.clear`로
-초기화합니다. 클라이언트는 Input → HUD → Effects → Camera 순서로 시작합니다.
+초기화합니다. 클라이언트는 Input → HUD → Effects → Camera → CharacterMotion 순서로 시작합니다.
 
 ## 서버 인터페이스
 

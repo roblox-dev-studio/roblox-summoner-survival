@@ -4,9 +4,13 @@ This repository is a 3D survival game inspired by Vampire Survivors. Read `READM
 `docs/ARCHITECTURE.md`, and `CONTRIBUTING.md` before changing code. Keep this file short;
 task details belong in an issue or PR, not a growing global instruction log.
 
+Read `docs/design/FIRST_VERSION.md` for the current product scope and
+`docs/design/MILESTONES.md` for acceptance gates. Summons are deferred; planned features
+are not evidence of implementation.
+
 ## Scope and ownership
 
-- Work in the feature area named by the current task: combat/summons, enemies/world,
+- Work in the feature area named by the current task: combat/magic, enemies/world,
   or progression/play flow. Each area includes its server logic and client presentation.
 - Ownership is assigned per issue, not permanently by frontend/backend job title.
   Check the issue/PR for who is editing the same files before overlapping work.
