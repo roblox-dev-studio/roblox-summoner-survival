@@ -33,7 +33,7 @@
 - 5단계까지 성장하는 마법·골렘과 체력·이동 속도·경험치 수집 범위 강화.
 - 경험치 수집, 레벨업 선택지, 승리·패배와 재시작.
 
-현재는 **골렘 효과 확인 모드**가 켜져 있습니다. 1단계에서도 5단계의 외형 효과를 보여주지만 피해량은 실제 단계 기준입니다. 단계별 연출을 사용하려면 [server.luau](server.luau)의 `PREVIEW_MAX_GOLEM_EFFECTS`를 `false`로 바꾸세요.
+현재는 **골렘 효과 확인 모드**가 켜져 있습니다. 1단계에서도 5단계의 외형 효과를 보여주지만 피해량은 실제 단계 기준입니다. 단계별 연출을 사용하려면 [Combat.luau](src/server/combat/Combat.luau)의 `PREVIEW_MAX_GOLEM_EFFECTS`를 `false`로 바꾸세요.
 
 협동용 서버 처리와 경험치 공유의 기반은 있지만 여러 클라이언트를 사용하는 협동 플레이와 모바일 기기 검증은 아직 하지 않았습니다. 드래곤, 보스 전투, 장기 저장, 완성된 진화 시스템은 미구현입니다.
 
@@ -42,19 +42,27 @@
 | 파일 | 역할 |
 | --- | --- |
 | [arena.luau](arena.luau) | 전장과 조명 생성 |
-| [server.luau](server.luau) | 적 AI, 피해, 성장, 소환수, 라운드 처리 |
-| [client.luau](client.luau) | UI, 입력, 카메라, 마법 효과 |
+| [server.luau](server.luau) | 서버 모듈 연결, 요청 분배, 단일 시뮬레이션 루프 |
+| [client.luau](client.luau) | 클라이언트 모듈 시작 |
+| [src/server](src/server) | 전투·적·성장·라운드의 서버 규칙 |
+| [src/client](src/client) | 입력·효과·HUD·카메라 |
 | [install.luau](install.luau) | 빈 Studio 프로젝트용 통합 설치기 |
 | [ASSET_CREDITS.md](ASSET_CREDITS.md) | 외부 소재의 출처와 이용 조건 |
 | [docs/PLAYTEST_NOTES.md](docs/PLAYTEST_NOTES.md) | 개발 중 플레이 점검 기록 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 세 기능 영역과 모듈·통신 계약 |
+| [AGENTS.md](AGENTS.md) | AI 에이전트 공통 작업 규칙 |
 
 소스 수정 후 Python 3으로 설치기를 다시 생성합니다.
 
 ```sh
 python3 tools/build_installer.py
+python3 tools/check.py
 ```
 
-이미 설치된 프로젝트를 수정할 때는 `server.luau`를 `ServerScriptService.SummonerServer`에, `client.luau`를 `StarterPlayer.StarterPlayerScripts.SummonerClient`에 반영합니다. 새 프로젝트에서 다시 시험하려면 갱신된 `install.luau`를 사용하세요.
+검사 도구는 처음 한 번 `python3 tools/bootstrap_luau.py`로 준비합니다.
+설치기는 각 진입점 아래 `Modules` 폴더와 ModuleScript를 함께 만듭니다.
+**진입점 두 개만 복사하면 실행되지 않습니다.** 기존 단일 스크립트 버전에서 전환할 때는
+새 Baseplate에 갱신된 `install.luau` 전체를 설치하세요. 기존 place를 자동 덮어쓰지 않습니다.
 
 ## 함께 개발하기
 

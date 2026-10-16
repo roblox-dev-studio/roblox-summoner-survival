@@ -7,3 +7,5 @@
 *.rbxlx.lock
 __pycache__/
 *.pyc
+.tools/
+artifacts/
