@@ -1,0 +1,60 @@
+{
+  "provider": "Quaternius",
+  "pack": "Universal Animation Library 2 Standard",
+  "source": "https://quaternius.com/packs/universalanimationlibrary2.html",
+  "license": "CC0-1.0",
+  "clips": [
+    {
+      "name": "Walk_Carry_Loop",
+      "file": "src/client/world/clips/Walk_Carry_Loop.luau",
+      "sha256": "1b451299f0ea76eff2ba5c7910e1cb27327eb538df6e84145287a84034c61a7d",
+      "duration": 2.0,
+      "originalGLBSHA256": "8cee20ab1bc55130092447e810e26df22dd2803eccc54f52137a7d54d7ab88a8",
+      "sourceAction": "Walk_Carry_Loop",
+      "sourceProject": "roblox_ai_starter",
+      "sourceRelativePath": "assets/external-library/retargeted/QuaterniusExpanded/Walk_Carry_Loop/Walk_Carry_LoopAnimation.luau",
+      "rig": "R15 Motor6D Transform",
+      "originalConversionValidation": true,
+      "runtimeStatus": "solo Studio keyboard transitions verified; six leg joints only; visual polish pending"
+    },
+    {
+      "name": "NinjaJump_Start",
+      "file": "src/client/world/clips/NinjaJump_Start.luau",
+      "sha256": "1e18c863e63df67dbd7fd8e96aebdee9ce196d40f153bc579caa8cb6732643ff",
+      "duration": 0.9666666666666667,
+      "originalGLBSHA256": "8cee20ab1bc55130092447e810e26df22dd2803eccc54f52137a7d54d7ab88a8",
+      "sourceAction": "NinjaJump_Start",
+      "sourceProject": "roblox_ai_starter",
+      "sourceRelativePath": "assets/external-library/retargeted/QuaterniusExpanded/NinjaJump_Start/NinjaJump_StartAnimation.luau",
+      "rig": "R15 Motor6D Transform",
+      "originalConversionValidation": true,
+      "runtimeStatus": "solo Studio keyboard transitions verified; six leg joints only; visual polish pending"
+    },
+    {
+      "name": "NinjaJump_Idle_Loop",
+      "file": "src/client/world/clips/NinjaJump_Idle_Loop.luau",
+      "sha256": "f0196ad1186918d3f9b4f59d0e75affc904a351cdb751bad79995c4eb870817b",
+      "duration": 2.0,
+      "originalGLBSHA256": "8cee20ab1bc55130092447e810e26df22dd2803eccc54f52137a7d54d7ab88a8",
+      "sourceAction": "NinjaJump_Idle_Loop",
+      "sourceProject": "roblox_ai_starter",
+      "sourceRelativePath": "assets/external-library/retargeted/QuaterniusExpanded/NinjaJump_Idle_Loop/NinjaJump_Idle_LoopAnimation.luau",
+      "rig": "R15 Motor6D Transform",
+      "originalConversionValidation": true,
+      "runtimeStatus": "solo Studio keyboard transitions verified; six leg joints only; visual polish pending"
+    },
+    {
+      "name": "NinjaJump_Land",
+      "file": "src/client/world/clips/NinjaJump_Land.luau",
+      "sha256": "a432b2723a448020de6a98bdb0667d78a0d1d84ceb7c51464fffb6f314535149",
+      "duration": 1.2666666666666666,
+      "originalGLBSHA256": "8cee20ab1bc55130092447e810e26df22dd2803eccc54f52137a7d54d7ab88a8",
+      "sourceAction": "NinjaJump_Land",
+      "sourceProject": "roblox_ai_starter",
+      "sourceRelativePath": "assets/external-library/retargeted/QuaterniusExpanded/NinjaJump_Land/NinjaJump_LandAnimation.luau",
+      "rig": "R15 Motor6D Transform",
+      "originalConversionValidation": true,
+      "runtimeStatus": "solo Studio keyboard transitions verified; six leg joints only; visual polish pending"
+    }
+  ]
+}
