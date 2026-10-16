@@ -42,6 +42,10 @@ task details belong in an issue or PR, not a growing global instruction log.
 6. Submit a focused PR with the template. Do not merge your own change or publish the game
    unless the user explicitly asks. Regenerate the installer after resolving source conflicts.
 
+Update relevant docs in the same change: architecture/contracts for module changes,
+ASSET_CREDITS and an asset manifest for reused materials, PLAYTEST_NOTES for observed
+results and remaining gaps. Keep dated evidence concise; do not label untested work complete.
+
 If Studio is unavailable, finish source checks and clearly mark engine verification pending.
 Do not claim a local file, mock, or successful tool call proves the feature is in the game.
 If a repair repeats without new evidence, state the concrete blocker and choose a smaller

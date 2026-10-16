@@ -30,7 +30,7 @@ StarterPlayer / StarterPlayerScripts
 └── SummonerClient (client.luau)
     └── Modules (src/client)
         ├── combat: Input, Effects
-        ├── world: Camera
+        ├── world: Camera, CharacterMotion, clips (4 CC0 R15 clips)
         ├── flow: HUD
         └── Theme
 ReplicatedStorage
@@ -93,3 +93,16 @@ Workspace
 - `Combat.luau`의 `PREVIEW_MAX_GOLEM_EFFECTS=true`도 유지했습니다. 시각 미리보기와 실제 피해 레벨은 다릅니다.
 - Combat과 Effects 내부는 기존 알고리즘을 옮겼습니다. 주문을 추가할 때 필요해진 부분부터 더 나누면 됩니다.
 - 기존 플레이 검증 기록은 이전 단일 스크립트의 기록입니다. 새 구조의 통과 증거로 재사용하지 않습니다.
+
+## 재사용 모션의 경계
+
+`world/CharacterMotion`은 모든 현재 플레이어의 R15 관절을 각 클라이언트에서 표시합니다.
+서버 속도·루트 위치·피해를 바꾸지 않습니다. PreAnimation에서 이전 프레임의 관절 값을
+복원하고 Animator 처리 뒤 PreSimulation에서 여섯 하체 관절만 혼합합니다.
+정지/메뉴 선택/대시/사망은 덧씌우기를 해제하며 캐릭터 교체 시 이전 참조를 정리합니다.
+R6는 기본 Animate를 유지합니다. 협동에서 다른 플레이어 표시와 서로 다른 아바타 비율은
+추가 검증이 필요합니다. 클라이언트 모듈은 현재 10개(기존 5 + 제어기 1 + 클립 4)입니다.
+
+클립 추가 시 CC0 등 배포 가능한 출처와 해시를 manifest에 적고,
+`tests/test_motion_assets.py`의 데이터 검사를 갱신합니다. 출처 확인·변환 성공·엔진 재생·
+시각 품질을 구별해서 `PLAYTEST_NOTES.md`에 기록합니다.

@@ -23,3 +23,22 @@
 ## 검증
 
 대지 강타 효과의 준비 빛·먼지·충격파·바위 메시를 플레이 모드에서 재생하고 화면으로 확인했습니다. 메시 및 내장 파티클 두 종류의 ContentProvider 로드 상태가 Success임을 확인했습니다. 시각 점검용 반복 재생·정지 프레임·고정 카메라·숨긴 HUD는 플레이 종료로 제거했습니다. 전투 피해·자동 강타 판단·플레이어 화염 파동 규칙은 유지하며 서버에 강타 준비 연출 이벤트만 추가했습니다.
+
+## 재사용한 캐릭터 모션 (2026-10-16)
+
+Quaternius [Universal Animation Library 2](https://quaternius.com/packs/universalanimationlibrary2.html)
+Standard에서 이전 AFTERLIGHT 테스트가 R15로 변환한 네 클립을 재사용했습니다.
+제공자 페이지와 동봉 원문에서 CC0-1.0을 확인했습니다. 원문은
+`assets/animations/Quaternius-LICENSE.txt`, 원본/변환본 SHA-256과 이전 경로는
+`assets/animations/manifest.json`에 보존했습니다.
+
+- `Walk_Carry_Loop`: 이동 속도에 맞춘 하체 주기. 물건을 드는 상체 자세는 사용하지 않음.
+- `NinjaJump_Start`, `NinjaJump_Idle_Loop`, `NinjaJump_Land`: 점프·공중·착지 하체.
+- 클립 데이터 자체는 변경하지 않았으며, 게임에서는 양쪽 Hip/Knee/Ankle만 혼합합니다.
+  Root 이동·상체·실제 점프 궤적은 가져오지 않습니다. FPS 팔/카메라 구현도 가져오지 않음.
+- Mixamo 걷기/달리기/점프/사망 변환본은 후보로 확인했지만 포함하지 않았습니다.
+  [Adobe FAQ](https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html)는 게임 사용을 허용하지만,
+  공개 저장소에서 추출 가능한 모션 데이터 재배포까지 확인된 근거는 확보하지 못했습니다.
+
+이번 새 Baseplate에서 선택적 GroundSpikes import는 생성되지 않았습니다.
+위의 과거 로드 성공 기록과 구별하며, 현재 테스트 place는 내장 입자/절차적 파편을 사용합니다.
