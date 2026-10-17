@@ -10,7 +10,13 @@ return function(deps)
 	local player, net, gui = deps.player, deps.net, deps.gui
 	local theme = require(script.Parent.Parent:WaitForChild("Theme"))
 	local palette, make, label = theme.Palette, theme.Make, theme.Label
-	local fx=Instance.new("Folder"); fx.Name="SummonerLocalEffects"; fx.Parent=workspace
+	local fx=deps.folder
+	if not fx then fx=Instance.new("Folder");fx.Name="SummonerLocalEffects";fx.Parent=workspace end
+	local art=require(script.Parent.SpellArt)({folder=fx})
+	local areaArt=require(script.Parent.AreaArt)({folder=fx})
+	local activeArt=require(script.Parent.ActiveArt)({folder=fx})
+	local projectileArt=require(script.Parent.ProjectileArt)({folder=fx})
+ local fireArt=require(script.Parent.FireArt)({folder=fx})
 	local bloom=Lighting:FindFirstChild("SummonerSpellBloom")
 	if not bloom then
 		bloom=Instance.new("BloomEffect");bloom.Name="SummonerSpellBloom";bloom.Intensity=.22;bloom.Size=22;bloom.Threshold=1.35;bloom.Parent=Lighting
@@ -182,38 +188,13 @@ return function(deps)
 		return p
 	end
 	local function fireWave(origin,direction,range)
-		local gold=Color3.fromRGB(255,175,48)
-		runeCircle(origin,3.1,gold,.5)
-		spellGlow(origin+direction*2,gold,3)
-		-- Invisible moving sources leave curling flame sprites, never solid slabs.
-		for i=-7,7 do
-			local dir=CFrame.Angles(0,math.rad(i*4.8),0):VectorToWorldSpace(direction)
-			local base=Vector3.new(origin.X,math.max(.8,origin.Y-1.7),origin.Z)
-			local host=visual(Vector3.new(.3,.1,.3),CFrame.lookAt(base+dir*2,base+dir*3),gold,nil,1.5)
-			host.Name="FlameWaveSource";host.Transparency=1
-			local flame=flameEmitter(host,false);local core=flameEmitter(host,true)
-			flame:Emit(5);core:Emit(3)
-			local sparks=Instance.new("ParticleEmitter");sparks.Name="FlameEmbers";sparks.Texture=emberTexture;sparks.Rate=12;sparks.Lifetime=NumberRange.new(.35,.65);sparks.Speed=NumberRange.new(4,9);sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(65,65);sparks.Acceleration=Vector3.new(0,3,0);sparks.Drag=2;sparks.Color=ColorSequence.new(Color3.fromRGB(255,209,85),Color3.fromRGB(255,80,25));sparks.Size=NumberSequence.new(.55,0);sparks.Transparency=NumberSequence.new(.1,1);sparks.LightEmission=1;sparks.Parent=host
-			if i%4==0 then local light=Instance.new("PointLight");light.Color=gold;light.Range=10;light.Brightness=1.4;light.Parent=host;task.delay(.45,function()if light.Parent then TweenService:Create(light,TweenInfo.new(.25),{Brightness=0}):Play()end end)end
-			TweenService:Create(host,TweenInfo.new(.62,Enum.EasingStyle.Linear),{Position=base+dir*range}):Play()
-			task.delay(.62,function()if host.Parent then flame.Enabled=false;core.Enabled=false;sparks.Enabled=false end end)
-		end
-	end
+        fireArt.Wave(origin,direction,range)
+    end
+
 	local function magicBolt(a,b,radius)
-		local delta=b-a;if delta.Magnitude<.01 then return end
-		local host=visual(Vector3.new(.1,.1,.1),CFrame.lookAt(a,b),Color3.fromRGB(255,158,35),nil,1)
-		host.Name="ArcaneFireBolt";host.Transparency=1
-		local flame=flameEmitter(host,false);flame.Rate=65;flame.Size=NumberSequence.new(1.25,0);flame.Lifetime=NumberRange.new(.15,.25);flame.Speed=NumberRange.new(1,3);flame:Emit(5)
-		local core=flameEmitter(host,true);core.Rate=35;core.Size=NumberSequence.new(.7,0);core:Emit(3)
-		TweenService:Create(host,TweenInfo.new(.12,Enum.EasingStyle.Linear),{Position=b}):Play()
-		task.delay(.12,function()
-			if not host.Parent then return end
-			flame.Enabled=false;core.Enabled=false
-			spellGlow(b,Color3.fromRGB(255,171,45),2.5)
-			local burst=spellBurst(b,fireTexture,Color3.fromRGB(255,127,30),12,1.6,7)
-			local p=burst:FindFirstChildOfClass("ParticleEmitter");p:Clear();p.Color=ColorSequence.new(Color3.fromRGB(255,193,64),Color3.fromRGB(232,59,20));p.Orientation=Enum.ParticleOrientation.FacingCameraWorldUp;p.Rotation=NumberRange.new(-15,15);p:Emit(12)
-		end)
-	end
+        fireArt.Bolt(a,b,radius)
+    end
+
 	local function dashEffect(character,duration,direction)
 		if typeof(character)~="Instance" or not character.Parent then return end
 		local root=character:FindFirstChild("HumanoidRootPart");if not root then return end
@@ -331,9 +312,13 @@ return function(deps)
 		return portal
 	end
 	local function iceProjectile(anchorName,portalCF,charge)
-		if type(anchorName)~="string" or typeof(portalCF)~="CFrame" then return end
-		local runtime=workspace:FindFirstChild("SummonerRuntime")
-		local anchor=runtime and (runtime:FindFirstChild(anchorName) or runtime:WaitForChild(anchorName,2))
+		if typeof(portalCF)~="CFrame" then return end
+		local anchor=anchorName
+		if type(anchorName)=="string" then
+			local runtime=workspace:FindFirstChild("SummonerRuntime")
+			anchor=runtime and (runtime:FindFirstChild(anchorName) or runtime:WaitForChild(anchorName,2))
+		end
+		if typeof(anchor)~="Instance" then return end
 		if not anchor or not anchor.Parent then return end
 		local portal=icePortal(portalCF,charge)
 		local spear=Instance.new("Model");spear.Name="GlacialSpear";spear.Parent=fx
@@ -421,13 +406,24 @@ return function(deps)
 			task.delay(duration+.2,function()if model.Parent and not model:GetAttribute("Frozen") then clear() end end)
 		end
 	end
-	net.Effect.OnClientEvent:Connect(function(kind,a,b,c)
+	local function play(kind,a,b,c)
+		if not fx.Parent then return end
 		if kind=="hit" then
 			local p=visual(Vector3.new(.05,.05,.05),CFrame.new(a+Vector3.new(0,3,0)),palette.text); p.Transparency=1
 			local billboard=make("BillboardGui",p,{Size=UDim2.fromOffset(70,32),AlwaysOnTop=true,Adornee=p})
 			local number=label(billboard,tostring(b),UDim2.fromScale(1,1),nil,Enum.Font.GothamBold,palette.gold); number.TextSize=18
 			TweenService:Create(p,TweenInfo.new(.55),{Position=p.Position+Vector3.new(0,2,0)}):Play(); TweenService:Create(number,TweenInfo.new(.55),{TextTransparency=1}):Play()
-		elseif kind=="golemCharge" then chargeGolem(a,b)
+		elseif kind=="dragonSlam" then art.Slam(a,b)
+        elseif kind=="dragonTailSpin" then art.TailSpin(a,b,c)
+        elseif kind=="dragonFireLine" then fireArt.FireLine(a,b,c)
+        elseif kind=="dragonCharge" then fireArt.Charge(a,b)
+        elseif kind=="dragonBreath" then fireArt.Breath(a,b,c)
+        elseif kind=="dragonAirBreath" then fireArt.AirBreath(a,b,c)
+        elseif kind=="dragonEruption" then art.Rupture(a,b,false)
+        elseif kind=="enemyExplosion" then art.Rupture(a,b,true)
+        elseif kind=="dragonDive" then art.Dive(a,b)
+        elseif kind=="dragonArrival" then art.Rupture(a,b,false)
+        elseif kind=="golemCharge" then chargeGolem(a,b)
 		elseif kind=="golemHeavy" or kind=="golemLight" then groundImpact(a,b,kind=="golemHeavy",c)
 		elseif kind=="dash" then dashEffect(a,b,c)
 		elseif kind=="fire" then magicBolt(a,b,c)
@@ -435,12 +431,31 @@ return function(deps)
 			fireWave(a,b,c)
 		elseif kind=="lightning" then
 			task.delay(math.min(.3,math.max(0,(c or 1)-1)*.045),function()lightningBolt(a,b,c)end)
+		elseif kind=="thunderSpear" then projectileArt.Cast(a,"thunder")
+		elseif kind=="aetherSpear" then projectileArt.Cast(a,"aetherLance")
+		elseif kind=="aetherHit" then projectileArt.Impact(a,"aetherLance")
+		elseif kind=="crystalBolt" then projectileArt.Cast(a,"crystal")
+		elseif kind=="skyLanceHit" then areaArt.Burst(a,b,Color3.fromRGB(157,204,255))
+		elseif kind=="crystalHit" then projectileArt.Impact(a,"crystal")
+		elseif kind=="homingMissile" then projectileArt.Cast(a,"missile")
+		elseif kind=="thunderHit" then projectileArt.Impact(a,"thunder")
+		elseif kind=="missileHit" then projectileArt.Impact(a,"missile")
+		elseif kind=="activeCast" then activeArt.Charge(a,b)
+		elseif kind=="activeStrike" then activeArt.Strike(a,b,c)
+		elseif kind=="areaCast" then areaArt.Cast(a,b)
+		elseif kind=="meteorHit" then art.Rupture(a,b,false);areaArt.MeteorImpact(a,b)
+		elseif kind=="frostHit" then areaArt.FrostImpact(a,b)
+		elseif kind=="wardHit" then areaArt.Burst(a,b and 5 or 2.5,Color3.fromRGB(255,222,152))
 		elseif kind=="iceCast" then iceProjectile(a,b,c)
 		elseif kind=="iceHit" then iceImpact(a,b,c)
 		end
-	end)
+	end
+	local connection
+	if deps.listen~=false then connection=net.Effect.OnClientEvent:Connect(play) end
 
 	return {
 		Folder = fx,
+		Play = play,
+		Disconnect = function()if connection then connection:Disconnect();connection=nil end end,
 	}
 end

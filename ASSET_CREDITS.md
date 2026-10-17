@@ -42,3 +42,20 @@ Standard에서 이전 AFTERLIGHT 테스트가 R15로 변환한 네 클립을 재
 
 이번 새 Baseplate에서 선택적 GroundSpikes import는 생성되지 않았습니다.
 위의 과거 로드 성공 기록과 구별하며, 현재 테스트 place는 내장 입자/절차적 파편을 사용합니다.
+
+## 현재 드래곤과 화염 참고 자료 (2026-10-17)
+
+- **Cethiel’s Dragon 3D**, Drummyfish / Cethiel, **CC0-1.0**: https://opengameart.org/content/cethiels-dragon-3d . 원본 ZIP과 SHA-256은 `assets/dragon/`에 보존합니다. 원본의 633개 정점, 1262개 삼각형, 32개 뼈대와 Idle/Walk/Attack/Die 클립을 변환했습니다. 검은 텍스처를 면 꼭짓점 색으로 변환했고, 비행 날갯짓·날개 영역 확장·다리 접기·꼬리 회전과 보스 공격 연출은 추가 작성했습니다. 변환 배율은 36이고 원본 좌우 관절명 _L/_R을 유지합니다. `tools/convert_dragon.py`로 재생성합니다. 이전 수작업 드래곤은 `models/ember_dragon_prototype.luau`에 보관합니다.
+- **AetherFX**, holokat / Gene와 기여자, **MIT**: https://github.com/holokat/AetherFX . Fire Bolt / Lesser Fireball의 핵·불꽃 외피·불씨·연기·폭발 레이어 구성을 참고해 Roblox용 `FireArt.luau`로 구현했습니다. 참고 JSON, MIT 원문, 고정 커밋과 파일 해시는 `assets/vfx/aetherfx/`에 보존합니다. 원본 C++ 실행 코드나 외부 바이너리를 실행하지 않습니다.
+- **Creator Store Fireball VFX Mesh**, Random_Guy1stRevised: https://create.roblox.com/store/asset/5747839770 . 조사 목적으로 메시 한 개를 가져와 실행 스크립트가 없음을 확인했으나 최종 효과/설치기에는 포함하지 않았습니다.
+- 일반 적 모델과 SpellArt 형상은 직접 작성했습니다. Roblox 내장 입자 텍스처를 사용합니다. Dark Souls 3의 모델·텍스처·애니메이션은 가져오지 않았습니다.
+
+8종 보스 공격의 직선 화염·원형 비행 경로·회전 꼬리 궤적·착지 파편과 충격파는 이 프로젝트에서 작성한 절차적 연출입니다. 추가 외부 모델이나 실행 스크립트는 가져오지 않았습니다.
+
+CC0 드래곤의 꼬리 영역에 길이 축 1.65배 변형과 관절 관성을 추가했습니다. 원본 보존 ZIP은 변경하지 않았고 변형은 DragonMesh에서 적용합니다.
+
+현재 추가 변형 배율은 날개 축 (1.90,1.50,1.80), 꼬리 길이 축 2.0입니다. 이전 수치 기록을 대체하며 원본 CC0 ZIP은 그대로 보존합니다.
+
+## 사용자 제공 반짝임 참고 이미지 (2026-10-17)
+
+`magic-wand-sparkle-trails.zip` 안의 JPG를 열어 푸른/보라색 굽이치는 잔광과 작은 반짝임 구성을 참고했습니다. ZIP에는 JPG/EPS만 있고 이용 조건이나 제작자 표시는 제공되지 않았습니다. 원본 JPG/EPS를 게임·설치기·저장소에 포함하지 않았고 EPS를 실행/가져오지 않았습니다. 성운창은 `AetherLanceArt.luau`의 직접 작성한 형상·Beam/Trail과 Roblox 내장 smoke_main/sparkles_main 텍스처만 사용합니다. 참고 파일 이름/해시/사용 범위는 `assets/vfx/user-sparkle-reference/manifest.json`에 기록했습니다.

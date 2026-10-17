@@ -1,0 +1,12 @@
+{
+  "source": "https://github.com/holokat/AetherFX",
+  "commit": "78d0ff693e31b4416b8ccddc8c3797e6c14a831e",
+  "authors": "holokat / Gene and contributors",
+  "license": "MIT",
+  "usage": "Fire Bolt and Lesser Fireball layering reference adapted for Roblox FireArt; no C++ runtime dependency",
+  "sha256": {
+    "LICENSE": "453f27c66044f39bdcfb26c4eb2a5e26ad7d3c1ef1a25b500d85b5699d7ce823",
+    "lesser_fireball.json": "03a4e24d0cc5f836e958a07dc5a65a984afaa924b75a642b41f1370aaec576d0",
+    "fire_bolt.json": "f9e7d988313b6a1d7fbfdbba2dc14bdc66d3758962b716ca1721eb359a4a2bea"
+  }
+}

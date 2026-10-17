@@ -5,6 +5,7 @@ return function(deps)
 	local effect, drop = deps.effect, deps.drop
 	local iceShots = {}
 	local nextIceShot = 0
+	local areaSpells,activeSpells,missiles,crystals,skyLances
 	-- Temporary visual preview: all golems show the final-tier presentation.
 	-- Damage, fragment damage and extra damage hits still use the actual upgrade level.
 	local PREVIEW_MAX_GOLEM_EFFECTS = true
@@ -15,15 +16,23 @@ return function(deps)
 		e.model:SetAttribute("HP",math.max(0,e.hp))
 		effect:FireAllClients("hit",e.pos,amount)
 		if e.hp<=0 then
-			s.kills+=1; drop(e.pos); e.model:Destroy()
+			s.kills+=1
+			if not e.isBoss then drop(e.pos);if e.elite then drop(e.pos+Vector3.new(1,0,0));drop(e.pos-Vector3.new(1,0,0))end; e.model:Destroy() end
 		end
 	end
+	areaSpells=require(script.Parent.AreaSpells)({world=world,enemies=enemies,effect=effect,damage=damage})
+	activeSpells=require(script.Parent.ActiveSpells)({world=world,enemies=enemies,effect=effect,damage=damage})
+	missiles=require(script.Parent.HomingMissiles)({world=world,enemies=enemies,effect=effect,damage=damage,rootOf=rootOf})
+	crystals=require(script.Parent.ArcaneCrystals)({world=world,enemies=enemies,effect=effect,damage=damage,rootOf=rootOf})
+	skyLances=require(script.Parent.SkyLances)({world=world,enemies=enemies,effect=effect,damage=damage})
 	local function nearest(pos,range)
 		local found,dist=nil,range
 		for _,e in ipairs(enemies) do if e.hp>0 then local d=(e.pos-pos).Magnitude; if d<dist then found,dist=e,d end end end
 		return found
 	end
 	local function clearIceShots(source)
+		missiles.Clear(source);crystals.Clear(source);skyLances.Clear(source)
+		if source then areaSpells.Clear(source);activeSpells.Clear(source) end
 		for i=#iceShots,1,-1 do
 			local shot=iceShots[i]
 			if not source or shot.source==source then shot.anchor:Destroy();table.remove(iceShots,i) end
@@ -58,11 +67,12 @@ return function(deps)
 					if delta.Magnitude<=step+1 then
 						local target=shot.target;local pos=target.pos
 						local duration=.55+shot.level*.1
+						duration=target.isBoss and 0 or duration
 						target.frozen=math.max(target.frozen or 0,duration)
 						target.slow=math.max(target.slow,2+shot.level*.4)
-						target.model:SetAttribute("Frozen",true)
+						target.model:SetAttribute("Frozen",duration>0)
 						damage(target,10+shot.level*8,shot.source)
-						if target.hp>0 then
+						if target.hp>0 and not target.isBoss then
 							local forward=shot.anchor.CFrame.LookVector
 							local flat=Vector3.new(forward.X,0,forward.Z)
 							if flat.Magnitude>.01 then target.knockback=flat.Unit*34;target.knockTime=.23 end
@@ -87,7 +97,7 @@ return function(deps)
 				damage(e,amount,s)
 				if e.hp>0 then
 					if slow then e.slow=math.max(e.slow,slow) end
-					if knock and knock>0 then
+					if knock and knock>0 and not e.isBoss then
 						local dir=Vector3.new(e.pos.X-pos.X,0,e.pos.Z-pos.Z)
 						if dir.Magnitude>.01 then e.pos+=dir.Unit*knock end
 						local flat=Vector3.new(e.pos.X,0,e.pos.Z)
@@ -196,22 +206,27 @@ return function(deps)
 			else s.petAttack=nil end
 		end
 	end
-	local function requestWave(s)
+	local function requestWave(s,aim)
 		if s.over or s.cooldown>0 or s.offers or paused() then return end
 		local root=rootOf(s); if not root then return end
-		s.cooldown=7
 		local origin=root.Position
 		local facing=root.CFrame.LookVector
-		local direction=Vector3.new(facing.X,0,facing.Z)
+        if aim~=nil then
+            if typeof(aim)~="Vector3" or aim.X~=aim.X or aim.Z~=aim.Z or math.abs(aim.X)>10000 or math.abs(aim.Z)>10000 then return end
+            facing=aim
+        end
+        local direction=Vector3.new(facing.X,0,facing.Z)
 		if direction.Magnitude<.01 then direction=Vector3.new(0,0,-1) else direction=direction.Unit end
+		if s.activeSkill and s.activeSkill~="fireWave" then return activeSpells.Request(s,origin,direction) end
+		s.cooldown=7
 		effect:FireAllClients("fireWave",origin,direction,30)
 		for _,e in ipairs(enemies) do
 			local delta=Vector3.new(e.pos.X-origin.X,0,e.pos.Z-origin.Z)
 			local distance=delta.Magnitude
-			if e.hp>0 and distance<=30 and (distance<.1 or delta.Unit:Dot(direction)>=math.cos(math.rad(35))) then
+			if e.hp>0 and not e.airborne and distance<=30 and (distance<.1 or delta.Unit:Dot(direction)>=math.cos(math.rad(35))) then
 				damage(e,40+s.fire*10,s)
 				if e.hp>0 then
-					e.pos+=direction*5; e.slow=math.max(e.slow,.7)
+					if not e.isBoss then e.pos+=direction*5 end; e.slow=math.max(e.slow,.7)
 					local flat=Vector3.new(e.pos.X,0,e.pos.Z)
 					if flat.Magnitude>82 then e.pos=flat.Unit*82+Vector3.new(0,e.pos.Y,0) end
 				end
@@ -271,9 +286,14 @@ return function(deps)
 		s.pet:SetAttribute("Behavior",s.petAttack and (s.petAttack.heavy and "EarthSlam" or "GroundPunch") or (petTarget and "Attack" or (s.petReturning and "Return" or "Patrol")))
 		s.cooldown=math.max(0,s.cooldown-dt)
 		if not s.offers then
+			activeSpells.Step(s,dt)
+			missiles.StepPlayer(s,r,dt)
+			crystals.StepPlayer(s,r,dt)
+			skyLances.Step(s,r,dt)
+			areaSpells.Step(s,r,dt)
 			s.fireClock-=dt; s.lightningClock-=dt; s.iceClock-=dt; s.golemClock-=dt
 			local target=nearest(r.Position,46)
-			if target and s.fireClock<=0 then
+			if target and s.fire>0 and s.fireClock<=0 then
 				s.fireClock=math.max(.4,1.05-s.fire*.09)
 				effect:FireAllClients("fire",r.Position,target.pos,2.5+s.fire*.6)
 				blast(target.pos,2.5+s.fire*.6,15+s.fire*8,s)
@@ -305,7 +325,7 @@ return function(deps)
 
 	return {
 		StepPlayer = stepPlayer,
-		StepProjectiles = advanceIceSpears,
+		StepProjectiles = function(dt)advanceIceSpears(dt);missiles.Step(dt);crystals.Step(dt)end,
 		ClearProjectiles = clearIceShots,
 		RequestWave = requestWave,
 	}

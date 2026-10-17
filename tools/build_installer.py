@@ -60,6 +60,12 @@ def build(root=ROOT):
     module.Name=path[#path];module.Source=source;module.Parent=parent
 end
 '''
+    # Install the visual model factory; authoritative boss rules remain under server.Modules.
+    for filename, kind, name, parent in (
+        ("models/ember_dragon.luau", "ModuleScript", "EmberDragonModel", "game.ReplicatedStorage"),
+    ):
+        source = (root / filename).read_text(encoding="utf-8")
+        output += f'local extra=Instance.new({quote(kind)});extra.Name={quote(name)};extra.Source={source_literal(source)};extra.Parent={parent}\n'
     for side, kind, name, parent in ENTRYPOINTS:
         source = (root / f"{side}.luau").read_text(encoding="utf-8")
         output += f'\ndo\nlocal entry=Instance.new({quote(kind)})\nentry.Name={quote(name)}\n'

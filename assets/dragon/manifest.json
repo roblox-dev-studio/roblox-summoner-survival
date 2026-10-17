@@ -1,0 +1,15 @@
+{
+  "source": "https://opengameart.org/content/cethiels-dragon-3d",
+  "download": "https://opengameart.org/sites/default/files/dragon_oga.zip",
+  "authors": [
+    "Drummyfish",
+    "Cethiel"
+  ],
+  "license": "CC0-1.0",
+  "archive_sha256": "f6a8c25dd3b2abdb1e7830b0b88f9083052c0750e710e6439eceb320783a57c1",
+  "vertices": 633,
+  "triangles": 1262,
+  "bones": 32,
+  "scale": 36,
+  "notes": "Original geometry, weights and four animation clips. Hand-painted black texture sampled to corner colors; no external Roblox image upload required."
+}

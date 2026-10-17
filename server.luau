@@ -10,7 +10,7 @@ world.Name = "SummonerRuntime"
 world.Parent = workspace
 local states, enemies, gems = {}, {}, {}
 local rng = Random.new()
-local clock = {elapsed = 0, roundLength = 180}
+local clock = {elapsed = 0, roundLength = script:GetAttribute("BossSpawnAt") or 120, bossElapsed = 0, phase = "survival"}
 local actors = require(modules.shared.Actors)({world = world})
 local players = require(modules.shared.PlayerState)({states = states})
 local movement = require(modules.combat.Movement)({
@@ -19,7 +19,7 @@ local movement = require(modules.combat.Movement)({
 local progression = require(modules.flow.Progression)({
     world = world, states = states, gems = gems, rng = rng, block = actors.Block,
     rootOf = players.RootOf, paused = players.Paused, finishDash = movement.FinishDash,
-    update = net.State, clock = clock,
+    update = net.State, clock = clock, spellOptions = require(modules.flow.Loadout).Options, activeOptions = require(modules.flow.Loadout).ActiveOptions,
 })
 local combat = require(modules.combat.Combat)({
     world = world, enemies = enemies, rng = rng, block = actors.Block,
@@ -27,25 +27,50 @@ local combat = require(modules.combat.Combat)({
 })
 local waves = require(modules.world.Waves)({
     states = states, enemies = enemies, rng = rng, creature = actors.Create,
-    rootOf = players.RootOf, roundLength = clock.roundLength,
+    rootOf = players.RootOf, roundLength = clock.roundLength, clock = clock, world = world, effect = net.Effect, drop = progression.Drop,
 })
+local lobbySpawn=require(modules.world.LobbyWorld)()
+local boss
 local session = require(modules.flow.Session)({
     world = world, states = states, enemies = enemies, gems = gems, rng = rng,
     creature = actors.Create, finishDash = movement.FinishDash,
     clearIceShots = combat.ClearProjectiles, sync = progression.Sync,
-    clock = clock, resetSpawn = waves.ResetSpawn,
+    clock = clock, lobbySpawn=lobbySpawn, resetSpawn = waves.ResetSpawn, resetBoss = function() if boss then boss.Reset() end end,
 })
-net.Action.OnServerEvent:Connect(function(player,kind,id)
+boss = require(modules.world.Boss)({
+    world = world, enemies = enemies, states = states, clock = clock,
+    rootOf = players.RootOf, effect = net.Effect, drop = progression.Drop,
+    modelFactory = require(RS:WaitForChild("EmberDragonModel")), endPlayer = session.EndPlayer, clearEnemyShots = waves.ResetSpawn,
+})
+net.Action.OnServerEvent:Connect(function(player,kind,id,activeId)
     local s = states[player]
     if not s then return end
     if kind == "ready" then progression.Sync(s); return end
+    if kind == "previewDragon" then
+        if not RunService:IsStudio() or type(id) ~= "boolean" then return end
+        s.previewDragon=id
+        if id then movement.FinishDash(s) end
+        progression.Sync(s)
+        return
+    end
+    if kind == "previewSkills" then
+        if not RunService:IsStudio() or type(id) ~= "boolean" then return end
+        s.previewSkills=id
+        if id then movement.FinishDash(s) end
+        progression.Sync(s)
+        return
+    end
+    if s.previewDragon or s.previewSkills then return end
+    if kind == "startRound" then session.StartRound(s,id,activeId); return end
+    if kind == "cancelReady" then session.CancelReady(s); return end
+    if s.lobby then return end
     if kind == "restart" then if s.over then session.Restart() end; return end
     if s.over then return end
     if kind == "choose" then progression.Choose(s,id)
     elseif kind == "dash" then
         if movement.RequestDash(s,id) then progression.Sync(s) end
     elseif kind == "fireWave" then
-        if combat.RequestWave(s) then progression.Sync(s) end
+        if combat.RequestWave(s,id) then progression.Sync(s) end
     end
 end)
 Players.PlayerAdded:Connect(function(p) task.spawn(session.AddPlayer,p) end)
@@ -61,9 +86,7 @@ RunService.Heartbeat:Connect(function(dt)
     local alive = players.LiveCount()
     if alive > 0 and not players.Paused() then
         clock.elapsed += dt
-        if clock.elapsed >= clock.roundLength then
-            for _,s in pairs(states) do if not s.over then session.EndPlayer(s,"victory") end end
-        end
+        boss.Step(dt)
         -- Keep the prototype's simulation order; changing it can change hits and XP timing.
         waves.Spawn(dt,alive,clock.elapsed)
         for _,s in pairs(states) do movement.Step(s,dt) end
@@ -79,6 +102,7 @@ RunService.Heartbeat:Connect(function(dt)
             end
         end
         progression.Collect(dt)
+        boss.Resolve()
     end
     sendClock += dt
     if sendClock >= .2 then

@@ -4,6 +4,9 @@ assert(not workspace:FindFirstChild("SummonerArena"), "SummonerArena already exi
 assert(not game.ReplicatedStorage:FindFirstChild("SummonerNet"), "SummonerNet already exists; installation cancelled")
 assert(not game.ServerScriptService:FindFirstChild("SummonerServer"), "SummonerServer already exists; installation cancelled")
 assert(not game.StarterPlayer.StarterPlayerScripts:FindFirstChild("SummonerClient"), "SummonerClient already exists; installation cancelled");
+assert(not game.ReplicatedStorage:FindFirstChild("EmberDragonModel"), "EmberDragonModel already exists; installation cancelled")
+assert(not game.ServerScriptService:FindFirstChild("WardenPreview"), "WardenPreview already exists; installation cancelled")
+assert(not workspace:FindFirstChild("RiftWardenPreview"), "RiftWardenPreview already exists; installation cancelled");
 (function()
 -- @ARENA@
 
