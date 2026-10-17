@@ -1,0 +1,90 @@
+{
+  "usage": "Visual references only. Current player fire uses three independent moving fireballs with attached particles and a faint 0.14-second wake and sparse flame remnants lasting at most 0.16 seconds; no connected FlameSurface mesh, source images or billboard cards are distributed.",
+  "references": [
+    {
+      "url": "https://www.acon3d.com/ko/product/1000034557",
+      "title": "원형 이펙트 01 불꽃",
+      "creator": "sozai wo douzo",
+      "status": "Commercial product preview viewed; no purchase or redistribution"
+    },
+    {
+      "url": "https://www.pngegg.com/ko/png-dhzhm",
+      "title": "불꽃, 불꽃, 불꽃 효과 png",
+      "creator": "Not identified on page",
+      "status": "Page and partial preview viewed. Page marks noncommercial use; no download or reuse"
+    },
+    {
+      "url": "https://www.acon3d.com/ko/product/1000047245",
+      "title": "액션 마법 이펙트 <번개>",
+      "creator": "도토리작가",
+      "status": "Commercial product preview viewed; no purchase or redistribution"
+    }
+  ],
+  "original_asset": {
+    "generator": "src/client/combat/FlameTexture.luau",
+    "size": [
+      128,
+      128
+    ],
+    "format": "RGBA EditableImage; generated on client and shared by local billboard images",
+    "generator_sha256": "e67fc0b708924ee0c59e17125efd28d6c5a5f617da81e4cff6b4153b0ebc0370",
+    "status": "Retired: generator and billboard rendering removed from source/runtime on user request; hash retained for history only."
+  },
+  "builtin_textures": [
+    "rbxasset://textures/particles/fire_main.dds",
+    "rbxasset://textures/particles/fire_sparks_main.dds",
+    "rbxasset://textures/particles/smoke_main.dds",
+    "rbxasset://textures/particles/sparkles_main.dds"
+  ],
+  "user_lightning_reference": {
+    "filename": "0c0a9cd9a02d9c328f063e70a39fe458.jpg",
+    "sha256": "1b2622d58cb8544710b85704904c4d577c8b30490cce2d30f72d83cf14a418ba",
+    "license": "not provided; visual reference only, not imported or redistributed"
+  },
+  "connected_flame_references": [
+    {
+      "filename": "istockphoto-2202275228-1024x1024.jpg",
+      "creator_credit_on_preview": "Sensvector",
+      "sha256": "97fc0017e4918b324f2f1b564d5effac31c0a7b79e280b56d779dfbf69c682ca",
+      "usage": "User-provided stock preview; visual reference only. Not edited, imported or redistributed."
+    },
+    {
+      "filename": "istockphoto-513381956-1024x1024.jpg",
+      "creator_credit_on_preview": "Mojito_mak",
+      "sha256": "2bd036009b6382ebad53834e540f7fb5c0806221cbf7b4cd5ac6958026301b85",
+      "usage": "User-provided stock preview; visual reference only. Not edited, imported or redistributed."
+    },
+    {
+      "filename": "istockphoto-182842270-1024x1024.jpg",
+      "creator_credit_on_preview": "ramihalim",
+      "sha256": "d92e1627bea934820d85d12e6f9fc82535c1845ba07f747a4ced958590ad1741",
+      "usage": "User-provided stock preview; visual reference only. Not edited, imported or redistributed."
+    },
+    {
+      "filename": "istockphoto-1352338867-1024x1024.jpg",
+      "creator_credit_on_preview": "dzika_mrowka",
+      "sha256": "91b8ac8827b0f38097daee132383fbd42dc39a32b7bac192dc4d87a99a3e18bf",
+      "usage": "User-provided stock preview; visual reference only. Not edited, imported or redistributed."
+    }
+  ],
+  "user_fireball_reference": {
+    "files": [
+      {
+        "filename": "Fireball.webp",
+        "sha256": "62fdaccf67fde0a8da0c885bfd5676ca7375df1d2e01b141698d6aa7554413e1"
+      },
+      {
+        "filename": "png-dhxxq.html",
+        "sha256": "008421706f569d461b7d10bbde918adad3e88e8c17d2a297718f3c7377d5888c"
+      }
+    ],
+    "creator": "Not established",
+    "usage": "User supplied visual references only. Files not imported, executed, copied into project, uploaded or redistributed. Local HTML canonical URL identifies PNGEgg png-dhxxq; no external page fetched."
+  },
+  "long_flame_reference": {
+    "filename": "png-clipart-flame-fire-flame.png",
+    "sha256": "3b88bf0ac1722585f216b2c0846ddef27396e9e5e285ad0fab620ad8a4773b31",
+    "creator": "Not established",
+    "usage": "User supplied visual reference only for long tapered flame silhouette. Not imported, edited, uploaded or redistributed."
+  }
+}

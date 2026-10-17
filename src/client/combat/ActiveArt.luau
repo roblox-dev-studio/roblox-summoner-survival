@@ -1,6 +1,7 @@
 -- Procedural Q charge portals, jagged lightning and a rising glacial lane.
 return function(deps)
  local Tween=game:GetService('TweenService');local Debris=game:GetService('Debris');local Run=game:GetService('RunService')
+ local glacial=require(script.Parent.GlacialArt)(deps)
  local fx=deps.folder;local cyan=Color3.fromRGB(142,225,255);local white=Color3.fromRGB(232,251,255)
  local function part(parent,name,size,cf,color,shape)
   local p=Instance.new('Part');p.Name=name;p.Size=size;p.CFrame=cf;p.Shape=shape or Enum.PartType.Block;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false;p.CastShadow=false;p.Color=color;p.Material=Enum.Material.Neon;p.Parent=parent;return p
@@ -40,20 +41,7 @@ return function(deps)
   end)
  end
  local function strike(origin,direction,settings)
-  local side=direction:Cross(Vector3.yAxis)
-  if settings.kind=='iceRush' then
-   for step=1,8 do
-    for _,sign in ipairs({-1,1})do
-     local point=origin+direction*(step*settings.range/8)+side*sign*(1.2+step%3)
-     local height=4+step%3
-     local p=Instance.new('WedgePart');p.Name='GlacialRushSpire';p.Size=Vector3.new(.6,.1,2);p.CFrame=CFrame.lookAt(Vector3.new(point.X,-1,point.Z),Vector3.new(point.X,-1,point.Z)+direction)*CFrame.Angles(0,sign*.3,0);p.Color=step%2==0 and white or cyan;p.Material=Enum.Material.Glass;p.Transparency=.12;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false;p.CastShadow=false;p.Parent=fx;Debris:AddItem(p,1.8)
-     Tween:Create(p,TweenInfo.new(.2),{Size=Vector3.new(1.4,height,2.7),Position=Vector3.new(point.X,height*.35,point.Z)}):Play()
-     task.delay(.7,function()if p.Parent then Tween:Create(p,TweenInfo.new(.9),{Transparency=1,Position=p.Position-Vector3.new(0,2,0)}):Play()end end)
-    end
-   end
-   local from=Vector3.new(origin.X,.45,origin.Z);local to=from+direction*settings.range
-   local wave=line(fx,from,to,1.1,cyan,.45,.4);wave.Name='GlacialRushLane'
-  end
+  if settings.kind=='iceRush'then glacial.Strike(origin,direction,settings)end
  end
  return {Charge=charge,Strike=strike}
 end

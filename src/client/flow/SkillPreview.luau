@@ -5,19 +5,20 @@ return function(deps)
  local player,net,input,hud=deps.player,deps.net,deps.input,deps.hud
  local theme=require(script.Parent.Parent.Theme);local make,label,round=theme.Make,theme.Label,theme.Round;local palette=theme.Palette
  local spells={
+  {id='lightRing',name='성운 광륜',note='빛나는 초승달 부메랑 · 곡선 왕복 관통'},
+  {id='basic',name='기본 공격 · 별빛 마법탄',note='작은 빛의 탄환 · 누르고 연속 발사',common=true},
   {id='meteor',name='메테오',note='천천히 낙하하는 대형 운석과 충돌 폭발'},
   {id='skyLances',name='천공의 창',note='상공의 마법진에서 차례로 내려오는 다섯 마법 창'},
   {id='blades',name='비전 결정',note='등 뒤의 다섯 결정 · 개별 발사 · 재충전'},
   {id='frost',name='서리 폭발',note='냉기 응축 · 충격파 · 얼음 결정'},
   {id='missile',name='추적 마탄',note='강한 적 하나를 노리는 단일 대상 추적탄'},
   {id='ward',name='수호 결계',note='결계 생성 · 타격 · 보호막 파괴'},
-  {id='fire',name='화염탄',note='불꽃 탄환과 적중 폭발'},
+  {id='fire',name='화염탄 [Q]',note='정면으로 발사하는 불꽃 탄환 · 적중 범위 피해',common=true},
   {id='ice',name='빙결 얼음창',note='정면 마법진 · 얼음창 · 빙결'},
   {id='lightning',name='연쇄 번개',note='하늘에서 내려꽂히는 연쇄 번개'},
-  {id='fireWave',name='화염 파동 [Q]',note='정면으로 퍼지는 부채꼴 화염',common=true},
   {id='thunder',name='뇌창 [Q]',note='정면으로 쏘아 보내는 관통 번개 창',common=true},
   {id='aetherLance',name='성운창 [Q]',note='푸른 아지랑이가 모여 가느다란 창으로 발사',common=true},
-  {id='iceRush',name='빙하 쇄도 [Q]',note='정면에 솟아오르는 얼음 기둥',common=true},
+  {id='iceRush',name='빙하 쇄도 [Q]',note='땅에서 차례로 솟는 얼음 결정 · 빙결과 섬광',common=true},
   {id='golem',name='골렘 대지 강타',note='현재 게임과 같은 5단계 최대 연출',common=true},
   {id='dash',name='대시',note='이동 궤적과 잔상',common=true},
  }

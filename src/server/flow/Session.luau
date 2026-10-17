@@ -16,11 +16,11 @@ return function(deps)
 		clearIceShots(s)
 		local c=s.player.Character; local h=c and c:FindFirstChildOfClass("Humanoid")
 		if h then h.WalkSpeed=0 end
-		sync(s)
+		if not s.returning then sync(s)end
 	end
 	local function addPlayer(player)
-		local s={player=player,level=1,xp=0,kills=0,fire=0,lightning=0,ice=0,meteor=0,blades=0,frost=0,ward=0,missile=0,skyLances=0,golem=1,vitality=0,agility=0,magnet=0,cooldown=0,fireClock=0,lightningClock=0,iceClock=0,golemClock=0,over=false}
-		s.activeSkill=savedActive[player] or 'fireWave';s.activeName=loadouts.ActiveNames[s.activeSkill]
+		local s={player=player,level=1,xp=0,kills=0,fire=0,lightning=0,ice=0,meteor=0,blades=0,frost=0,ward=0,missile=0,skyLances=0,lightRing=0,weaponId="starlightWand",golem=1,vitality=0,agility=0,magnet=0,cooldown=0,fireClock=0,lightningClock=0,iceClock=0,golemClock=0,over=false}
+		s.activeSkill=savedActive[player] or 'fire';s.activeName=loadouts.ActiveNames[s.activeSkill]
 		s.lobby=true;s.loadout=table.clone(saved[player] or loadouts.Defaults)
 		states[player]=s
 		s.pet=creature(player.Name.."_Golem",Color3.fromRGB(95,112,120),true)
@@ -74,10 +74,10 @@ return function(deps)
  local function startRound(s,ids,activeId)
   if not s.lobby or not s.loaded or starting then return end
   local now=os.clock();if now-(s.lastLobbyRequest or -10)<.5 then return end;s.lastLobbyRequest=now
-  activeId=activeId or s.activeSkill or 'fireWave'
+  activeId=activeId or s.activeSkill or 'fire'
   if not loadouts.ValidateActive(activeId) then s.lobbyMessage='사용할 Q 스킬을 선택해 주세요.';sync(s);return end
   local valid=loadouts.Validate(ids)
-  if not valid then s.lobbyMessage='서로 다른 마법을 정확히 3개 골라 주세요.';sync(s);return end
+  if not valid then s.lobbyMessage='서로 다른 마법을 정확히 4개 골라 주세요.';sync(s);return end
   for _,other in pairs(states)do
    if not other.lobby then s.lobbyMessage='진행 중인 전투가 끝난 뒤 함께 출발할 수 있어요.';sync(s);return end
   end
@@ -85,6 +85,21 @@ return function(deps)
  end
  local function cancelReady(s)
   if s.lobby and s.queued then s.queued=false;sync(s)end
+ end
+ local function returnToLobby(s)
+  if states[s.player]~=s or s.lobby or s.returning or starting then return end
+  s.returning=true
+  saved[s.player]=table.clone(s.loadout);savedActive[s.player]=s.activeSkill
+  endPlayer(s,'retreat')
+  s.lobby=true;s.queued=false;s.loaded=false;s.over=false;s.result=nil;s.offers=nil;s.previewSkills=nil;s.previewDragon=nil
+  sync(s)
+  -- A teammate's active run continues; only the departing player's objects are cleared.
+  local anotherActive=false
+  for _,other in pairs(states)do if other~=s and not other.over and not other.lobby then anotherActive=true;break end end
+  if not anotherActive then restart();return end
+  if s.pet then s.pet:Destroy()end
+  local player=s.player;states[player]=nil
+  task.spawn(addPlayer,player)
  end
  local function removePlayer(p)
 		saved[p]=nil;savedActive[p]=nil
@@ -101,5 +116,6 @@ return function(deps)
 		Restart = restart,
 		StartRound = startRound,
 		CancelReady = cancelReady,
+        ReturnToLobby = returnToLobby,
 	}
 end

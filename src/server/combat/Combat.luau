@@ -5,7 +5,7 @@ return function(deps)
 	local effect, drop = deps.effect, deps.drop
 	local iceShots = {}
 	local nextIceShot = 0
-	local areaSpells,activeSpells,missiles,crystals,skyLances
+	local areaSpells,activeSpells,missiles,crystals,skyLances,lightSpells,basicAttack
 	-- Temporary visual preview: all golems show the final-tier presentation.
 	-- Damage, fragment damage and extra damage hits still use the actual upgrade level.
 	local PREVIEW_MAX_GOLEM_EFFECTS = true
@@ -25,13 +25,15 @@ return function(deps)
 	missiles=require(script.Parent.HomingMissiles)({world=world,enemies=enemies,effect=effect,damage=damage,rootOf=rootOf})
 	crystals=require(script.Parent.ArcaneCrystals)({world=world,enemies=enemies,effect=effect,damage=damage,rootOf=rootOf})
 	skyLances=require(script.Parent.SkyLances)({world=world,enemies=enemies,effect=effect,damage=damage})
+	lightSpells=require(script.Parent.LightSpells)({world=world,enemies=enemies,effect=effect,damage=damage,rootOf=rootOf})
+	basicAttack=require(script.Parent.BasicAttack)({world=world,enemies=enemies,effect=effect,damage=damage,rootOf=rootOf,paused=paused})
 	local function nearest(pos,range)
 		local found,dist=nil,range
 		for _,e in ipairs(enemies) do if e.hp>0 then local d=(e.pos-pos).Magnitude; if d<dist then found,dist=e,d end end end
 		return found
 	end
 	local function clearIceShots(source)
-		missiles.Clear(source);crystals.Clear(source);skyLances.Clear(source)
+		missiles.Clear(source);crystals.Clear(source);skyLances.Clear(source);lightSpells.Clear(source);basicAttack.Clear(source)
 		if source then areaSpells.Clear(source);activeSpells.Clear(source) end
 		for i=#iceShots,1,-1 do
 			local shot=iceShots[i]
@@ -217,22 +219,7 @@ return function(deps)
         end
         local direction=Vector3.new(facing.X,0,facing.Z)
 		if direction.Magnitude<.01 then direction=Vector3.new(0,0,-1) else direction=direction.Unit end
-		if s.activeSkill and s.activeSkill~="fireWave" then return activeSpells.Request(s,origin,direction) end
-		s.cooldown=7
-		effect:FireAllClients("fireWave",origin,direction,30)
-		for _,e in ipairs(enemies) do
-			local delta=Vector3.new(e.pos.X-origin.X,0,e.pos.Z-origin.Z)
-			local distance=delta.Magnitude
-			if e.hp>0 and not e.airborne and distance<=30 and (distance<.1 or delta.Unit:Dot(direction)>=math.cos(math.rad(35))) then
-				damage(e,40+s.fire*10,s)
-				if e.hp>0 then
-					if not e.isBoss then e.pos+=direction*5 end; e.slow=math.max(e.slow,.7)
-					local flat=Vector3.new(e.pos.X,0,e.pos.Z)
-					if flat.Magnitude>82 then e.pos=flat.Unit*82+Vector3.new(0,e.pos.Y,0) end
-				end
-			end
-		end
-		return true
+		return activeSpells.Request(s,origin,direction)
 	end
 	local function stepPlayer(s,r,dt)
 		-- The golem commits to its own target instead of staying at an owner offset.
@@ -287,17 +274,15 @@ return function(deps)
 		s.cooldown=math.max(0,s.cooldown-dt)
 		if not s.offers then
 			activeSpells.Step(s,dt)
+			basicAttack.StepPlayer(s,dt)
+			lightSpells.StepPlayer(s,r,dt)
 			missiles.StepPlayer(s,r,dt)
 			crystals.StepPlayer(s,r,dt)
 			skyLances.Step(s,r,dt)
 			areaSpells.Step(s,r,dt)
 			s.fireClock-=dt; s.lightningClock-=dt; s.iceClock-=dt; s.golemClock-=dt
 			local target=nearest(r.Position,46)
-			if target and s.fire>0 and s.fireClock<=0 then
-				s.fireClock=math.max(.4,1.05-s.fire*.09)
-				effect:FireAllClients("fire",r.Position,target.pos,2.5+s.fire*.6)
-				blast(target.pos,2.5+s.fire*.6,15+s.fire*8,s)
-			end
+
 			if target and s.lightning>0 and s.lightningClock<=0 then
 				s.lightningClock=2; local last=r.Position; local struck={}
 				for hop=1,1+s.lightning do
@@ -325,8 +310,9 @@ return function(deps)
 
 	return {
 		StepPlayer = stepPlayer,
-		StepProjectiles = function(dt)advanceIceSpears(dt);missiles.Step(dt);crystals.Step(dt)end,
+		StepProjectiles = function(dt)advanceIceSpears(dt);missiles.Step(dt);crystals.Step(dt);lightSpells.Step(dt);basicAttack.Step(dt)end,
 		ClearProjectiles = clearIceShots,
 		RequestWave = requestWave,
+		RequestBasic = basicAttack.Request,
 	}
 end

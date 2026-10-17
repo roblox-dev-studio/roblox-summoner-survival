@@ -16,7 +16,9 @@ return function(deps)
 	local areaArt=require(script.Parent.AreaArt)({folder=fx})
 	local activeArt=require(script.Parent.ActiveArt)({folder=fx})
 	local projectileArt=require(script.Parent.ProjectileArt)({folder=fx})
+ local lightArt=require(script.Parent.LightArt)({folder=fx})
  local fireArt=require(script.Parent.FireArt)({folder=fx})
+ local lightningArt=require(script.Parent.LightningArt)({folder=fx})
 	local bloom=Lighting:FindFirstChild("SummonerSpellBloom")
 	if not bloom then
 		bloom=Instance.new("BloomEffect");bloom.Name="SummonerSpellBloom";bloom.Intensity=.22;bloom.Size=22;bloom.Threshold=1.35;bloom.Parent=Lighting
@@ -187,9 +189,6 @@ return function(deps)
 		p.LightEmission=.8;p.LightInfluence=0;p.Rate=core and 24 or 42;p.Parent=host
 		return p
 	end
-	local function fireWave(origin,direction,range)
-        fireArt.Wave(origin,direction,range)
-    end
 
 	local function magicBolt(a,b,radius)
         fireArt.Bolt(a,b,radius)
@@ -221,67 +220,6 @@ return function(deps)
 			end
 		end)
 		task.delay(duration,function()if trail.Parent then trail.Enabled=false end end)
-	end
-	local function lightningBolt(a,b,hop)
-		local blue=Color3.fromRGB(65,164,255);local white=Color3.fromRGB(230,251,255)
-		local function ground(pos)
-			local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
-			local excluded={fx};local runtime=workspace:FindFirstChild("SummonerRuntime");if runtime then table.insert(excluded,runtime)end
-			for _,plr in ipairs(Players:GetPlayers())do if plr.Character then table.insert(excluded,plr.Character)end end
-			params.FilterDescendantsInstances=excluded;params.RespectCanCollide=true
-			local hit=workspace:Raycast(pos+Vector3.new(0,8,0),Vector3.new(0,-50,0),params)
-			return hit and hit.Position+Vector3.new(0,.12,0) or Vector3.new(pos.X,.15,pos.Z)
-		end
-		local function segment(start,finish,width,color,alpha,delay)
-			local length=(finish-start).Magnitude;if length<.01 then return end
-			task.delay(delay,function()
-				local p=visual(Vector3.new(width,width,length),CFrame.lookAt((start+finish)/2,finish),color,Enum.PartType.Block,.48)
-				p.Name="ChainLightning";p.Transparency=alpha
-				task.delay(.09,function()if p.Parent then TweenService:Create(p,TweenInfo.new(.28),{Transparency=1}):Play()end end)
-			end)
-		end
-		local function line(start,finish,width,delay)
-			segment(start,finish,width,blue,.5,delay);segment(start,finish,width*.32,white,.02,delay)
-		end
-		local landing=ground(b)
-		if (hop or 1)==1 then
-			-- The upper leader arrives first, then the flash and floor discharge.
-			local top=landing+Vector3.new(0,22,0);local points={top}
-			for i=1,7 do table.insert(points,top:Lerp(landing,i/8)+Vector3.new((i%2==0 and 1 or -1)*(1.1+math.random()),0,(math.random()-.5)*1.6))end
-			table.insert(points,landing)
-			for i=1,#points-1 do
-				line(points[i],points[i+1],.85,(i-1)*.008)
-				if i==3 or i==5 then
-					local branch=points[i]+Vector3.new(i==3 and 3 or -3,-3,1)
-					line(points[i],branch,.25,(i-1)*.008)
-				end
-			end
-			task.delay(.11,function()for i=1,#points-1 do line(points[i],points[i+1],.4,0)end end)
-		else
-			local start=ground(a);local delta=landing-start;local side=Vector3.new(-delta.Z,0,delta.X)
-			if side.Magnitude>.01 then side=side.Unit else side=Vector3.xAxis end
-			local last=start
-			for i=1,6 do
-				local point=i==6 and landing or start+delta*(i/6)+side*(i%2==0 and 1 or -1)*.75
-				line(last,point,.45,.055+i*.012);last=point
-			end
-		end
-		-- Radial arcs crawl out from the impact over the floor.
-		for ray=1,6 do
-			local angle=ray*math.pi/3+math.random()*.35
-			local dir=Vector3.new(math.cos(angle),0,math.sin(angle));local side=Vector3.new(-dir.Z,0,dir.X)
-			local last=landing
-			for step=1,4 do
-				local point=ground(landing+dir*(step*1.55)+side*((step%2==0 and 1 or -1)*.55))
-				line(last,point,.32*(1-step*.12),.065+step*.025);last=point
-			end
-		end
-		task.delay(.065,function()
-			spellGlow(landing,blue,5)
-			local host=spellBurst(landing+Vector3.new(0,.3,0),"rbxasset://textures/particles/sparkles_main.dds",blue,18,.5,10)
-			local light=Instance.new("PointLight");light.Color=blue;light.Range=15;light.Brightness=3;light.Parent=host;TweenService:Create(light,TweenInfo.new(.35),{Brightness=0}):Play()
-			spellGlow(b,white,2.5)
-		end)
 	end
 	local function iceShard(size,cf,color,lifetime)
 		local p=Instance.new("WedgePart");p.Name="IceCrystal";p.Size=size;p.CFrame=cf;p.Color=color;p.Material=Enum.Material.Neon;p.Transparency=.15
@@ -427,10 +365,13 @@ return function(deps)
 		elseif kind=="golemHeavy" or kind=="golemLight" then groundImpact(a,b,kind=="golemHeavy",c)
 		elseif kind=="dash" then dashEffect(a,b,c)
 		elseif kind=="fire" then magicBolt(a,b,c)
-		elseif kind=="fireWave" then
-			fireWave(a,b,c)
+		elseif kind=="fireProjectile" then fireArt.Projectile(a)
 		elseif kind=="lightning" then
-			task.delay(math.min(.3,math.max(0,(c or 1)-1)*.045),function()lightningBolt(a,b,c)end)
+			task.delay(math.min(.3,math.max(0,(c or 1)-1)*.045),function()lightningArt.Strike(a,b,c)end)
+		elseif kind=="lightCast" then lightArt.Cast(a,b)
+		elseif kind=="lightHit" then lightArt.Hit(a,b)
+		elseif kind=="basicBolt" then lightArt.Bolt(a)
+		elseif kind=="basicHit" then lightArt.Hit(a,"basic")
 		elseif kind=="thunderSpear" then projectileArt.Cast(a,"thunder")
 		elseif kind=="aetherSpear" then projectileArt.Cast(a,"aetherLance")
 		elseif kind=="aetherHit" then projectileArt.Impact(a,"aetherLance")

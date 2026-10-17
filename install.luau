@@ -177,13 +177,19 @@ net.Action.OnServerEvent:Connect(function(player,kind,id,activeId)
         progression.Sync(s)
         return
     end
+    if kind == "returnToLobby" then
+        if id==nil and activeId==nil then session.ReturnToLobby(s)end
+        return
+    end
     if s.previewDragon or s.previewSkills then return end
     if kind == "startRound" then session.StartRound(s,id,activeId); return end
     if kind == "cancelReady" then session.CancelReady(s); return end
     if s.lobby then return end
     if kind == "restart" then if s.over then session.Restart() end; return end
     if s.over then return end
-    if kind == "choose" then progression.Choose(s,id)
+    if kind == "basicAttack" then
+        if id==nil then combat.RequestBasic(s)end
+    elseif kind == "choose" then progression.Choose(s,id)
     elseif kind == "dash" then
         if movement.RequestDash(s,id) then progression.Sync(s) end
     elseif kind == "fireWave" then
@@ -239,7 +245,14 @@ return function(deps)
   if s.activeCast then if s.activeCast.anchor.Parent then s.activeCast.anchor:Destroy()end;s.activeCast=nil end
  end
  local function request(s,origin,direction)
-  local kind=s.activeSkill;if kind~='thunder' and kind~='iceRush' and kind~='aetherLance' then return end
+  local kind=s.activeSkill;if kind~='fire' and kind~='thunder' and kind~='iceRush' and kind~='aetherLance' then return end
+  if kind=='fire' then
+   nextCast+=1
+   local anchor=Instance.new('Part');anchor.Name='ActiveFireball_'..nextCast;anchor.Anchored=true;anchor.Transparency=1;anchor.Size=Vector3.one*.1;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
+   local start=origin+direction*3+Vector3.new(0,1.2,0);anchor.CFrame=CFrame.lookAt(start,start+direction);anchor.Parent=deps.world
+   s.activeCast={kind=kind,time=0,origin=start,direction=direction,range=42,travelled=0,hits={},anchor=anchor};s.cooldown=7
+   deps.effect:FireAllClients('fireProjectile',anchor.Name);return true
+  end
   nextCast+=1
   local anchor=Instance.new('Part');anchor.Name='ActiveCast_'..nextCast;anchor.Anchored=true;anchor.Transparency=1;anchor.Size=Vector3.one*.1;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
   anchor.CFrame=CFrame.lookAt(origin,origin+direction);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Duration',.4);anchor:SetAttribute('Range',kind~='iceRush' and 52 or 34);anchor:SetAttribute('Launched',false);anchor.Parent=deps.world
@@ -262,6 +275,24 @@ return function(deps)
  local function step(s,dt)
   local cast=s.activeCast;if not cast then return end
   cast.time+=dt;cast.anchor:SetAttribute('Elapsed',cast.time)
+  if cast.kind=='fire' then
+   local previous=cast.origin+cast.direction*cast.travelled
+   local travel=math.min(58*dt,cast.range-cast.travelled);local pos=previous+cast.direction*travel
+   local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={deps.world,s.player.Character};params.RespectCanCollide=true
+   local wall=workspace:Raycast(previous,pos-previous,params);if wall then pos=wall.Position end
+   local target,nearest=nil,math.huge
+   for _,e in ipairs(deps.enemies)do
+    local along=(e.pos-previous):Dot(cast.direction)
+    if e.hp>0 and along>=-2.4 and along<=(pos-previous).Magnitude and segmentDistance(e.pos,previous,pos)<=2.4 and along<nearest then target=e;nearest=along end
+   end
+   if target then pos=previous+cast.direction*math.clamp(nearest,0,(pos-previous).Magnitude)end
+   cast.travelled+=(pos-previous).Magnitude;cast.anchor.CFrame=CFrame.lookAt(pos,pos+cast.direction)
+   if target or wall then
+    for _,e in ipairs(deps.enemies)do if e.hp>0 and (e==target or(e.pos-pos).Magnitude<=5)then deps.damage(e,75,s)end end
+    clear(s)
+   elseif cast.travelled>=cast.range-.001 then clear(s)end
+   return
+  end
   if cast.time<.4 then return end
   if cast.kind=='thunder'or cast.kind=='aetherLance' then
    cast.anchor:SetAttribute('Launched',true)
@@ -281,16 +312,25 @@ return function(deps)
    if wall or cast.travelled>=cast.range-.001 then deps.effect:FireAllClients(cast.kind=='thunder'and'thunderHit'or'aetherHit',pos);clear(s)end
    return
   end
-  for _,e in ipairs(deps.enemies)do
-   if e.hp>0 and not e.airborne then
-    local delta=Vector3.new(e.pos.X-cast.origin.X,0,e.pos.Z-cast.origin.Z);local along=delta:Dot(cast.direction)
-    if along>=0 and along<=cast.range and(delta-cast.direction*along).Magnitude<=6 then
-     deps.damage(e,52+(s.ice or 0)*7,s)
-     if e.hp>0 then e.slow=math.max(e.slow or 0,2.5);if not e.isBoss then e.frozen=math.max(e.frozen or 0,1.1);e.model:SetAttribute('Frozen',true);e.knockback=cast.direction*28;e.knockTime=.2 end end
+  if not cast.eruptionStarted then
+   cast.eruptionStarted=true;cast.anchor:SetAttribute('Launched',true)
+   deps.effect:FireAllClients('activeStrike',cast.origin,cast.direction,{kind='iceRush',range=cast.range,width=6,anchorName=cast.anchor.Name})
+  end
+  -- Each ground strip erupts and hits once as the ice travels away from the caster.
+  cast.iceRow=cast.iceRow or 0
+  while cast.iceRow<7 and cast.time>=.4+.07+cast.iceRow*.075 do
+   local row=cast.iceRow;cast.iceRow+=1
+   for _,e in ipairs(deps.enemies)do
+    if e.hp>0 and not e.airborne and not cast.hits[e]then
+     local delta=Vector3.new(e.pos.X-cast.origin.X,0,e.pos.Z-cast.origin.Z);local along=delta:Dot(cast.direction)
+     if along>=row*cast.range/7 and along<=(row+1)*cast.range/7 and(delta-cast.direction*along).Magnitude<=6 then
+      cast.hits[e]=true;deps.damage(e,52+(s.ice or 0)*7,s)
+      if e.hp>0 then e.slow=math.max(e.slow or 0,2.5);if not e.isBoss then e.frozen=math.max(e.frozen or 0,1.1);e.model:SetAttribute('Frozen',true);e.knockback=cast.direction*28;e.knockTime=.2 end end
+     end
     end
    end
   end
-  deps.effect:FireAllClients('activeStrike',cast.origin,cast.direction,{kind='iceRush',range=34,width=6});clear(s)
+  if cast.iceRow>=7 then clear(s)end
  end
  return {Request=request,Step=step,Clear=clear}
 end
@@ -394,7 +434,10 @@ return function(deps)
   nextCast+=1
   local anchor=Instance.new('Part');anchor.Name='AreaCast_'..nextCast;anchor:SetAttribute('Kind',kind);anchor.Size=Vector3.one*.1;anchor.Position=point;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
   anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Radius',radius);anchor:SetAttribute('Duration',duration);anchor:SetAttribute('Level',level)
-  if kind=='ward' then s.shield=30+level*12 end
+  if kind=='ward' then
+   s.shield=30+level*12
+   if s.player and type(s.player.UserId)=='number'then anchor:SetAttribute('OwnerUserId',s.player.UserId)end
+  end
   anchor.Parent=world
   table.insert(s.areaCasts,{kind=kind,pos=point,level=level,radius=radius,duration=duration,time=0,hits={},anchor=anchor})
   effect:FireAllClients('areaCast',anchor.Name,kind)
@@ -445,6 +488,50 @@ return function(deps)
  return {Step=step,Clear=clear}
 end
 ]====])
+-- Source: src/server/combat/BasicAttack.luau
+addModule(modules,{"combat","BasicAttack"},[====[
+-- Clients request a swing/shot, never a target, weapon profile or damage value.
+return function(deps)
+ local weapons=require(script.Parent.Weapons)
+ local shots={};local serial=0
+ local function clear(source)
+  for i=#shots,1,-1 do local p=shots[i];if not source or p.source==source then p.anchor:Destroy();table.remove(shots,i)end end
+ end
+ local function request(s)
+  if s.over or s.lobby or s.offers or deps.paused()or(s.basicCooldown or 0)>.0001 then return end
+  local root=deps.rootOf(s);if not root then return end
+  local profile=weapons.Get(s.weaponId)
+  local direction=Vector3.new(root.CFrame.LookVector.X,0,root.CFrame.LookVector.Z)
+  direction=direction.Magnitude>.01 and direction.Unit or Vector3.new(0,0,-1)
+  local origin=root.Position+Vector3.new(0,.8,0)+direction*2
+  serial+=1;local a=Instance.new('Part');a.Name='BasicBolt_'..serial;a.Size=Vector3.one*.1;a.Transparency=1;a.Anchored=true;a.CanCollide=false;a.CanQuery=false;a.CanTouch=false;a.CFrame=CFrame.lookAt(origin,origin+direction);a:SetAttribute('Style',profile.style);a.Parent=deps.world
+  table.insert(shots,{source=s,anchor=a,direction=direction,profile=profile,distance=0})
+  s.basicCooldown=profile.interval;deps.effect:FireAllClients('basicBolt',a.Name);return true
+ end
+ local function step(dt)
+  for i=#shots,1,-1 do
+   local p=shots[i];local root=deps.rootOf(p.source);local remove=not root or not p.anchor.Parent
+   if not remove and not p.source.offers then
+    local from=p.anchor.Position;local travel=math.min(p.profile.speed*dt,p.profile.range-p.distance);local to=from+p.direction*travel
+    local ray=RaycastParams.new();ray.FilterType=Enum.RaycastFilterType.Exclude;ray.FilterDescendantsInstances={deps.world,p.source.player.Character};ray.RespectCanCollide=true
+    local wall=workspace:Raycast(from,to-from,ray);if wall then to=wall.Position end
+    local delta=to-from;local length=delta:Dot(delta);local hit,first=nil,math.huge
+    for _,e in ipairs(deps.enemies)do if e.hp>0 then
+     local t=length>.0001 and math.clamp((e.pos-from):Dot(delta)/length,0,1)or 0
+     if(e.pos-from-delta*t).Magnitude<=p.profile.radius and t<first then hit,first=e,t end
+    end end
+    p.distance+=travel
+    if hit then deps.damage(hit,p.profile.damage,p.source);deps.effect:FireAllClients('basicHit',hit.pos);remove=true
+    elseif wall or p.distance>=p.profile.range then remove=true
+    else p.anchor.CFrame=CFrame.lookAt(to,to+p.direction)end
+   end
+   if remove then p.anchor:Destroy();table.remove(shots,i)end
+  end
+ end
+ local function stepPlayer(s,dt)if not s.offers then s.basicCooldown=math.max(0,(s.basicCooldown or 0)-dt)end end
+ return {Request=request,Step=step,StepPlayer=stepPlayer,Clear=clear}
+end
+]====])
 -- Source: src/server/combat/Combat.luau
 addModule(modules,{"combat","Combat"},[====[
 -- Automatic spells, ice projectiles, summon AI and damage. No client-owned damage.
@@ -454,7 +541,7 @@ return function(deps)
 	local effect, drop = deps.effect, deps.drop
 	local iceShots = {}
 	local nextIceShot = 0
-	local areaSpells,activeSpells,missiles,crystals,skyLances
+	local areaSpells,activeSpells,missiles,crystals,skyLances,lightSpells,basicAttack
 	-- Temporary visual preview: all golems show the final-tier presentation.
 	-- Damage, fragment damage and extra damage hits still use the actual upgrade level.
 	local PREVIEW_MAX_GOLEM_EFFECTS = true
@@ -474,13 +561,15 @@ return function(deps)
 	missiles=require(script.Parent.HomingMissiles)({world=world,enemies=enemies,effect=effect,damage=damage,rootOf=rootOf})
 	crystals=require(script.Parent.ArcaneCrystals)({world=world,enemies=enemies,effect=effect,damage=damage,rootOf=rootOf})
 	skyLances=require(script.Parent.SkyLances)({world=world,enemies=enemies,effect=effect,damage=damage})
+	lightSpells=require(script.Parent.LightSpells)({world=world,enemies=enemies,effect=effect,damage=damage,rootOf=rootOf})
+	basicAttack=require(script.Parent.BasicAttack)({world=world,enemies=enemies,effect=effect,damage=damage,rootOf=rootOf,paused=paused})
 	local function nearest(pos,range)
 		local found,dist=nil,range
 		for _,e in ipairs(enemies) do if e.hp>0 then local d=(e.pos-pos).Magnitude; if d<dist then found,dist=e,d end end end
 		return found
 	end
 	local function clearIceShots(source)
-		missiles.Clear(source);crystals.Clear(source);skyLances.Clear(source)
+		missiles.Clear(source);crystals.Clear(source);skyLances.Clear(source);lightSpells.Clear(source);basicAttack.Clear(source)
 		if source then areaSpells.Clear(source);activeSpells.Clear(source) end
 		for i=#iceShots,1,-1 do
 			local shot=iceShots[i]
@@ -666,22 +755,7 @@ return function(deps)
         end
         local direction=Vector3.new(facing.X,0,facing.Z)
 		if direction.Magnitude<.01 then direction=Vector3.new(0,0,-1) else direction=direction.Unit end
-		if s.activeSkill and s.activeSkill~="fireWave" then return activeSpells.Request(s,origin,direction) end
-		s.cooldown=7
-		effect:FireAllClients("fireWave",origin,direction,30)
-		for _,e in ipairs(enemies) do
-			local delta=Vector3.new(e.pos.X-origin.X,0,e.pos.Z-origin.Z)
-			local distance=delta.Magnitude
-			if e.hp>0 and not e.airborne and distance<=30 and (distance<.1 or delta.Unit:Dot(direction)>=math.cos(math.rad(35))) then
-				damage(e,40+s.fire*10,s)
-				if e.hp>0 then
-					if not e.isBoss then e.pos+=direction*5 end; e.slow=math.max(e.slow,.7)
-					local flat=Vector3.new(e.pos.X,0,e.pos.Z)
-					if flat.Magnitude>82 then e.pos=flat.Unit*82+Vector3.new(0,e.pos.Y,0) end
-				end
-			end
-		end
-		return true
+		return activeSpells.Request(s,origin,direction)
 	end
 	local function stepPlayer(s,r,dt)
 		-- The golem commits to its own target instead of staying at an owner offset.
@@ -736,17 +810,15 @@ return function(deps)
 		s.cooldown=math.max(0,s.cooldown-dt)
 		if not s.offers then
 			activeSpells.Step(s,dt)
+			basicAttack.StepPlayer(s,dt)
+			lightSpells.StepPlayer(s,r,dt)
 			missiles.StepPlayer(s,r,dt)
 			crystals.StepPlayer(s,r,dt)
 			skyLances.Step(s,r,dt)
 			areaSpells.Step(s,r,dt)
 			s.fireClock-=dt; s.lightningClock-=dt; s.iceClock-=dt; s.golemClock-=dt
 			local target=nearest(r.Position,46)
-			if target and s.fire>0 and s.fireClock<=0 then
-				s.fireClock=math.max(.4,1.05-s.fire*.09)
-				effect:FireAllClients("fire",r.Position,target.pos,2.5+s.fire*.6)
-				blast(target.pos,2.5+s.fire*.6,15+s.fire*8,s)
-			end
+
 			if target and s.lightning>0 and s.lightningClock<=0 then
 				s.lightningClock=2; local last=r.Position; local struck={}
 				for hop=1,1+s.lightning do
@@ -774,9 +846,10 @@ return function(deps)
 
 	return {
 		StepPlayer = stepPlayer,
-		StepProjectiles = function(dt)advanceIceSpears(dt);missiles.Step(dt);crystals.Step(dt)end,
+		StepProjectiles = function(dt)advanceIceSpears(dt);missiles.Step(dt);crystals.Step(dt);lightSpells.Step(dt);basicAttack.Step(dt)end,
 		ClearProjectiles = clearIceShots,
 		RequestWave = requestWave,
+		RequestBasic = basicAttack.Request,
 	}
 end
 ]====])
@@ -835,6 +908,79 @@ return function(deps)
     end
    end
    if remove then if shot.anchor.Parent then shot.anchor:Destroy()end;table.remove(shots,i)end
+  end
+ end
+ return {StepPlayer=stepPlayer,Step=step,Clear=clear}
+end
+]====])
+-- Source: src/server/combat/LightSpells.luau
+addModule(modules,{"combat","LightSpells"},[====[
+-- Returning crescent boomerang, on the shared server simulation.
+return function(deps)
+ local casts={};local serial=0
+ local function clear(source)
+  for i=#casts,1,-1 do local c=casts[i];if not source or c.source==source then c.anchor:Destroy();table.remove(casts,i)end end
+ end
+ local function nearest(point,range)
+  local best
+  for _,e in ipairs(deps.enemies)do local d=(e.pos-point).Magnitude;if e.hp>0 and not e.airborne and d<range then best,range=e,d end end
+  return best
+ end
+ local function start(s,kind,pos,level,direction)
+  serial+=1;local a=Instance.new('Part');a.Name='LightCast_'..serial;a.Size=Vector3.one*.1;a.Transparency=1;a.Anchored=true;a.CanCollide=false;a.CanQuery=false;a.CanTouch=false;a.CFrame=CFrame.lookAt(pos,pos+(direction or Vector3.zAxis));a:SetAttribute('Elapsed',0);a:SetAttribute('Level',level);a:SetAttribute('Radius',3);a:SetAttribute('Returning',false);a.Parent=deps.world
+  table.insert(casts,{source=s,kind=kind,anchor=a,level=level,time=0,distance=0,origin=pos,direction=direction,hits={},returnHits={},pulse=0,returning=false})
+  deps.effect:FireAllClients('lightCast',a.Name,kind)
+ end
+ local function stepPlayer(s,root,dt)
+  if s.offers then return end
+  for _,kind in ipairs({'lightRing'})do
+   local level=s[kind]or 0
+   if level>0 then
+    local key=kind..'Clock';s[key]=math.max(0,(s[key]or 0)-dt)
+    if s[key]<=0 then
+     local target=nearest(root.Position,46)
+     if target then
+       local delta=Vector3.new(target.pos.X-root.Position.X,0,target.pos.Z-root.Position.Z);local direction=delta.Magnitude>.01 and delta.Unit or root.CFrame.LookVector
+       start(s,kind,root.Position+Vector3.new(0,.8,0),level,direction)
+      s[key]=4.8-level*.25
+     end
+    end
+   end
+  end
+ end
+ local function step(dt)
+  for i=#casts,1,-1 do
+   local c=casts[i];local root=deps.rootOf(c.source);local remove=not root or not c.anchor.Parent
+   if not remove and not c.source.offers then
+    c.time+=dt;c.anchor:SetAttribute('Elapsed',c.time)
+     local from=c.anchor.Position;local to;local wall
+     if c.returning then
+      c.returnAge=(c.returnAge or 0)+dt
+      local u=math.clamp(c.returnAge/c.returnDuration,0,1)
+      local goal=root.Position+Vector3.new(0,.8,0)
+      to=c.returnStart:Lerp(goal,u)-c.direction:Cross(Vector3.yAxis)*math.sin(u*math.pi)*2
+      if u>=1 then remove=true end
+     else
+      local distance=math.min(38,c.distance+34*dt)
+      to=c.origin+c.direction*distance+c.direction:Cross(Vector3.yAxis)*math.sin(distance/38*math.pi)*1.8
+      local ray=RaycastParams.new();ray.FilterType=Enum.RaycastFilterType.Exclude;ray.FilterDescendantsInstances={deps.world,c.source.player.Character};ray.RespectCanCollide=true
+      wall=workspace:Raycast(from,to-from,ray);if wall then to=wall.Position end
+      c.distance=wall and math.clamp((to-c.origin):Dot(c.direction),0,38)or distance
+     end
+     if c.returning then
+      local ray=RaycastParams.new();ray.FilterType=Enum.RaycastFilterType.Exclude;ray.FilterDescendantsInstances={deps.world,c.source.player.Character};ray.RespectCanCollide=true
+      local obstruction=workspace:Raycast(from,to-from,ray);if obstruction then to=obstruction.Position;remove=true end
+     end
+     local delta=to-from;local length=delta:Dot(delta);local hits=c.returning and c.returnHits or c.hits
+     for _,e in ipairs(deps.enemies)do if e.hp>0 and not hits[e]then
+      local t=length>.0001 and math.clamp((e.pos-from):Dot(delta)/length,0,1)or 0
+      if(e.pos-from-delta*t).Magnitude<=3.3 then hits[e]=true;deps.damage(e,18+c.level*8,c.source);deps.effect:FireAllClients('lightHit',e.pos,'lightRing')end
+     end end
+     if delta.Magnitude>.001 then c.anchor.CFrame=CFrame.lookAt(to,to+delta.Unit)end
+     if not c.returning and(wall or c.distance>=38-.001)then c.returning=true;c.returnStart=to;c.returnAge=0;c.returnDuration=math.max(.1,(to-root.Position-Vector3.new(0,.8,0)).Magnitude/40);c.anchor:SetAttribute('Returning',true)end
+     if c.time>=4 then remove=true end
+   end
+   if remove then c.anchor:Destroy();table.remove(casts,i)end
   end
  end
  return {StepPlayer=stepPlayer,Step=step,Clear=clear}
@@ -955,11 +1101,21 @@ return function(deps)
  return {Step=step,Clear=clear}
 end
 ]====])
+-- Source: src/server/combat/Weapons.luau
+addModule(modules,{"combat","Weapons"},[====[
+-- Server-owned basic-attack profiles. Future equipment chooses an allowed profile ID.
+local profiles={
+ starlightWand={name='별빛 지팡이',style='starlight',interval=.3,damage=13,speed=80,range=52,radius=1.6},
+}
+local function get(id)return profiles[id]or profiles.starlightWand end
+return {Get=get,Default='starlightWand'}
+]====])
 -- Source: src/server/flow/Loadout.luau
 addModule(modules,{"flow","Loadout"},[====[
 -- Public spell descriptions and strict server-side loadout validation.
+local SLOT_COUNT=4
 local options={
- {id='fire',name='화염탄',role='빠른 자동 공격',desc='가까운 적에게 불꽃을 쏘고 작은 폭발을 일으킵니다.',color={255,155,82}},
+ {id='lightRing',name='성운 광륜',role='초승달 부메랑 · 왕복 관통',desc='빛나는 초승달이 곡선을 그리며 날아갔다가 돌아오며 다시 타격합니다.',color={204,163,255}},
  {id='ice',name='빙결 얼음창',role='빙결 · 밀치기',desc='마법진에서 얼음창을 쏘아 적을 밀치고 얼립니다.',color={132,218,255}},
  {id='lightning',name='연쇄 번개',role='여러 적 연속 타격',desc='하늘에서 내려꽂힌 번개가 주변 적에게 이어집니다.',color={208,191,255}},
  {id='meteor',name='메테오',role='강력한 광역 폭발',desc='거대한 운석이 하늘에서 낙하해 밀집한 적을 강타합니다.',color={255,188,91}},
@@ -974,21 +1130,22 @@ local function validate(ids)
  if type(ids)~='table' then return nil end
  local result,seen,count={},{},0
  for key,id in pairs(ids)do
-  if type(key)~='number' or key%1~=0 or key<1 or key>3 or type(id)~='string' or not allowed[id] or seen[id] then return nil end
+  if type(key)~='number' or key%1~=0 or key<1 or key>SLOT_COUNT or type(id)~='string' or not allowed[id] or seen[id] then return nil end
   seen[id]=true;result[key]=id;count+=1
  end
- if count~=3 or not result[1] or not result[2] or not result[3] then return nil end
+ if count~=SLOT_COUNT then return nil end
+ for i=1,SLOT_COUNT do if not result[i]then return nil end end
  return result
 end
 local activeOptions={
- {id='fireWave',name='화염 파동',desc='정면 부채꼴 · 밀치기 · 7초'},
+ {id='fire',name='화염탄',desc='정면 불꽃 탄환 · 적중 범위 피해 · 7초'},
  {id='thunder',name='뇌창',desc='정면으로 날아가는 번개 창 · 관통 · 7초'},
  {id='aetherLance',name='성운창',desc='아지랑이 빛의 창 · 관통 · 7초'},
  {id='iceRush',name='빙하 쇄도',desc='정면 얼음 기둥 · 빙결 · 7초'},
 }
 local activeNames={};for _,v in ipairs(activeOptions)do activeNames[v.id]=v.name end
 local function validateActive(id)return type(id)=='string' and activeNames[id]~=nil end
-return {Options=options,Validate=validate,Defaults={'fire','meteor','blades'},ActiveOptions=activeOptions,ActiveNames=activeNames,ValidateActive=validateActive}
+return {Options=options,Validate=validate,SlotCount=SLOT_COUNT,Defaults={'ice','meteor','blades','lightRing'},ActiveOptions=activeOptions,ActiveNames=activeNames,ValidateActive=validateActive}
 ]====])
 -- Source: src/server/flow/Progression.luau
 addModule(modules,{"flow","Progression"},[====[
@@ -999,18 +1156,18 @@ return function(deps)
 	local finishDash, update, clock = deps.finishDash, deps.update, deps.clock
 	local spellOptions=deps.spellOptions
 	local function need(s) return 5+(s.level-1)*3 end
-	local labels={fire="화염탄",lightning="연쇄 번개",ice="빙결 얼음창",golem="골렘",meteor="메테오",blades="비전 결정",frost="서리 폭발",ward="수호 결계",missile="추적 마탄",skyLances="천공의 창"}
+	local labels={fire="화염탄",lightning="연쇄 번개",ice="빙결 얼음창",golem="골렘",meteor="메테오",blades="비전 결정",frost="서리 폭발",ward="수호 결계",missile="추적 마탄",skyLances="천공의 창",lightRing="성운 광륜"}
 	local function choices(s)
 		local pool={}
-		for _,id in ipairs({"fire","lightning","ice","golem","meteor","blades","frost","ward","missile","skyLances"}) do
+		for _,id in ipairs({"lightning","ice","golem","meteor","blades","frost","ward","missile","skyLances","lightRing"}) do
 			local lv=s[id] or 0
 			if lv<5 and (not s.loadout or id=="golem" or table.find(s.loadout,id)) then
 				local description
-				if id=="fire" then description="피해량 +8 · 폭발 범위 증가"
-				elseif id=="lightning" then description=lv==0 and "주변 적을 연결하는 번개를 자동 발사" or "피해량과 연쇄 타격 수 증가"
+				if id=="lightning" then description=lv==0 and "주변 적을 연결하는 번개를 자동 발사" or "피해량과 연쇄 타격 수 증가"
 				elseif id=="meteor" then description=lv==0 and "밀집한 적을 향해 운석 낙하 · 넓은 폭발" or "운석 피해 +18 · 범위 증가 · 대기시간 감소"
 				elseif id=="blades" then description="다섯 결정 피해 증가 · 재충전 시간 감소"
 				elseif id=="skyLances" then description="낙하 창 피해 증가 · 재사용 대기시간 감소"
+				elseif id=="lightRing" then description="왕복 관통 피해 증가 · 재사용 대기시간 감소"
 				elseif id=="frost" then description="냉기 피해·범위·빙결 시간 증가"
 				elseif id=="missile" then description="단일 대상 마탄 피해 증가 · 강화 시 발사 수 증가"
 				elseif id=="ward" then description="보호막 흡수량 증가 · 재사용 시간 감소"
@@ -1035,8 +1192,8 @@ return function(deps)
 		local _,h=rootOf(s)
         local remaining=clock.phase=="boss" and math.floor(clock.bossElapsed) or clock.roundLength-math.floor(clock.elapsed)
         local b=clock.boss
-		update:FireClient(s.player,{time=math.max(0,remaining),phase=clock.phase,lobby=s.lobby==true,queued=s.queued==true,loadout=s.loadout,spellOptions=s.lobby and spellOptions or nil,activeOptions=s.lobby and deps.activeOptions or nil,activeSkill=s.activeSkill or "fireWave",activeName=s.activeName or "화염 파동",lobbyMessage=s.lobbyMessage,shield=s.shield or 0,boss=b and {name=b.name,hp=math.max(0,b.hp),maxHp=b.maxHp,stage=b.phase,airborne=b.airborne} or nil,level=s.level,xp=s.xp,need=need(s),hp=h and math.ceil(h.Health) or 0,maxHp=h and h.MaxHealth or 100,
-			kills=s.kills,fire=s.fire,lightning=s.lightning,ice=s.ice,meteor=s.meteor or 0,blades=s.blades or 0,frost=s.frost or 0,ward=s.ward or 0,missile=s.missile or 0,skyLances=s.skyLances or 0,golem=s.golem,offers=s.offers,over=s.over,result=s.result,cooldown=math.max(0,math.ceil(s.cooldown)),dashCooldown=math.ceil((s.dashCooldown or 0)*10)/10,golemCooldown=math.max(0,math.ceil(s.petHeavyCooldown or 0)),paused=paused()})
+		update:FireClient(s.player,{time=math.max(0,remaining),phase=clock.phase,lobby=s.lobby==true,queued=s.queued==true,loadout=s.loadout,spellOptions=s.lobby and spellOptions or nil,activeOptions=s.lobby and deps.activeOptions or nil,activeSkill=s.activeSkill or "fire",activeName=s.activeName or "화염탄",lobbyMessage=s.lobbyMessage,shield=s.shield or 0,boss=b and {name=b.name,hp=math.max(0,b.hp),maxHp=b.maxHp,stage=b.phase,airborne=b.airborne} or nil,level=s.level,xp=s.xp,need=need(s),hp=h and math.ceil(h.Health) or 0,maxHp=h and h.MaxHealth or 100,
+			kills=s.kills,fire=s.fire,lightning=s.lightning,ice=s.ice,meteor=s.meteor or 0,blades=s.blades or 0,frost=s.frost or 0,ward=s.ward or 0,missile=s.missile or 0,skyLances=s.skyLances or 0,lightRing=s.lightRing or 0,golem=s.golem,offers=s.offers,over=s.over,result=s.result,cooldown=math.max(0,math.ceil(s.cooldown)),dashCooldown=math.ceil((s.dashCooldown or 0)*10)/10,golemCooldown=math.max(0,math.ceil(s.petHeavyCooldown or 0)),paused=paused()})
 	end
 	local function levelCheck(s)
 		if s.over or s.offers or s.lobby then return end
@@ -1132,11 +1289,11 @@ return function(deps)
 		clearIceShots(s)
 		local c=s.player.Character; local h=c and c:FindFirstChildOfClass("Humanoid")
 		if h then h.WalkSpeed=0 end
-		sync(s)
+		if not s.returning then sync(s)end
 	end
 	local function addPlayer(player)
-		local s={player=player,level=1,xp=0,kills=0,fire=0,lightning=0,ice=0,meteor=0,blades=0,frost=0,ward=0,missile=0,skyLances=0,golem=1,vitality=0,agility=0,magnet=0,cooldown=0,fireClock=0,lightningClock=0,iceClock=0,golemClock=0,over=false}
-		s.activeSkill=savedActive[player] or 'fireWave';s.activeName=loadouts.ActiveNames[s.activeSkill]
+		local s={player=player,level=1,xp=0,kills=0,fire=0,lightning=0,ice=0,meteor=0,blades=0,frost=0,ward=0,missile=0,skyLances=0,lightRing=0,weaponId="starlightWand",golem=1,vitality=0,agility=0,magnet=0,cooldown=0,fireClock=0,lightningClock=0,iceClock=0,golemClock=0,over=false}
+		s.activeSkill=savedActive[player] or 'fire';s.activeName=loadouts.ActiveNames[s.activeSkill]
 		s.lobby=true;s.loadout=table.clone(saved[player] or loadouts.Defaults)
 		states[player]=s
 		s.pet=creature(player.Name.."_Golem",Color3.fromRGB(95,112,120),true)
@@ -1190,10 +1347,10 @@ return function(deps)
  local function startRound(s,ids,activeId)
   if not s.lobby or not s.loaded or starting then return end
   local now=os.clock();if now-(s.lastLobbyRequest or -10)<.5 then return end;s.lastLobbyRequest=now
-  activeId=activeId or s.activeSkill or 'fireWave'
+  activeId=activeId or s.activeSkill or 'fire'
   if not loadouts.ValidateActive(activeId) then s.lobbyMessage='사용할 Q 스킬을 선택해 주세요.';sync(s);return end
   local valid=loadouts.Validate(ids)
-  if not valid then s.lobbyMessage='서로 다른 마법을 정확히 3개 골라 주세요.';sync(s);return end
+  if not valid then s.lobbyMessage='서로 다른 마법을 정확히 4개 골라 주세요.';sync(s);return end
   for _,other in pairs(states)do
    if not other.lobby then s.lobbyMessage='진행 중인 전투가 끝난 뒤 함께 출발할 수 있어요.';sync(s);return end
   end
@@ -1201,6 +1358,21 @@ return function(deps)
  end
  local function cancelReady(s)
   if s.lobby and s.queued then s.queued=false;sync(s)end
+ end
+ local function returnToLobby(s)
+  if states[s.player]~=s or s.lobby or s.returning or starting then return end
+  s.returning=true
+  saved[s.player]=table.clone(s.loadout);savedActive[s.player]=s.activeSkill
+  endPlayer(s,'retreat')
+  s.lobby=true;s.queued=false;s.loaded=false;s.over=false;s.result=nil;s.offers=nil;s.previewSkills=nil;s.previewDragon=nil
+  sync(s)
+  -- A teammate's active run continues; only the departing player's objects are cleared.
+  local anotherActive=false
+  for _,other in pairs(states)do if other~=s and not other.over and not other.lobby then anotherActive=true;break end end
+  if not anotherActive then restart();return end
+  if s.pet then s.pet:Destroy()end
+  local player=s.player;states[player]=nil
+  task.spawn(addPlayer,player)
  end
  local function removePlayer(p)
 		saved[p]=nil;savedActive[p]=nil
@@ -1217,6 +1389,7 @@ return function(deps)
 		Restart = restart,
 		StartRound = startRound,
 		CancelReady = cancelReady,
+        ReturnToLobby = returnToLobby,
 	}
 end
 ]====])
@@ -1834,6 +2007,7 @@ addModule(modules,{"combat","ActiveArt"},[====[
 -- Procedural Q charge portals, jagged lightning and a rising glacial lane.
 return function(deps)
  local Tween=game:GetService('TweenService');local Debris=game:GetService('Debris');local Run=game:GetService('RunService')
+ local glacial=require(script.Parent.GlacialArt)(deps)
  local fx=deps.folder;local cyan=Color3.fromRGB(142,225,255);local white=Color3.fromRGB(232,251,255)
  local function part(parent,name,size,cf,color,shape)
   local p=Instance.new('Part');p.Name=name;p.Size=size;p.CFrame=cf;p.Shape=shape or Enum.PartType.Block;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false;p.CastShadow=false;p.Color=color;p.Material=Enum.Material.Neon;p.Parent=parent;return p
@@ -1873,20 +2047,7 @@ return function(deps)
   end)
  end
  local function strike(origin,direction,settings)
-  local side=direction:Cross(Vector3.yAxis)
-  if settings.kind=='iceRush' then
-   for step=1,8 do
-    for _,sign in ipairs({-1,1})do
-     local point=origin+direction*(step*settings.range/8)+side*sign*(1.2+step%3)
-     local height=4+step%3
-     local p=Instance.new('WedgePart');p.Name='GlacialRushSpire';p.Size=Vector3.new(.6,.1,2);p.CFrame=CFrame.lookAt(Vector3.new(point.X,-1,point.Z),Vector3.new(point.X,-1,point.Z)+direction)*CFrame.Angles(0,sign*.3,0);p.Color=step%2==0 and white or cyan;p.Material=Enum.Material.Glass;p.Transparency=.12;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false;p.CastShadow=false;p.Parent=fx;Debris:AddItem(p,1.8)
-     Tween:Create(p,TweenInfo.new(.2),{Size=Vector3.new(1.4,height,2.7),Position=Vector3.new(point.X,height*.35,point.Z)}):Play()
-     task.delay(.7,function()if p.Parent then Tween:Create(p,TweenInfo.new(.9),{Transparency=1,Position=p.Position-Vector3.new(0,2,0)}):Play()end end)
-    end
-   end
-   local from=Vector3.new(origin.X,.45,origin.Z);local to=from+direction*settings.range
-   local wave=line(fx,from,to,1.1,cyan,.45,.4);wave.Name='GlacialRushLane'
-  end
+  if settings.kind=='iceRush'then glacial.Strike(origin,direction,settings)end
  end
  return {Charge=charge,Strike=strike}
 end
@@ -1989,6 +2150,7 @@ addModule(modules,{"combat","AreaArt"},[====[
 -- Original procedural art. Active casts follow server time, so menu pauses freeze them.
 return function(deps)
  local Run=game:GetService('RunService');local Debris=game:GetService('Debris');local Tween=game:GetService('TweenService')
+ local Players=game:GetService('Players')
  local fx=deps.folder
  local skyLances=require(script.Parent.SkyLanceArt)({folder=fx})
  local gold=Color3.fromRGB(255,171,62);local ice=Color3.fromRGB(158,235,255);local mint=Color3.fromRGB(132,255,220)
@@ -2108,7 +2270,13 @@ return function(deps)
   destroyConn=anchor.Destroying:Connect(clear)
   conn=Run.RenderStepped:Connect(function()
    if not anchor.Parent then clear();return end
-   local center=anchor.Position;local t=anchor:GetAttribute('Elapsed')or 0;local u=math.clamp(t/duration,0,1)
+   local center=anchor.Position
+   if kind=='ward'then
+    local ownerId=anchor:GetAttribute('OwnerUserId');local owner=ownerId and Players:GetPlayerByUserId(ownerId)
+    local root=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
+    if root then center=root.Position-Vector3.new(0,2.6,0)end
+   end
+   local t=anchor:GetAttribute('Elapsed')or 0;local u=math.clamp(t/duration,0,1)
    for i,p in ipairs(arcs)do
     local a=(i-1)*math.pi/24;local b=i*math.pi/24
     local r=radius*(kind=='meteor' and (.85+u*.15) or(kind=='frost' and .3+u*.7 or 1))
@@ -2171,7 +2339,9 @@ return function(deps)
 	local areaArt=require(script.Parent.AreaArt)({folder=fx})
 	local activeArt=require(script.Parent.ActiveArt)({folder=fx})
 	local projectileArt=require(script.Parent.ProjectileArt)({folder=fx})
+ local lightArt=require(script.Parent.LightArt)({folder=fx})
  local fireArt=require(script.Parent.FireArt)({folder=fx})
+ local lightningArt=require(script.Parent.LightningArt)({folder=fx})
 	local bloom=Lighting:FindFirstChild("SummonerSpellBloom")
 	if not bloom then
 		bloom=Instance.new("BloomEffect");bloom.Name="SummonerSpellBloom";bloom.Intensity=.22;bloom.Size=22;bloom.Threshold=1.35;bloom.Parent=Lighting
@@ -2342,9 +2512,6 @@ return function(deps)
 		p.LightEmission=.8;p.LightInfluence=0;p.Rate=core and 24 or 42;p.Parent=host
 		return p
 	end
-	local function fireWave(origin,direction,range)
-        fireArt.Wave(origin,direction,range)
-    end
 
 	local function magicBolt(a,b,radius)
         fireArt.Bolt(a,b,radius)
@@ -2376,67 +2543,6 @@ return function(deps)
 			end
 		end)
 		task.delay(duration,function()if trail.Parent then trail.Enabled=false end end)
-	end
-	local function lightningBolt(a,b,hop)
-		local blue=Color3.fromRGB(65,164,255);local white=Color3.fromRGB(230,251,255)
-		local function ground(pos)
-			local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
-			local excluded={fx};local runtime=workspace:FindFirstChild("SummonerRuntime");if runtime then table.insert(excluded,runtime)end
-			for _,plr in ipairs(Players:GetPlayers())do if plr.Character then table.insert(excluded,plr.Character)end end
-			params.FilterDescendantsInstances=excluded;params.RespectCanCollide=true
-			local hit=workspace:Raycast(pos+Vector3.new(0,8,0),Vector3.new(0,-50,0),params)
-			return hit and hit.Position+Vector3.new(0,.12,0) or Vector3.new(pos.X,.15,pos.Z)
-		end
-		local function segment(start,finish,width,color,alpha,delay)
-			local length=(finish-start).Magnitude;if length<.01 then return end
-			task.delay(delay,function()
-				local p=visual(Vector3.new(width,width,length),CFrame.lookAt((start+finish)/2,finish),color,Enum.PartType.Block,.48)
-				p.Name="ChainLightning";p.Transparency=alpha
-				task.delay(.09,function()if p.Parent then TweenService:Create(p,TweenInfo.new(.28),{Transparency=1}):Play()end end)
-			end)
-		end
-		local function line(start,finish,width,delay)
-			segment(start,finish,width,blue,.5,delay);segment(start,finish,width*.32,white,.02,delay)
-		end
-		local landing=ground(b)
-		if (hop or 1)==1 then
-			-- The upper leader arrives first, then the flash and floor discharge.
-			local top=landing+Vector3.new(0,22,0);local points={top}
-			for i=1,7 do table.insert(points,top:Lerp(landing,i/8)+Vector3.new((i%2==0 and 1 or -1)*(1.1+math.random()),0,(math.random()-.5)*1.6))end
-			table.insert(points,landing)
-			for i=1,#points-1 do
-				line(points[i],points[i+1],.85,(i-1)*.008)
-				if i==3 or i==5 then
-					local branch=points[i]+Vector3.new(i==3 and 3 or -3,-3,1)
-					line(points[i],branch,.25,(i-1)*.008)
-				end
-			end
-			task.delay(.11,function()for i=1,#points-1 do line(points[i],points[i+1],.4,0)end end)
-		else
-			local start=ground(a);local delta=landing-start;local side=Vector3.new(-delta.Z,0,delta.X)
-			if side.Magnitude>.01 then side=side.Unit else side=Vector3.xAxis end
-			local last=start
-			for i=1,6 do
-				local point=i==6 and landing or start+delta*(i/6)+side*(i%2==0 and 1 or -1)*.75
-				line(last,point,.45,.055+i*.012);last=point
-			end
-		end
-		-- Radial arcs crawl out from the impact over the floor.
-		for ray=1,6 do
-			local angle=ray*math.pi/3+math.random()*.35
-			local dir=Vector3.new(math.cos(angle),0,math.sin(angle));local side=Vector3.new(-dir.Z,0,dir.X)
-			local last=landing
-			for step=1,4 do
-				local point=ground(landing+dir*(step*1.55)+side*((step%2==0 and 1 or -1)*.55))
-				line(last,point,.32*(1-step*.12),.065+step*.025);last=point
-			end
-		end
-		task.delay(.065,function()
-			spellGlow(landing,blue,5)
-			local host=spellBurst(landing+Vector3.new(0,.3,0),"rbxasset://textures/particles/sparkles_main.dds",blue,18,.5,10)
-			local light=Instance.new("PointLight");light.Color=blue;light.Range=15;light.Brightness=3;light.Parent=host;TweenService:Create(light,TweenInfo.new(.35),{Brightness=0}):Play()
-			spellGlow(b,white,2.5)
-		end)
 	end
 	local function iceShard(size,cf,color,lifetime)
 		local p=Instance.new("WedgePart");p.Name="IceCrystal";p.Size=size;p.CFrame=cf;p.Color=color;p.Material=Enum.Material.Neon;p.Transparency=.15
@@ -2582,10 +2688,13 @@ return function(deps)
 		elseif kind=="golemHeavy" or kind=="golemLight" then groundImpact(a,b,kind=="golemHeavy",c)
 		elseif kind=="dash" then dashEffect(a,b,c)
 		elseif kind=="fire" then magicBolt(a,b,c)
-		elseif kind=="fireWave" then
-			fireWave(a,b,c)
+		elseif kind=="fireProjectile" then fireArt.Projectile(a)
 		elseif kind=="lightning" then
-			task.delay(math.min(.3,math.max(0,(c or 1)-1)*.045),function()lightningBolt(a,b,c)end)
+			task.delay(math.min(.3,math.max(0,(c or 1)-1)*.045),function()lightningArt.Strike(a,b,c)end)
+		elseif kind=="lightCast" then lightArt.Cast(a,b)
+		elseif kind=="lightHit" then lightArt.Hit(a,b)
+		elseif kind=="basicBolt" then lightArt.Bolt(a)
+		elseif kind=="basicHit" then lightArt.Hit(a,"basic")
 		elseif kind=="thunderSpear" then projectileArt.Cast(a,"thunder")
 		elseif kind=="aetherSpear" then projectileArt.Cast(a,"aetherLance")
 		elseif kind=="aetherHit" then projectileArt.Impact(a,"aetherLance")
@@ -2631,26 +2740,117 @@ return function(deps)
   local e=Instance.new('ParticleEmitter');e.Texture=texture;e.Rate=rate;e.Lifetime=lifetime;e.Size=size;e.Color=color;e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.15),NumberSequenceKeypoint.new(.65,.35),NumberSequenceKeypoint.new(1,1)});e.LightEmission=.7;e.LightInfluence=0;e.Orientation=Enum.ParticleOrientation.FacingCameraWorldUp;e.Rotation=NumberRange.new(-35,35);e.RotSpeed=NumberRange.new(-90,90);e.SpreadAngle=Vector2.new(20,20);e.EmissionDirection=Enum.NormalId.Back;e.Speed=NumberRange.new(3,7);e.Drag=1;e.Parent=p;return e
  end
  local colors=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,224,140)),ColorSequenceKeypoint.new(.35,orange),ColorSequenceKeypoint.new(1,red)})
- local function impact(point,radius)
-  local p=host('FireballImpact',CFrame.new(point),1.4)
-  local fire=emitter(p,flame,0,NumberRange.new(.22,.55),NumberSequence.new({NumberSequenceKeypoint.new(0,1.2),NumberSequenceKeypoint.new(.25,radius),NumberSequenceKeypoint.new(1,0)}),colors);fire.Speed=NumberRange.new(5,13);fire.SpreadAngle=Vector2.new(180,180);fire.Acceleration=Vector3.new(0,5,0);fire:Emit(18)
-  local sparks=emitter(p,ember,0,NumberRange.new(.3,.7),NumberSequence.new(.5,0),ColorSequence.new(orange));sparks.Speed=NumberRange.new(9,18);sparks.SpreadAngle=Vector2.new(180,180);sparks.Acceleration=Vector3.new(0,-14,0);sparks:Emit(18)
-  local soot=emitter(p,smoke,0,NumberRange.new(.45,1),NumberSequence.new(1,radius*1.5),ColorSequence.new(Color3.fromRGB(66,53,48)));soot.LightEmission=0;soot.Transparency=NumberSequence.new(.6,1);soot.Speed=NumberRange.new(2,5);soot.Acceleration=Vector3.new(0,4,0);soot:Emit(6)
-  local light=Instance.new('PointLight');light.Color=orange;light.Range=radius*4;light.Brightness=2;light.Parent=p;Tween:Create(light,TweenInfo.new(.25),{Brightness=0}):Play()
+ local gold=Color3.fromRGB(255,211,86);local white=Color3.fromRGB(255,247,205)
+ local function glow(parent,name,size,color,alpha)
+  local p=Instance.new('Part');p.Name=name;p.Shape=Enum.PartType.Ball;p.Size=Vector3.one*size;p.Color=color;p.Material=Enum.Material.Neon;p.Transparency=alpha;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false;p.Parent=parent;return p
+ end
+ -- Attached flame body with only a brief, faint wake; no ground fire or burst.
+ local function fireballBody(p,size)
+  -- The luminous core sits inside flame, rather than reading as a bare white sphere.
+  local core=glow(p,'WhiteHotCore',size*.22,Color3.fromRGB(255,155,48),.8)
+  local shell=glow(p,'AmberFlameHalo',size*.52,Color3.fromRGB(225,60,15),.9)
+  core.CFrame=p.CFrame;shell.CFrame=p.CFrame
+  local layers={}
+  for i=0,3 do
+   local attachment=Instance.new('Attachment');attachment.Name='FlameBodyLayer';attachment.Parent=p
+   local scale=i==0 and .82 or .84-i*.035
+   local body=emitter(attachment,flame,i==0 and 90 or 48,NumberRange.new(.1,.18),NumberSequence.new({NumberSequenceKeypoint.new(0,size*scale*.65),NumberSequenceKeypoint.new(.25,size*scale),NumberSequenceKeypoint.new(1,size*scale*.45)}),colors)
+   body.Name=i==0 and 'AttachedFlame'or'AttachedFlameTongue';body.LockedToPart=true;body.Speed=NumberRange.new(0);body.Acceleration=Vector3.zero;body.Drag=0;body.VelocityInheritance=0
+   body.Orientation=Enum.ParticleOrientation.FacingCamera;body.Rotation=NumberRange.new(-12,12);body.RotSpeed=NumberRange.new(65,115);body.Squash=NumberSequence.new(0);body.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,212,95)),ColorSequenceKeypoint.new(.45,Color3.fromRGB(255,128,24)),ColorSequenceKeypoint.new(1,Color3.fromRGB(225,48,8))});if i>0 then body.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,112,22)),ColorSequenceKeypoint.new(.4,Color3.fromRGB(235,53,12)),ColorSequenceKeypoint.new(1,Color3.fromRGB(150,18,8))})end;body.LightEmission=1;body.Brightness=i==0 and 2 or 1.4;body.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(.2,.08),NumberSequenceKeypoint.new(.7,.28),NumberSequenceKeypoint.new(1,1)});body:Emit(i==0 and 8 or 4)
+   layers[#layers+1]={attachment=attachment,body=body,index=i}
+  end
+  -- Tail belongs to the projectile, so its silhouette is independent of wake lifetime.
+  local tailLayers={}
+  for i=1,11 do
+   local attachment=Instance.new('Attachment');attachment.Name='FlameTailLayer';attachment.Position=Vector3.new(0,0,size*i*.35);attachment.Parent=p
+   local scale=1.06-i*.065
+   local e=emitter(attachment,flame,36-i,NumberRange.new(.1,.18),NumberSequence.new({NumberSequenceKeypoint.new(0,size*scale*.7),NumberSequenceKeypoint.new(.25,size*scale),NumberSequenceKeypoint.new(1,size*scale*.3)}),ColorSequence.new(Color3.fromRGB(255,144,35),Color3.fromRGB(182,30,9)))
+   e.Name='AttachedTailFlame';e.LockedToPart=true;e.Speed=NumberRange.new(0);e.Acceleration=Vector3.zero;e.VelocityInheritance=0;e.Orientation=Enum.ParticleOrientation.FacingCamera;e.Rotation=NumberRange.new(-15,15);e.RotSpeed=NumberRange.new(-35,35);e.Squash=NumberSequence.new(-.25);e.LightEmission=1;e.Brightness=2.2;e.Transparency=NumberSequence.new(.1+i*.012,1);e:Emit(4)
+   tailLayers[#tailLayers+1]={attachment=attachment,body=e,index=i}
+  end
+  -- Continuous tapered tongues provide a single flame silhouette instead of beads.
+  local tongues={}
+  for i=1,3 do
+   local a=Instance.new('Attachment');a.Parent=p;local b=Instance.new('Attachment');b.Parent=p
+   local beam=Instance.new('Beam');beam.Name='FlameTongue';beam.Attachment0=a;beam.Attachment1=b;beam.FaceCamera=true;beam.Segments=16;beam.Width0=size*(i==1 and 1.05 or .7);beam.Width1=.02;beam.Texture=flame;beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=.9+i*.3;beam.LightEmission=1;beam.Brightness=1.8
+   beam.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,i==1 and Color3.fromRGB(235,64,15)or orange),ColorSequenceKeypoint.new(.35,Color3.fromRGB(218,43,10)),ColorSequenceKeypoint.new(1,Color3.fromRGB(205,32,8))});beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(.55,.2),NumberSequenceKeypoint.new(1,.85)});beam.Parent=p
+   local inner=beam:Clone();inner.Name='FlameTailCore';inner.Texture='';inner.Brightness=.65;inner.Width0=size*(i==1 and .23 or .13);inner.Color=ColorSequence.new(Color3.fromRGB(255,168,51),Color3.fromRGB(235,66,17));inner.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.57),NumberSequenceKeypoint.new(.55,.73),NumberSequenceKeypoint.new(1,1)});inner.Parent=p
+   tongues[#tongues+1]={a=a,b=b,beam=beam,inner=inner,index=i}
+  end
+  local left=Instance.new('Attachment');left.Position=Vector3.new(-size*.12,0,size*.2);left.Parent=p
+  local right=Instance.new('Attachment');right.Position=Vector3.new(size*.12,0,size*.2);right.Parent=p
+  local wake=Instance.new('Trail');wake.Name='SoftFlameWake';wake.Attachment0=left;wake.Attachment1=right;wake.Lifetime=.14;wake.MinLength=.12;wake.FaceCamera=true;wake.LightEmission=1;wake.Color=ColorSequence.new(gold,orange);wake.Transparency=NumberSequence.new(.6,1);wake.WidthScale=NumberSequence.new(1,0);wake.Texture=flame;wake.TextureMode=Enum.TextureMode.Stretch;wake.Parent=p
+  local rear=Instance.new('Attachment');rear.Name='BriefFlameAfterglow';rear.Position=Vector3.new(0,0,size*.45);rear.Parent=p
+  local remnants=emitter(rear,flame,22,NumberRange.new(.08,.16),NumberSequence.new({NumberSequenceKeypoint.new(0,size*.4),NumberSequenceKeypoint.new(.2,size*.5),NumberSequenceKeypoint.new(1,0)}),ColorSequence.new(gold,orange))
+  remnants.Name='BriefFlameRemnants';remnants.LockedToPart=false;remnants.Speed=NumberRange.new(.4,1.2);remnants.SpreadAngle=Vector2.new(12,12);remnants.Acceleration=Vector3.new(0,2,0);remnants.VelocityInheritance=0;remnants.LightEmission=1;remnants.Brightness=2;remnants.Transparency=NumberSequence.new(.5,1)
+  local light=Instance.new('PointLight');light.Color=gold;light.Range=8;light.Brightness=.8;light.Parent=p
+  local function animate(t)
+   core.CFrame=p.CFrame;core.Size=Vector3.one*(size*.22+math.sin(t*24)*size*.018)
+   shell.CFrame=p.CFrame;shell.Size=Vector3.one*(size*.52+math.sin(t*19)*size*.03)
+   local angle=0;local camera=workspace.CurrentCamera
+   if camera then
+    local head=camera:WorldToViewportPoint(p.Position)
+    local tail=camera:WorldToViewportPoint(p.Position-p.CFrame.LookVector*size)
+    angle=math.deg(math.atan2(tail.X-head.X,head.Y-tail.Y))
+   end
+   for _,v in ipairs(tongues)do
+    local i=v.index;local phase=t*7+i*math.pi*2/3
+    local length=size*(i==1 and 4.3 or (i==2 and 3.7 or 3.2))+math.sin(t*19-i)*size*.12
+    v.a.CFrame=CFrame.new(math.cos(phase)*size*.12,math.sin(phase)*size*.12,size*.12)*CFrame.Angles(0,-math.pi/2+math.sin(phase)*.65,0)
+    v.b.CFrame=CFrame.new(math.sin(t*12-i)*size*.25,math.cos(t*15-i)*size*.2,length)*CFrame.Angles(0,-math.pi/2+math.cos(phase)*.6,0)
+    v.beam.CurveSize0=size*(1.4+math.sin(t*13+i)*.4);v.beam.CurveSize1=-size*(.9+math.cos(t*11+i)*.3)
+    v.inner.CurveSize0=v.beam.CurveSize0;v.inner.CurveSize1=v.beam.CurveSize1
+   end
+   for _,v in ipairs(tailLayers)do
+    local i=v.index;local bend=math.sin(t*19-i*1.1)*size*.035*i
+    v.attachment.Position=Vector3.new(bend,math.cos(t*16-i)*size*.018*i,size*i*.35)
+    local flicker=angle+math.sin(t*15-i)*18
+    v.body.Rotation=NumberRange.new(flicker-12,flicker+12)
+   end
+   for _,v in ipairs(layers)do
+    local i=v.index;local curl=t*9+i/3*math.pi*2
+    local radius=i==0 and 0 or size*(.28+math.sin(t*13+i)*.045)
+    local spin=angle+t*155+i*105
+    v.body.Rotation=NumberRange.new(spin-18,spin+18)
+    v.body.Squash=NumberSequence.new(math.sin(t*15+i)*.08)
+    v.attachment.Position=Vector3.new(math.cos(curl)*radius,math.sin(curl)*radius, i==0 and 0 or size*(.12+math.sin(curl*.85)*.12))
+   end
+  end
+  local function finish()
+   core.Transparency=1;shell.Transparency=1;light.Enabled=false;wake.Enabled=false;remnants.Enabled=false
+   for _,v in ipairs(tongues)do v.beam.Enabled=false;v.inner.Enabled=false end
+   for _,group in ipairs({layers,tailLayers})do for _,v in ipairs(group)do v.body.Enabled=false;v.body:Clear()end end
+  end
+  return animate,finish
  end
  local function bolt(a,b,radius)
   local distance=(b-a).Magnitude;if distance<.1 then return end
-  local p=host('MoltenFireball',CFrame.lookAt(a,b),1.6);p.Shape=Enum.PartType.Ball;p.Size=Vector3.one*.55;p.Color=Color3.fromRGB(255,143,35);p.Material=Enum.Material.Neon;p.Transparency=0
-  local sheath=emitter(p,flame,160,NumberRange.new(.2,.38),NumberSequence.new({NumberSequenceKeypoint.new(0,1.4),NumberSequenceKeypoint.new(.25,3),NumberSequenceKeypoint.new(1,0)}),colors);sheath.Speed=NumberRange.new(1,4);sheath:Emit(12)
-  local core=emitter(p,flame,70,NumberRange.new(.1,.18),NumberSequence.new(1.1,0),ColorSequence.new(Color3.fromRGB(255,225,153),orange));core.Speed=NumberRange.new(0,2)
-  local tail=emitter(p,ember,35,NumberRange.new(.2,.45),NumberSequence.new(.5,0),ColorSequence.new(orange));tail.Speed=NumberRange.new(6,12)
-  local soot=emitter(p,smoke,18,NumberRange.new(.25,.55),NumberSequence.new(1.1,2.8),ColorSequence.new(Color3.fromRGB(65,49,42)));soot.LightEmission=0;soot.Transparency=NumberSequence.new(.7,1)
-  local light=Instance.new('PointLight');light.Color=orange;light.Range=9;light.Brightness=.9;light.Parent=p
-  local duration=math.clamp(distance/85,.18,.42)
-  Tween:Create(p,TweenInfo.new(duration,Enum.EasingStyle.Linear),{Position=b}):Play()
-  task.delay(duration,function()
-   if not p.Parent then return end
-   p.Transparency=1;sheath.Enabled=false;core.Enabled=false;tail.Enabled=false;soot.Enabled=false;light.Enabled=false;impact(b,math.clamp(radius,2,5))
+  local p=host('SolarFireball',CFrame.lookAt(a,b),1.8)
+  local animate,finish=fireballBody(p,2.8)
+  local t=0;local duration=math.clamp(distance/58,.24,.65);local connection
+  connection=Run.RenderStepped:Connect(function(dt)
+   if not p.Parent then connection:Disconnect();return end
+   t+=dt;local u=math.clamp(t/duration,0,1);p.CFrame=CFrame.lookAt(a:Lerp(b,u),b+(b-a).Unit)
+   animate(t)
+   if u>=1 then connection:Disconnect();finish();Debris:AddItem(p,.18)end
+  end)
+ end
+ local function projectile(name)
+  local anchor=name
+  if type(name)=='string'then local runtime=workspace:WaitForChild('SummonerRuntime',3);anchor=runtime and runtime:WaitForChild(name,1)end
+  if typeof(anchor)~='Instance'or not anchor.Parent or not fx.Parent then return end
+  local p=host('ActiveFireball',anchor.CFrame,2)
+  local animate,finish=fireballBody(p,2.8)
+  local t=0;local connection,destroyConnection;local ended=false
+  local function stop()
+   if ended then return end;ended=true
+   if connection then connection:Disconnect()end;if destroyConnection then destroyConnection:Disconnect()end
+   if p.Parent then finish();Debris:AddItem(p,.18)end
+  end
+  destroyConnection=anchor.Destroying:Connect(stop)
+  connection=Run.RenderStepped:Connect(function(dt)
+   if not p.Parent or not anchor.Parent then stop();return end
+   t+=dt;p.CFrame=p.CFrame:Lerp(anchor.CFrame,1-math.exp(-dt*35));animate(t)
   end)
  end
  local function jet(origin,target,duration,follow,density)
@@ -2719,25 +2919,142 @@ return function(deps)
   end)
  end
  local function wave(origin,direction,range)
-  for i=-2,2 do
-   local dir=CFrame.Angles(0,math.rad(i*14),0):VectorToWorldSpace(direction)
-   local p=host('SpellFlameFront',CFrame.lookAt(origin+dir*2,origin+dir*3),1.6)
-   local e=emitter(p,flame,180,NumberRange.new(.16,.35),NumberSequence.new({NumberSequenceKeypoint.new(0,1.8),NumberSequenceKeypoint.new(.3,3.6),NumberSequenceKeypoint.new(1,0)}),colors);e.EmissionDirection=Enum.NormalId.Top;e.Speed=NumberRange.new(2,8);e.Acceleration=Vector3.new(0,6,0);e:Emit(10)
-   local emb=emitter(p,ember,25,NumberRange.new(.2,.55),NumberSequence.new(.45,0),ColorSequence.new(orange));emb.Speed=NumberRange.new(5,10)
-   Tween:Create(p,TweenInfo.new(.42,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Position=origin+dir*range}):Play()
-   task.delay(.42,function()if p.Parent then e.Enabled=false;emb.Enabled=false end end)
+  local model=Instance.new('Model');model.Name='RollingFlameWave';model.Parent=fx;Debris:AddItem(model,1.25)
+  local frame=CFrame.lookAt(Vector3.new(origin.X,1.3,origin.Z),Vector3.new(origin.X,1.3,origin.Z)+direction)
+  local plumes={}
+  for i=-1,1 do
+   local p=host('FlamePlume',frame,1.25);p.Size=Vector3.new(1.8,1.4,2.2);p.Parent=model
+   local animate,finish=fireballBody(p,i==0 and 3.3 or 3)
+   plumes[#plumes+1]={p=p,animate=animate,finish=finish,index=i,angle=math.rad(i*18)}
   end
+  local t=0;local connection
+  connection=Run.RenderStepped:Connect(function(dt)
+   if not model.Parent then connection:Disconnect();return end
+   t+=dt;local u=math.clamp(t/.65,0,1);local travel=2+(range-2)*(1-(1-u)^1.25)
+   for _,v in ipairs(plumes)do
+    local localFrame=frame*CFrame.Angles(0,v.angle,0)
+    local sway=math.sin(t*12)*.2*math.sin(u*math.pi)
+    v.p.CFrame=localFrame*CFrame.new(sway,math.sin(t*12+v.index)*.25,-travel)*CFrame.Angles(0,0,math.sin(t*11+v.index)*.2)
+    v.animate(t)
+   end
+   if u>=1 then connection:Disconnect();for _,v in ipairs(plumes)do v.finish()end;Debris:AddItem(model,.18)end
+  end)
  end
- return {FireLine=fireLine,Charge=charge,Bolt=bolt,Breath=breath,AirBreath=airBreath,Wave=wave,Impact=impact}
+
+ return {FireLine=fireLine,Charge=charge,Bolt=bolt,Projectile=projectile,Breath=breath,AirBreath=airBreath,Wave=wave}
+end
+]====])
+-- Source: src/client/combat/GlacialArt.luau
+addModule(modules,{"combat","GlacialArt"},[====[
+-- A staggered eruption of faceted ice spires, with luminous cores and frost bursts.
+return function(deps)
+ local Run=game:GetService('RunService');local Debris=game:GetService('Debris')
+ local fx=deps.folder;local blue=Color3.fromRGB(55,146,231);local cyan=Color3.fromRGB(112,237,255);local white=Color3.fromRGB(228,255,255)
+ local function part(parent,name,size,cf,color)
+  local p=Instance.new('Part');p.Name=name;p.Size=size;p.CFrame=cf;p.Color=color;p.Material=Enum.Material.Neon;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false;p.Parent=parent;return p
+ end
+ local function face(parent,a,b,c,color,core)
+  if(b-a):Cross(c-a).Magnitude<.0001 then return end
+  local ab,ac,bc=b-a,c-a,c-b
+  if ab:Dot(ab)>ac:Dot(ac)and ab:Dot(ab)>bc:Dot(bc)then c,a=a,c elseif ac:Dot(ac)>ab:Dot(ab)and ac:Dot(ac)>bc:Dot(bc)then a,b=b,a end
+  ab,ac,bc=b-a,c-a,c-b;local right=ac:Cross(ab).Unit;local back=bc.Unit;local up=bc:Cross(right).Unit
+  for _,v in ipairs({{b,right,back,math.abs(ab:Dot(back))},{c,-right,-back,math.abs(ac:Dot(back))}})do if v[4]>.005 then
+   local p=Instance.new('WedgePart');p.Name=core and'IceLightCore'or'IceFacet';p.Size=Vector3.new(.025,math.abs(ab:Dot(up)),v[4]);p.CFrame=CFrame.fromMatrix((a+v[1])/2,v[2],up,v[3]);p.Material=core and Enum.Material.Neon or Enum.Material.Glass;p.Color=color;p.Transparency=core and .12 or .32;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false;p.Parent=parent
+  end end
+ end
+ local function edge(pivot,a,b)
+  local x=Instance.new('Attachment');x.Position=a;x.Parent=pivot;local y=Instance.new('Attachment');y.Position=b;y.Parent=pivot
+  local beam=Instance.new('Beam');beam.Name='IceLitEdge';beam.Attachment0=x;beam.Attachment1=y;beam.Width0=.045;beam.Width1=.02;beam.FaceCamera=true;beam.LightEmission=1;beam.Color=ColorSequence.new(cyan,white);beam.Transparency=NumberSequence.new(.3);beam.Parent=pivot;return beam
+ end
+ local function emitter(pivot,texture,color,size)
+  local p=Instance.new('ParticleEmitter');p.Texture='rbxasset://textures/particles/'..texture..'_main.dds';p.Rate=0;p.Lifetime=NumberRange.new(.3,.6);p.Speed=NumberRange.new(3,8);p.SpreadAngle=Vector2.new(65,65);p.Color=ColorSequence.new(white,color);p.Size=NumberSequence.new(size,0);p.Transparency=NumberSequence.new(.2,1);p.LightEmission=1;p.Parent=pivot;return p
+ end
+ local function strike(origin,direction,settings)
+  local model=Instance.new('Model');model.Name='GlacialEruption';model.Parent=fx;Debris:AddItem(model,3)
+  local frame=CFrame.lookAt(Vector3.new(origin.X,.12,origin.Z),Vector3.new(origin.X,.12,origin.Z)+direction)
+  local crystals={}
+  for row=1,7 do for flank=0,1 do
+   local m=Instance.new('Model');m.Name=flank==0 and'GlacialSpire'or'GlacialShard'
+   local pivot=part(m,'Pivot',Vector3.one*.1,CFrame.identity,blue);pivot.Transparency=1;m.PrimaryPart=pivot
+   local h=flank==0 and 6.8+row*.5 or 4.2+row*.15;local width=flank==0 and 1.35 or .85
+   local tip=Vector3.new((row%2==0 and 1 or -1)*.35,h,-h*.2)
+   local rim={}
+   for j=1,4 do local a=j*math.pi/2+.3;rim[j]=Vector3.new(math.cos(a)*width,h*.38,math.sin(a)*width-.3)end
+   for j=1,4 do
+    local nextIndex=j%4+1
+    face(m,tip,rim[j],rim[nextIndex],j%2==0 and cyan or blue,false)
+    local baseA=Vector3.new(rim[j].X*.7,-.15,rim[j].Z*.7)
+    local baseB=Vector3.new(rim[nextIndex].X*.7,-.15,rim[nextIndex].Z*.7)
+    face(m,baseA,rim[nextIndex],rim[j],blue,false);face(m,baseA,baseB,rim[nextIndex],blue,false)
+    local coreA=Vector3.new(rim[j].X*.38,h*.3,rim[j].Z*.38)
+    local coreB=Vector3.new(rim[nextIndex].X*.38,h*.3,rim[nextIndex].Z*.38)
+    face(m,tip*.91,coreA,coreB,white,true)
+    edge(pivot,rim[j],tip)
+   end
+   local ground=part(model,'IceBirthEmitter',Vector3.one*.1,CFrame.identity,blue);ground.Transparency=1
+   local burst=emitter(ground,'sparkles',cyan,.24)
+   local mist=emitter(ground,'smoke',blue,2.8);mist.Lifetime=NumberRange.new(.4,.75);mist.Speed=NumberRange.new(1,3);mist.Transparency=NumberSequence.new(.85,1)
+   local light=Instance.new('PointLight');light.Color=cyan;light.Brightness=0;light.Range=flank==0 and 12 or 7;light.Parent=ground
+   local flash=part(model,'BirthFlash',Vector3.one*.5,CFrame.new(0,.12,0),white);flash.Shape=Enum.PartType.Ball;flash.Transparency=1
+   local x=flank==0 and (row%2==0 and .6 or -.6)or(row%2==0 and -1 or 1)*(settings.width-1.3)
+   local target=frame*CFrame.new(x,0,-(row-.5)*settings.range/7)*CFrame.Angles(0,row*.67,0)
+   ground.CFrame=target*CFrame.new(0,.2,0);flash.CFrame=ground.CFrame
+   m:ScaleTo(.03);m:PivotTo(target);m.Parent=model
+   local frost=part(model,'GroundFrost',Vector3.new(3.4,.045,4.2),target*CFrame.new(0,.08,0),cyan);frost.Shape=Enum.PartType.Ball;frost.Transparency=1
+   local splinters={}
+   for chip=1,2 do
+    local shard=Instance.new('WedgePart');shard.Name='IceSplinter';shard.Size=Vector3.new(.18,.6+chip*.18,.35);shard.Color=chip==1 and white or cyan;shard.Material=Enum.Material.Glass;shard.Transparency=1;shard.Anchored=true;shard.CanCollide=false;shard.CanTouch=false;shard.CanQuery=false;shard.CastShadow=false;shard.Parent=model
+    local angle=row*1.7+flank*2.4+chip*2.1
+    splinters[chip]={p=shard,offset=Vector3.new(math.cos(angle),0,math.sin(angle))*1.5,velocity=Vector3.new(math.cos(angle)*2,4+chip,math.sin(angle)*2),angle=angle}
+   end
+   local parts={};for _,p in m:GetChildren()do if p:IsA('BasePart')and p.Name~='Pivot'and p.Name~='BirthFlash'then parts[#parts+1]=p end end
+   crystals[#crystals+1]={model=m,target=target,height=h,delay=(row-1)*.075,burst=burst,mist=mist,light=light,flash=flash,frost=frost,splinters=splinters,parts=parts,started=false}
+  end end
+  local serverAnchor
+  if settings.anchorName then local runtime=workspace:FindFirstChild('SummonerRuntime');serverAnchor=runtime and runtime:FindFirstChild(settings.anchorName)end
+  local t=0;local conn
+  conn=Run.RenderStepped:Connect(function(dt)
+   if not model.Parent then conn:Disconnect();return end
+   if serverAnchor and serverAnchor.Parent then t=math.max(0,(serverAnchor:GetAttribute('Elapsed')or .4)-.4)else t+=dt end
+   for _,c in ipairs(crystals)do
+    local age=t-c.delay;local growth=1-(1-math.clamp(age/.14,0,1))^3;local fade=math.clamp((age-.75)/.55,0,1)
+    if age>=0 and not c.started then c.started=true;c.burst:Emit(18);c.mist:Emit(6)end
+    c.model:ScaleTo(math.max(.03,growth*(1-fade*.12)))
+    c.model:PivotTo(c.target*CFrame.new(0,-c.height*(1-growth)-fade*1.2,0))
+    for _,p in ipairs(c.parts)do p.LocalTransparencyModifier=age<0 and 1 or fade end
+    c.light.Brightness=age<0 and 0 or(1-math.clamp(age/.35,0,1))*4
+    c.flash.Transparency=age<0 and 1 or math.clamp(age/.16,0,1)
+    c.flash.Size=Vector3.new(3.8,.25,3.8)*(1+math.clamp(age,0,.16)*5)
+    c.frost.Transparency=age<0 and 1 or .82+fade*.18
+    for _,chip in ipairs(c.splinters)do
+     local u=math.max(0,age);local offset=chip.offset+chip.velocity*u-Vector3.new(0,6*u*u,0)
+     offset=Vector3.new(offset.X,math.max(.2,offset.Y),offset.Z)
+     chip.p.CFrame=c.target*CFrame.new(offset)*CFrame.Angles(u*3,chip.angle+u*2,.3)
+     chip.p.Transparency=age<0 and 1 or .25+math.clamp((age-.35)/.65,0,1)*.75
+    end
+   end
+   if t>=2 then conn:Disconnect();model:Destroy()end
+  end)
+ end
+ return {Strike=strike}
 end
 ]====])
 -- Source: src/client/combat/Input.luau
 addModule(modules,{"combat","Input"},[====[
--- Fire along the character's facing, independent of pointer and camera position.
+-- Movement-facing Q and held basic attack. No pointer aiming or client damage.
 return function(deps)
- local UIS=game:GetService('UserInputService')
+ local UIS=game:GetService('UserInputService');local Run=game:GetService('RunService')
  local player,net=deps.player,deps.net
- local suspended=false
+ local suspended,basicBlocked=false,false;local held={};local basicClock=0;local hudInput
+ local function clearHeld()table.clear(held);basicClock=0;hudInput=nil end
+ local function setBasicHeld(source,value,input)
+  if value and(suspended or basicBlocked or UIS:GetFocusedTextBox())then return end
+  if source=='HUD'then
+   if not value and input and hudInput and input~=hudInput then return end
+   hudInput=value and input or nil
+  end
+  held[source]=value and true or nil
+ end
  local function requestDash()
   if suspended then return end
   local char=player.Character;local h=char and char:FindFirstChildOfClass('Humanoid');local root=char and char:FindFirstChild('HumanoidRootPart')
@@ -2747,14 +3064,278 @@ return function(deps)
  local function fireWave()
   if suspended then return end
   local char=player.Character;local root=char and char:FindFirstChild('HumanoidRootPart')
-  if root then net.Action:FireServer('fireWave',root.CFrame.LookVector) end
+  if root then net.Action:FireServer('fireWave',root.CFrame.LookVector)end
+ end
+ local function basicKey(input)
+  if input.KeyCode==Enum.KeyCode.F then return 'F'end
+  if input.KeyCode==Enum.KeyCode.ButtonR1 then return 'R1'end
+  if input.UserInputType==Enum.UserInputType.MouseButton1 then return 'Mouse'end
  end
  UIS.InputBegan:Connect(function(input,processed)
   if processed then return end
-  if input.KeyCode==Enum.KeyCode.Q or input.KeyCode==Enum.KeyCode.ButtonR2 then fireWave()
-  elseif input.KeyCode==Enum.KeyCode.E or input.KeyCode==Enum.KeyCode.ButtonB then requestDash() end
+  local key=basicKey(input)
+  if key then setBasicHeld(key,true)
+  elseif input.KeyCode==Enum.KeyCode.Q or input.KeyCode==Enum.KeyCode.ButtonR2 then fireWave()
+  elseif input.KeyCode==Enum.KeyCode.E or input.KeyCode==Enum.KeyCode.ButtonB then requestDash()end
  end)
- return {Dash=requestDash,FireWave=fireWave,SetSuspended=function(value)suspended=value end}
+ UIS.InputEnded:Connect(function(input)
+  local key=basicKey(input);if key then setBasicHeld(key,false)end
+  if input==hudInput then setBasicHeld('HUD',false,input)end
+ end)
+ UIS.WindowFocusReleased:Connect(clearHeld);player.CharacterRemoving:Connect(clearHeld)
+ Run.Heartbeat:Connect(function(dt)
+  if suspended or basicBlocked or not next(held)or UIS:GetFocusedTextBox()then basicClock=0;return end
+  basicClock-=dt
+  if basicClock<=0 then basicClock=.1;net.Action:FireServer('basicAttack')end
+ end)
+ return {Dash=requestDash,FireWave=fireWave,SetBasicHeld=setBasicHeld,
+  SetBasicBlocked=function(value)basicBlocked=value;if value then clearHeld()end end,
+  SetSuspended=function(value)suspended=value;if value then clearHeld()end end}
+end
+]====])
+-- Source: src/client/combat/LightArt.luau
+addModule(modules,{"combat","LightArt"},[====[
+-- Flat spinning crescent, comet-tip trails and compact wand bolts.
+return function(deps)
+ local Run=game:GetService('RunService');local Tween=game:GetService('TweenService');local Debris=game:GetService('Debris')
+ local fx=deps.folder;local white=Color3.fromRGB(225,251,255);local blue=Color3.fromRGB(105,204,255);local purple=Color3.fromRGB(193,128,255)
+ local function part(parent,name,size,color)
+  local p=Instance.new('Part');p.Name=name;p.Shape=Enum.PartType.Ball;p.Size=size;p.Material=Enum.Material.Neon;p.Color=color;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false;p.CastShadow=false;p.Parent=parent;return p
+ end
+ local function resolve(a)
+  if type(a)=='string'then local world=workspace:WaitForChild('SummonerRuntime',3);a=world and world:WaitForChild(a,2)end
+  return a and a.Parent and a
+ end
+ local function beam(pivot,color,width,alpha)
+  local a=Instance.new('Attachment');a.Parent=pivot;local b=Instance.new('Attachment');b.Parent=pivot
+  local e=Instance.new('Beam');e.Attachment0=a;e.Attachment1=b;e.FaceCamera=true;e.Width0=width;e.Width1=width;e.Color=ColorSequence.new(color,white);e.LightEmission=1;e.LightInfluence=0;e.Transparency=NumberSequence.new(alpha or .2);e.Parent=pivot
+  return {a=a,b=b,beam=e}
+ end
+ local function sparks(parent,color,rate)
+  local p=Instance.new('ParticleEmitter');p.Name='Starlight';p.Texture='rbxasset://textures/particles/sparkles_main.dds';p.Color=ColorSequence.new(white,color);p.Size=NumberSequence.new(.13,0);p.Transparency=NumberSequence.new(.15,1);p.Lifetime=NumberRange.new(.2,.5);p.Speed=NumberRange.new(1,3);p.SpreadAngle=Vector2.new(180,180);p.LightEmission=1;p.Rate=rate;p.Parent=parent;return p
+ end
+ -- Crescent = the portion of an outer disk left outside an offset inner disk.
+ local radius,cutRadius,cutOffset=3,2.8,1.2
+ local intersection=(radius*radius-cutRadius*cutRadius+cutOffset*cutOffset)/(2*cutOffset)
+ local top=math.sqrt(radius*radius-intersection*intersection)
+ local outerAngle=math.acos(intersection/radius);local innerAngle=math.atan2(top,intersection-cutOffset)
+ local function moonPoint(u,inner)
+  local start=inner and innerAngle or outerAngle;local angle=start+(math.pi*2-start*2)*u
+  local r=inner and cutRadius or radius
+  return Vector3.new(math.cos(angle)*r+(inner and cutOffset or 0),math.sin(angle)*r,0)
+ end
+ local function triangle(parent,a,b,c)
+  if(b-a):Cross(c-a).Magnitude<.0001 then return end
+  local ab,ac,bc=b-a,c-a,c-b
+  if ab:Dot(ab)>ac:Dot(ac)and ab:Dot(ab)>bc:Dot(bc)then c,a=a,c elseif ac:Dot(ac)>ab:Dot(ab)and ac:Dot(ac)>bc:Dot(bc)then a,b=b,a end
+  ab,ac,bc=b-a,c-a,c-b;local right=ac:Cross(ab).Unit;local back=bc.Unit;local up=bc:Cross(right).Unit
+  for _,v in ipairs({{b,right,back,math.abs(ab:Dot(back))},{c,-right,-back,math.abs(ac:Dot(back))}})do if v[4]>.005 then
+   local p=Instance.new('WedgePart');p.Name='CrescentBody';p.Size=Vector3.new(.035,math.abs(ab:Dot(up)),v[4]);p.CFrame=CFrame.fromMatrix((a+v[1])/2,v[2],up,v[3]);p.Color=purple;p.Material=Enum.Material.Neon;p.Transparency=.45;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false;p.Parent=parent
+  end end
+ end
+ local function cast(name,kind)
+  if kind~='lightRing' then return end
+  local anchor=resolve(name);if not anchor then return end
+  local model=Instance.new('Model');model.Name='NebulaCrescent';model.Parent=fx
+  local pivot=part(model,'Pivot',Vector3.one*.1,purple);pivot.Transparency=1;model.PrimaryPart=pivot
+  for i=1,20 do local u,v=(i-1)/20,i/20;triangle(model,moonPoint(u,false),moonPoint(v,false),moonPoint(v,true));triangle(model,moonPoint(u,false),moonPoint(v,true),moonPoint(u,true))end
+  local ribbons={};local inside={}
+  for layer=1,3 do
+   ribbons[layer]={}
+   for i=1,48 do
+    local v=beam(pivot,layer==1 and white or purple,layer==1 and .11 or(layer==2 and .4 or 1.1),layer==1 and .08 or(layer==2 and .35 or .85))
+    v.a.Position=moonPoint((i-1)/48,false);v.b.Position=moonPoint(i/48,false);ribbons[layer][i]=v
+   end
+  end
+  for i=1,48 do local v=beam(pivot,white,.055,.25);v.a.Position=moonPoint((i-1)/48,true);v.b.Position=moonPoint(i/48,true);inside[i]=v end
+  local light=Instance.new('PointLight');light.Color=purple;light.Brightness=2.4;light.Range=16;light.Parent=pivot
+  local stars={}
+  for i,u in ipairs({0,.5,1})do
+   local star=part(model,'CrescentTip',Vector3.one*(i==2 and .16 or .24),white)
+   local a=Instance.new('Attachment');a.Position=Vector3.new(-.22,0,0);a.Parent=star
+   local b=Instance.new('Attachment');b.Position=Vector3.new(.22,0,0);b.Parent=star
+   local trail=Instance.new('Trail');trail.Name='CrescentCometTail';trail.Attachment0=a;trail.Attachment1=b;trail.Lifetime=.22;trail.MinLength=.08;trail.Color=ColorSequence.new(white,purple);trail.LightEmission=1;trail.WidthScale=NumberSequence.new(1,0);trail.Transparency=NumberSequence.new(.3,1);trail.Parent=star
+   local dust=sparks(star,purple,12);dust.Size=NumberSequence.new(.16,0);dust.Speed=NumberRange.new(.5,2)
+   stars[i]={p=star,u=u,trail=trail}
+  end
+  -- A pair of thin trailing arcs makes rotation readable without another solid disk.
+  local echoes={}
+  for layer=1,2 do
+   echoes[layer]={}
+   for i=1,24 do echoes[layer][i]=beam(pivot,layer==1 and blue or purple,.08,layer==1 and .65 or .85)end
+  end
+  local conn,dc;local heading=anchor.CFrame.Rotation
+  local function clear()if conn then conn:Disconnect()end;if dc then dc:Disconnect()end;model:Destroy()end
+  dc=anchor.Destroying:Connect(clear)
+  conn=Run.RenderStepped:Connect(function()
+   if not anchor.Parent then clear();return end
+   local t=anchor:GetAttribute('Elapsed')or 0
+   -- Ease into a faster flat spin; use simulation time so previews and pauses agree.
+   local spin=8*t-6*.2*(1-math.exp(-t/.2))
+   local display=CFrame.new(anchor.Position)*heading*CFrame.Angles(-math.pi/2,0,spin)
+   model:PivotTo(display)
+   local returning=anchor:GetAttribute('Returning');light.Color=returning and blue or purple
+   for _,star in ipairs(stars)do star.p.Position=display:PointToWorldSpace(moonPoint(star.u,false))end
+   for layer,row in ipairs(echoes)do
+    local turn=CFrame.Angles(0,0,-layer*.22)
+    for i,v in ipairs(row)do
+     v.a.Position=turn:PointToWorldSpace(moonPoint((i-1)/24,false)*(1+layer*.035))
+     v.b.Position=turn:PointToWorldSpace(moonPoint(i/24,false)*(1+layer*.035))
+    end
+   end
+   local pulse=.9+.1*math.sin(t*13);light.Brightness=2.4*pulse
+  end)
+ end
+ local function bolt(name)
+  local anchor=resolve(name);if not anchor then return end
+  local model=Instance.new('Model');model.Name='WandLightBolt';model.Parent=fx
+  local p=part(model,'Core',Vector3.one*.28,white);model.PrimaryPart=p
+  local glow=part(model,'Glow',Vector3.one*.65,blue);glow.Transparency=.8
+  local a=Instance.new('Attachment');a.Position=Vector3.new(-.13,0,.2);a.Parent=p
+  local b=Instance.new('Attachment');b.Position=Vector3.new(.13,0,.2);b.Parent=p
+  local trail=Instance.new('Trail');trail.Attachment0=a;trail.Attachment1=b;trail.Lifetime=.18;trail.Color=ColorSequence.new(white,blue);trail.LightEmission=1;trail.Transparency=NumberSequence.new(.1,1);trail.WidthScale=NumberSequence.new(1,0);trail.Parent=p
+  sparks(p,blue,18)
+  local conn,dc
+  local function clear()if conn then conn:Disconnect()end;if dc then dc:Disconnect()end;model:Destroy()end
+  dc=anchor.Destroying:Connect(clear)
+  conn=Run.RenderStepped:Connect(function()if not anchor.Parent then clear();return end;model:PivotTo(anchor.CFrame)end)
+ end
+ local function hit(pos,kind)
+  local p=part(fx,'LightImpact',Vector3.one*.4,kind=='lightRing'and purple or blue);p.Position=pos;Debris:AddItem(p,.4)
+  Tween:Create(p,TweenInfo.new(.3),{Size=Vector3.one*1.3,Transparency=1}):Play();sparks(p,p.Color,0):Emit(8)
+ end
+ return {Cast=cast,Bolt=bolt,Hit=hit}
+end
+]====])
+-- Source: src/client/combat/LightningArt.luau
+addModule(modules,{"combat","LightningArt"},[====[
+-- Branched white-hot leaders, blue coronas and brief ground discharges.
+return function(deps)
+ local Run=game:GetService('RunService');local Players=game:GetService('Players');local Debris=game:GetService('Debris')
+ local violet=Color3.fromRGB(162,77,255)
+ local fx=deps.folder;local blue=Color3.fromRGB(83,157,255);local white=Color3.fromRGB(231,251,255)
+ local function ground(pos)
+  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.RespectCanCollide=true
+  local excluded={fx};local runtime=workspace:FindFirstChild('SummonerRuntime');if runtime then excluded[#excluded+1]=runtime end
+  for _,p in ipairs(Players:GetPlayers())do if p.Character then excluded[#excluded+1]=p.Character end end
+  params.FilterDescendantsInstances=excluded
+  local hit=workspace:Raycast(pos+Vector3.new(0,8,0),Vector3.new(0,-60,0),params)
+  return hit and hit.Position+Vector3.new(0,.15,0)or Vector3.new(pos.X,.15,pos.Z)
+ end
+ local function strike(from,to,hop)
+  local model=Instance.new('Model');model.Name='BranchedChainLightning';model.Parent=fx;Debris:AddItem(model,1.4)
+  local pivot=Instance.new('Part');pivot.Name='LightningPivot';pivot.Size=Vector3.one*.1;pivot.Transparency=1;pivot.Anchored=true;pivot.CanCollide=false;pivot.CanTouch=false;pivot.CanQuery=false;pivot.CFrame=CFrame.identity;pivot.Parent=model
+  local strokes={};local landing=ground(to);local rng=Random.new()
+  local function line(a,b,width,delay,main)
+   for layer=1,main and 3 or 2 do
+    local x=Instance.new('Attachment');x.Position=a;x.Parent=pivot;local y=Instance.new('Attachment');y.Position=b;y.Parent=pivot
+    local beam=Instance.new('Beam');beam.Name=layer==1 and'LightningWhiteCore'or'LightningCorona';beam.Attachment0=x;beam.Attachment1=y;beam.FaceCamera=true;beam.Width0=width*(layer==1 and .38 or(layer==2 and 1.2 or 2.8));beam.Width1=beam.Width0*.85;beam.Color=ColorSequence.new(layer==1 and white or(layer==3 and violet or blue));beam.LightEmission=1;beam.Brightness=2;beam.LightInfluence=0;if layer>1 then beam.Texture='rbxasset://textures/particles/smoke_main.dds';beam.TextureMode=Enum.TextureMode.Stretch end;beam.Transparency=NumberSequence.new(1);beam.Parent=pivot
+    strokes[#strokes+1]={beam=beam,delay=delay,alpha=layer==1 and .02 or(layer==2 and .36 or .78)}
+   end
+  end
+  local function jagged(a,b,segments,width,delay,main)
+   local span=b-a;if span.Magnitude<.01 then return {a,b}end;local side=span:Cross(Vector3.yAxis);if side.Magnitude<.1 then side=Vector3.xAxis else side=side.Unit end
+   local other=span.Unit:Cross(side);local points={a}
+   for i=1,segments-1 do
+    local spread=math.sin(i/segments*math.pi)
+    points[#points+1]=a:Lerp(b,i/segments)+side*rng:NextNumber(-1.5,1.5)*spread+other*rng:NextNumber(-.6,.6)*spread
+   end
+   points[#points+1]=b
+   for i=1,#points-1 do line(points[i],points[i+1],width*(main and(.8+i/#points*.5)or(1-i/(#points*2))),delay+i*.004,main)end
+   return points
+  end
+  local points=jagged(landing+Vector3.new(0,(hop or 1)==1 and 30 or 11,0),landing,12,2.2,0,true)
+  -- Two lower forks merge into the landing rather than narrowing to one thin thread.
+  jagged(landing+Vector3.new(-2,9,.5),landing+Vector3.new(.4,0,0),6,.85,.025,true)
+  jagged(landing+Vector3.new(1.8,7,-.6),landing,6,.85,.04,true)
+  for n=1,4 do
+   local index=2+n*2;local a=points[index];local angle=n*2.2+rng:NextNumber(-.3,.3)
+   jagged(a,a+Vector3.new(math.cos(angle)*(4+n*.5),-3-n*.3,math.sin(angle)*(4+n*.5)),4,.32,index*.004,false)
+  end
+  if (hop or 1)>1 and(from-to).Magnitude>.1 then jagged(ground(from)+Vector3.new(0,.25,0),landing+Vector3.new(0,.25,0),8,.6,.025,true)end
+  for i=1,6 do
+   local angle=i*math.pi/3+rng:NextNumber(-.2,.2)
+   local endpoint=ground(landing+Vector3.new(math.cos(angle),0,math.sin(angle))*rng:NextNumber(5,8))
+   jagged(landing,endpoint,4,.36,.055+i*.004,false)
+  end
+  local flash=Instance.new('Part');flash.Name='LightningLandingFlash';flash.Shape=Enum.PartType.Ball;flash.Material=Enum.Material.Neon;flash.Color=white;flash.Size=Vector3.new(1,.25,1);flash.CFrame=CFrame.new(landing);flash.Transparency=1;flash.Anchored=true;flash.CanCollide=false;flash.CanTouch=false;flash.CanQuery=false;flash.CastShadow=false;flash.Parent=model
+  local light=Instance.new('PointLight');light.Color=blue;light.Range=22;light.Brightness=0;light.Parent=flash
+  local sparks=Instance.new('ParticleEmitter');sparks.Texture='rbxasset://textures/particles/sparkles_main.dds';sparks.Rate=0;sparks.Lifetime=NumberRange.new(.15,.4);sparks.Speed=NumberRange.new(7,18);sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(75,75);sparks.Size=NumberSequence.new(.22,0);sparks.Color=ColorSequence.new(white,blue);sparks.LightEmission=1;sparks.Parent=flash
+  local dust=Instance.new('ParticleEmitter');dust.Texture='rbxasset://textures/particles/smoke_main.dds';dust.Rate=0;dust.Lifetime=NumberRange.new(.3,.6);dust.Speed=NumberRange.new(3,6);dust.SpreadAngle=Vector2.new(80,80);dust.Color=ColorSequence.new(Color3.fromRGB(115,140,166));dust.Size=NumberSequence.new(1.2,3);dust.Transparency=NumberSequence.new(.78,1);dust.Parent=flash
+  local function ball(name,size,color,alpha,pos)
+   local p=Instance.new('Part');p.Name=name;p.Shape=Enum.PartType.Ball;p.Size=size;p.Material=Enum.Material.Neon;p.Color=color;p.Transparency=alpha;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false;p.Position=pos;p.Parent=model;return p
+  end
+  local scale=(hop or 1)==1 and 1 or .7
+  local halo=ball('VioletImpactAura',Vector3.new(1,.2,1),violet,1,landing)
+  local inner=ball('CyanImpactAura',Vector3.new(1,.25,1),blue,1,landing+Vector3.new(0,.07,0))
+  local column=ball('ArcaneColumn',Vector3.new(2.1,12,2.1),blue,.79,landing+Vector3.new(0,6,0))
+  local petals={};local motes={}
+  local function tangentFrame(pos,axis)
+   local x=axis.Unit;local z=x:Cross(Vector3.zAxis);if z.Magnitude<.1 then z=x:Cross(Vector3.xAxis)end;z=z.Unit;return CFrame.fromMatrix(pos,x,z:Cross(x),z)
+  end
+  for i=1,16 do
+   local angle=i*math.pi/8;local dir=Vector3.new(math.cos(angle),0,math.sin(angle))
+   local a=Instance.new('Attachment');a.CFrame=tangentFrame(landing+dir*.4,dir+Vector3.yAxis*1.4);a.Parent=pivot
+   local b=Instance.new('Attachment');b.CFrame=tangentFrame(landing+dir*(8+i%3)*scale+Vector3.new(0,.2,0),dir);b.Parent=pivot
+   local beam=Instance.new('Beam');beam.Name='ArcaneImpactPetal';beam.Texture='rbxasset://textures/particles/smoke_main.dds';beam.TextureMode=Enum.TextureMode.Stretch;beam.Attachment0=a;beam.Attachment1=b;beam.FaceCamera=true;beam.Width0=3*scale;beam.Width1=.02;beam.CurveSize0=3*scale;beam.CurveSize1=2*scale;beam.Segments=16;beam.Color=ColorSequence.new(white,i%2==0 and blue or violet);beam.LightEmission=1;beam.Brightness=2;beam.Transparency=NumberSequence.new(1);beam.Parent=pivot;petals[i]=beam
+  end
+  for i=1,11 do
+   local a=i*math.pi*2/11;local p=ball('ArcaneSpark',Vector3.one*.28,white,1,landing)
+   local glow=ball('SparkAura',Vector3.one*1.1,blue,1,landing)
+   motes[i]={p=p,glow=glow,velocity=Vector3.new(math.cos(a)*(5+i%3),5+i%4,math.sin(a)*(5+i%3))}
+  end
+  dust.Color=ColorSequence.new(violet,blue);dust.LightEmission=1;dust.Brightness=2;dust.Size=NumberSequence.new(3,10);dust.Transparency=NumberSequence.new(.86,1)
+  local bloom=Instance.new('ParticleEmitter');bloom.Name='ArcaneImpactBloom';bloom.Texture='rbxasset://textures/particles/forcefield_glow_main.dds';bloom.Rate=0;bloom.Speed=NumberRange.new(0);bloom.Lifetime=NumberRange.new(.4,.5);bloom.Size=NumberSequence.new(13*scale,20*scale);bloom.Color=ColorSequence.new(Color3.fromRGB(100,224,255),violet);bloom.Transparency=NumberSequence.new(.15,1);bloom.LightEmission=1;bloom.Brightness=5;bloom.Parent=flash
+  -- Delayed concentric shock fronts travel out over the floor after contact.
+  local rings={}
+  for ring=1,((hop or 1)==1 and 2 or 1)do
+   local segments={}
+   for i=1,24 do
+    local a=Instance.new('Attachment');a.Parent=pivot;local b=Instance.new('Attachment');b.Parent=pivot
+    for layer=1,2 do
+     local beam=Instance.new('Beam');beam.Name='LightningGroundShockRing';beam.Attachment0=a;beam.Attachment1=b;beam.FaceCamera=true;beam.Width0=layer==1 and .13 or .85;beam.Width1=beam.Width0;beam.LightEmission=1;beam.Brightness=2;beam.Color=ColorSequence.new(ring==1 and blue or violet);beam.Transparency=NumberSequence.new(1);beam.Segments=5
+     if layer==2 then beam.Texture='rbxasset://textures/particles/smoke_main.dds';beam.TextureMode=Enum.TextureMode.Stretch end
+     beam.Parent=pivot;segments[#segments+1]={beam=beam,a=a,b=b,index=i,layer=layer}
+    end
+   end
+   rings[ring]=segments
+  end
+  local t=0;local emitted=false;local connection
+  connection=Run.RenderStepped:Connect(function(dt)
+   if not model.Parent then connection:Disconnect();return end
+   t+=dt
+   if t>=.055 and not emitted then emitted=true;bloom:Emit(3);sparks:Emit(40);dust:Emit(10)end
+   local flicker=(t<.09 or(t>.13 and t<.19)or(t>.23 and t<.27))and 0 or .7
+   for _,v in ipairs(strokes)do
+    local age=t-v.delay;local fade=age<0 and 1 or math.max(flicker,math.clamp((age-.32)/.32,0,1))
+    v.beam.Transparency=NumberSequence.new(v.alpha+(1-v.alpha)*fade)
+   end
+   local burst=math.clamp((t-.055)/.16,0,1);flash.Size=Vector3.new(1+burst*5,.3+burst*.3,1+burst*5);flash.Transparency=t<.055 and 1 or .3+burst*.7
+   local age=math.max(0,t-.055);local fade=math.clamp((age-.12)/.5,0,1)
+   halo.Size=Vector3.new(6+age*33,.25,6+age*33)*scale;halo.Transparency=t<.055 and 1 or .77+fade*.23
+   inner.Size=Vector3.new(4+age*26,.35,4+age*26)*scale;inner.Transparency=t<.055 and 1 or .68+fade*.32
+   column.Transparency=.79+fade*.21
+   for _,beam in ipairs(petals)do beam.Transparency=NumberSequence.new(t<.055 and 1 or .35+fade*.65,1)end
+   for _,v in ipairs(motes)do v.p.Position=landing+v.velocity*age+Vector3.new(0,-3*age*age,0);v.glow.Position=v.p.Position;v.p.Transparency=t<.055 and 1 or fade;v.glow.Transparency=.85+fade*.15 end
+   for ring,segments in ipairs(rings)do
+    local u=math.clamp((t-.055-(ring-1)*.1)/.55,0,1)
+    local radius=(.8+(ring==1 and 13 or 11)*(1-(1-u)^2))*scale
+    local alpha=u<=0 and 1 or .28+u*.72
+    for _,v in ipairs(segments)do
+     local function frame(index)
+      local angle=index/24*math.pi*2;local tangent=Vector3.new(-math.sin(angle),0,math.cos(angle))
+      return CFrame.fromMatrix(landing+Vector3.new(math.cos(angle)*radius,.08+ring*.03,math.sin(angle)*radius),tangent,Vector3.yAxis,tangent:Cross(Vector3.yAxis))
+     end
+     v.a.CFrame=frame(v.index-1);v.b.CFrame=frame(v.index)
+     v.beam.CurveSize0=radius*math.pi/36;v.beam.CurveSize1=v.beam.CurveSize0
+     v.beam.Transparency=NumberSequence.new(v.layer==1 and alpha or math.min(1,alpha+.35))
+    end
+   end
+   light.Brightness=6*(1-math.clamp((t-.055)/.3,0,1))
+   if t>=.85 then connection:Disconnect();model:Destroy()end
+  end)
+ end
+ return {Strike=strike}
 end
 ]====])
 -- Source: src/client/combat/PreviewScene.luau
@@ -2810,7 +3391,18 @@ return function(deps)
  end
  local function begin(spell,level)
   clear();time=0;id=spell;rank=level
-  if id=='meteor' or id=='frost' or id=='ward' then
+  if id=='lightRing'then
+   local point=casterPoint+Vector3.new(0,.8,0);local a=anchor(id,point,3,3.2);a.CFrame=CFrame.lookAt(point,point+forward);a:SetAttribute('Role','ring');play('lightCast',a,id)
+   at(38/34,function()a:SetAttribute('Returning',true)end);at(38/34+38/40,function()a:Destroy()end);duration=3.1
+  elseif id=='basic'then
+   for shot=1,5 do
+    local born=(shot-1)*.3
+    at(born,function()
+     local point=casterPoint+forward*2+Vector3.new(0,.8,0);local a=anchor(id,point,0,1);a:SetAttribute('Born',born);a.CFrame=CFrame.lookAt(point,point+forward);play('basicBolt',a)
+     at(born+28/80,function()a:Destroy();play('basicHit',targetPoint)end)
+    end)
+   end;duration=2.3
+  elseif id=='meteor' or id=='frost' or id=='ward' then
    local seconds=id=='meteor' and 3.2 or(id=='blades' and 6 or(id=='frost' and .75 or 5))
    local point=id=='meteor' and targetPoint or casterPoint
    point=Vector3.new(point.X,.35,point.Z)
@@ -2844,7 +3436,11 @@ return function(deps)
    for i,offset in ipairs({Vector3.zero,Vector3.new(5,0,0),Vector3.new(0,0,5),Vector3.new(-5,0,0),Vector3.new(0,0,-5)})do at(1.75+(i-1)*.16,function()play('skyLanceHit',point+offset,3.3)end)end
    at(2.65,function()a:Destroy()end);duration=4.1
   elseif id=='fire' then
-   at(.2,function()play('fire',casterPoint,targetPoint,2.5+rank*.6)end);duration=2.4
+   local start=casterPoint+forward*3+Vector3.new(0,1.2,0);local flight=42/58
+   local a=anchor('fire',start,0,.2+flight);a.CFrame=CFrame.lookAt(start,start+forward)
+   at(.2,function()play('fireProjectile',a)end)
+   for i=1,15 do at(.2+flight*i/15,function()if a.Parent then local pos=start+forward*42*i/15;a.CFrame=CFrame.lookAt(pos,pos+forward)end end)end
+   at(.2+flight,function()a:Destroy()end);duration=2.4
   elseif id=='lightning' then
    for hop=1,1+rank do
     at(.2+(hop-1)*.14,function()
@@ -2860,8 +3456,6 @@ return function(deps)
    play('iceCast',a,frame,.42)
    at(seconds,function()a:Destroy();targets[2]:SetAttribute('Frozen',true);play('iceHit',targets[2],targetPoint,1.2)end)
    at(seconds+1.2,function()targets[2]:SetAttribute('Frozen',false)end);duration=seconds+2
-  elseif id=='fireWave' then
-   at(.25,function()play('fireWave',casterPoint,forward,30)end);duration=2.4
   elseif id=='thunder'or id=='aetherLance' then
    local a=anchor(id,casterPoint,0,.4);a.CFrame=CFrame.lookAt(casterPoint,casterPoint+forward);a:SetAttribute('Range',52)
    play('activeCast',a,id);play(id=='thunder'and'thunderSpear'or'aetherSpear',a)
@@ -2901,7 +3495,12 @@ return function(deps)
   for _,a in ipairs(anchors)do
    if a.Parent then
     a:SetAttribute('Elapsed',time)
-    if id=='blades' and a:GetAttribute('Role')=='bolt' then
+    if id=='lightRing'then
+     local outward=38/34;local distance=time<=outward and time*34 or math.max(0,38-(time-outward)*40)
+     local point=casterPoint+Vector3.new(0,.8,0)+forward*distance+forward:Cross(Vector3.yAxis)*math.sin(distance/38*math.pi)*(time<=outward and 1.8 or -2);a.CFrame=CFrame.lookAt(point,point+(time<=outward and forward or -forward))
+    elseif id=='basic'then
+     local point=casterPoint+forward*(2+math.max(0,time-a:GetAttribute('Born'))*80)+Vector3.new(0,.8,0);a.CFrame=CFrame.lookAt(point,point+forward)
+    elseif id=='blades' and a:GetAttribute('Role')=='bolt' then
      local point=a:GetAttribute('Origin')+a:GetAttribute('Direction')*math.max(0,time-a:GetAttribute('Born'))*48;a.CFrame=CFrame.lookAt(point,point+a:GetAttribute('Direction'))
     elseif (id=='thunder'or id=='aetherLance')and time>=.4 then
      a:SetAttribute('Launched',true);local p=casterPoint+forward*(3+math.min(52,(time-.4)*48))+Vector3.new(0,1.2,0);a.CFrame=CFrame.lookAt(p,p+forward)
@@ -3319,8 +3918,18 @@ return function(deps)
 	local skills=label(top,"화염탄 1 · 골렘 1",UDim2.new(1,-24,0,16),UDim2.fromOffset(12,72),nil,palette.text);skills.TextSize=11;skills.TextXAlignment=Enum.TextXAlignment.Left
 	skills.Size=UDim2.new(1,-24,0,26);skills.Position=UDim2.fromOffset(12,68)
 	local golemStatus=label(top,"대지 강타 · 자동",UDim2.new(1,-24,0,16),UDim2.fromOffset(12,96),nil,palette.gold);golemStatus.TextSize=11;golemStatus.TextXAlignment=Enum.TextXAlignment.Left
-	local pulse=make("TextButton",gui,{Name="Pulse",Size=UDim2.fromOffset(108,72),Position=UDim2.new(1,-20,1,-88),AnchorPoint=Vector2.new(1,1),BackgroundColor3=palette.mint,TextColor3=palette.bg,Text="화염 파동\n[Q] 준비",Font=Enum.Font.GothamBold,TextSize=17,AutoButtonColor=true}); round(pulse,16)
+	local pulse=make("TextButton",gui,{Name="Pulse",Size=UDim2.fromOffset(108,72),Position=UDim2.new(1,-20,1,-88),AnchorPoint=Vector2.new(1,1),BackgroundColor3=palette.mint,TextColor3=palette.bg,Text="화염탄\n[Q] 준비",Font=Enum.Font.GothamBold,TextSize=17,AutoButtonColor=true}); round(pulse,16)
 	local dashButton=make("TextButton",gui,{Name="Dash",Size=UDim2.fromOffset(108,58),Position=UDim2.new(1,-20,1,-18),AnchorPoint=Vector2.new(1,1),BackgroundColor3=Color3.fromRGB(135,203,255),TextColor3=palette.bg,Text="대시 [E]\n준비",Font=Enum.Font.GothamBold,TextSize=15,AutoButtonColor=true});round(dashButton,14)
+ local basicButton=make("TextButton",gui,{Name="BasicAttack",Size=UDim2.fromOffset(108,58),Position=UDim2.new(1,-20,1,-172),AnchorPoint=Vector2.new(1,1),BackgroundColor3=Color3.fromRGB(177,210,255),TextColor3=palette.bg,Text="마법탄 [F/R1]\n누르고 연속 발사",Font=Enum.Font.GothamBold,TextSize=13,AutoButtonColor=true});round(basicButton,14)
+ basicButton.InputBegan:Connect(function(key)if key.UserInputType==Enum.UserInputType.MouseButton1 or key.UserInputType==Enum.UserInputType.Touch then deps.input.SetBasicHeld('HUD',true,key)end end)
+ basicButton.InputEnded:Connect(function(key)if key.UserInputType==Enum.UserInputType.MouseButton1 or key.UserInputType==Enum.UserInputType.Touch then deps.input.SetBasicHeld('HUD',false,key)end end)
+ basicButton.SelectionLost:Connect(function()deps.input.SetBasicHeld('HUD',false)end)
+ local returnButton=make('TextButton',gui,{Name='ReturnToLobby',Size=UDim2.fromOffset(132,30),Position=UDim2.new(1,-12,0,82),AnchorPoint=Vector2.new(1,0),BackgroundColor3=palette.card,TextColor3=palette.muted,Text='도전 중단 · 로비',Font=Enum.Font.GothamBold,TextSize=12,Visible=false,ZIndex=30,AutoButtonColor=true});round(returnButton,8)
+ local returning=false
+ returnButton.Activated:Connect(function()
+  if returning then return end;returning=true;deps.input.SetBasicHeld('HUD',false)
+  returnButton.Text='돌아가는 중…';net.Action:FireServer('returnToLobby')
+ end)
 	local function layoutActions()
 		local width=workspace.CurrentCamera.ViewportSize.X
 		top.Size=UDim2.fromOffset(math.clamp(width-152,180,340),116)
@@ -3348,11 +3957,14 @@ return function(deps)
 	local resultTitle=label(ending,"생존 성공!",UDim2.new(.9,0,0,70),UDim2.fromScale(.5,.32),Enum.Font.GothamBold,palette.mint); resultTitle.AnchorPoint=Vector2.new(.5,.5); resultTitle.TextSize=38; resultTitle.ZIndex=21
 	local resultInfo=label(ending,"",UDim2.new(.9,0,0,60),UDim2.fromScale(.5,.48),nil,palette.text); resultInfo.AnchorPoint=Vector2.new(.5,.5); resultInfo.TextSize=19; resultInfo.ZIndex=21
 	local again=make("TextButton",ending,{Name="Restart",Size=UDim2.fromOffset(220,58),Position=UDim2.fromScale(.5,.65),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.mint,TextColor3=palette.bg,Text="로비로 돌아가기",Font=Enum.Font.GothamBold,TextSize=20,ZIndex=21}); round(again)
-	again.Activated:Connect(function() net.Action:FireServer("restart") end)
+	again.Activated:Connect(function() net.Action:FireServer("returnToLobby") end)
 	pulse.Activated:Connect(deps.input.FireWave)
 	dashButton.Activated:Connect(deps.input.Dash)
 	local lastChoice=""
 	net.State.OnClientEvent:Connect(function(s)
+        returnButton.Visible=s.lobby~=true and s.over~=true
+        if s.lobby then returning=false;returnButton.Text='도전 중단 · 로비'end
+        deps.input.SetBasicBlocked(s.lobby==true or s.over==true or s.offers~=nil or s.paused==true)
         title.Text=s.phase=="boss" and "DRAGON / 시간 제한 없음" or "SURVIVAL / 드래곤 등장까지"
         bossPanel.Visible=s.phase=="boss" and s.boss~=nil and not s.over
         if s.boss then
@@ -3366,11 +3978,11 @@ return function(deps)
         xpInfo.Text=string.format("경험치 %d/%d",s.xp,s.need)
 		local text={"골렘 "..s.golem}; if s.fire>0 then table.insert(text,"화염탄 "..s.fire)end; if s.lightning>0 then table.insert(text,"번개 "..s.lightning) end; if s.ice>0 then table.insert(text,"얼음 "..s.ice) end
 		if (s.meteor or 0)>0 then table.insert(text,"메테오 "..s.meteor)end
-		for _,v in ipairs({{"blades","결정"},{"frost","서리"},{"ward","결계"},{"missile","마탄"},{"skyLances","천공"}})do if (s[v[1]] or 0)>0 then table.insert(text,v[2].." "..s[v[1]])end end
+		for _,v in ipairs({{"blades","결정"},{"frost","서리"},{"ward","결계"},{"missile","마탄"},{"skyLances","천공"},{"lightRing","광륜"}})do if (s[v[1]] or 0)>0 then table.insert(text,v[2].." "..s[v[1]])end end
 		local lines={}
 		for i=1,#text,3 do table.insert(lines,table.concat(text," · ",i,math.min(i+2,#text)))end
 		skills.Text=table.concat(lines,"\n")
-		local activeName=s.activeName or "화염 파동"
+		local activeName=s.activeName or "화염탄"
 		pulse.Text=activeName.."\n"..(s.cooldown>0 and s.cooldown.."초" or "[Q] 준비")
 		local dashCd=s.dashCooldown or 0
 		dashButton.Text=dashCd>0 and "대시 [E]\n"..string.format("%.1f초",dashCd) or "대시 [E]\n준비"
@@ -3412,7 +4024,7 @@ return function(deps)
  local function resize()local v=workspace.CurrentCamera.ViewportSize;scale.Scale=math.min(1,(v.X-24)/960,(v.Y-24)/744)end
  workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'):Connect(resize);resize()
  local heading=label(panel,'ARCANE HAVEN  /  마법사의 안식처',UDim2.fromOffset(900,38),UDim2.fromOffset(28,18),Enum.Font.GothamBold,palette.mint);heading.TextSize=25;heading.TextXAlignment=Enum.TextXAlignment.Left
- local hint=label(panel,'Q 사용 스킬 1개와 자동 마법 3개를 골라 출발하세요.',UDim2.fromOffset(900,24),UDim2.fromOffset(28,62),nil,palette.muted);hint.TextXAlignment=Enum.TextXAlignment.Left;hint.TextSize=15
+ local hint=label(panel,'Q 사용 스킬 1개와 자동 마법 4개를 골라 출발하세요.',UDim2.fromOffset(900,24),UDim2.fromOffset(28,62),nil,palette.muted);hint.TextXAlignment=Enum.TextXAlignment.Left;hint.TextSize=15
  local slots=label(panel,'마법 목록을 불러오는 중…',UDim2.fromOffset(900,24),UDim2.fromOffset(28,196),Enum.Font.GothamBold,palette.gold);slots.Name='SelectedSpells';slots.TextXAlignment=Enum.TextXAlignment.Left;slots.TextSize=15
  local grid=make('ScrollingFrame',panel,{Name='Spells',Size=UDim2.fromOffset(904,390),Position=UDim2.fromOffset(28,232),CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,BackgroundTransparency=1,BorderSizePixel=0})
  make('UIGridLayout',grid,{CellSize=UDim2.new(.5,-8,0,88),CellPadding=UDim2.fromOffset(12,10),SortOrder=Enum.SortOrder.LayoutOrder})
@@ -3421,11 +4033,11 @@ return function(deps)
  local footer=label(panel,'Q / 패드 R2 선택한 스킬 · E / 패드 B 대시 · 골렘은 기본 동행  |  선택한 마법은 1단계로 시작하고 레벨업으로 강화됩니다.',UDim2.fromOffset(904,26),UDim2.fromOffset(28,704),nil,palette.muted);footer.TextSize=12
  local activeLabel=label(panel,'Q 사용 스킬',UDim2.fromOffset(900,20),UDim2.fromOffset(28,90),Enum.Font.GothamBold,palette.gold);activeLabel.TextSize=13;activeLabel.TextXAlignment=Enum.TextXAlignment.Left
  local selected,options,buttons={},{},{}
- local activeSkill='fireWave';local activeButtons={}
+ local activeSkill='fire';local activeButtons={}
  local queued=false;local inLobby=nil;local pending=false
  local function refresh()
   local names={};for _,id in ipairs(selected)do for _,v in ipairs(options)do if v.id==id then table.insert(names,v.name)end end end
-  slots.Text=string.format('선택 %d / 3   ·   ',#selected)..table.concat(names,'  +  ')
+  slots.Text=string.format('선택 %d / 4   ·   ',#selected)..table.concat(names,'  +  ')
   for id,item in pairs(buttons)do
    local active=table.find(selected,id)~=nil
    item.button.BackgroundColor3=active and Color3.fromRGB(40,65,73) or palette.card
@@ -3433,7 +4045,7 @@ return function(deps)
   end
   for id,b in pairs(activeButtons)do b.BackgroundColor3=id==activeSkill and Color3.fromRGB(53,89,99) or palette.card end
   start.Text=queued and '준비 취소' or '전투 시작'
-  start.BackgroundColor3=#selected==3 and palette.mint or Color3.fromRGB(92,119,127)
+  start.BackgroundColor3=#selected==4 and palette.mint or Color3.fromRGB(92,119,127)
  end
  local function buildActive(items)
   local width=(904-(#items-1)*10)/#items
@@ -3454,7 +4066,7 @@ return function(deps)
    b.Activated:Connect(function()
     if queued or pending then return end
     local i=table.find(selected,v.id)
-    if i then table.remove(selected,i)elseif #selected<3 then table.insert(selected,v.id)else status.Text='선택한 마법 하나를 해제한 뒤 다른 마법을 골라 주세요.'end
+    if i then table.remove(selected,i)elseif #selected<4 then table.insert(selected,v.id)else status.Text='선택한 마법 하나를 해제한 뒤 다른 마법을 골라 주세요.'end
     refresh()
    end)
   end
@@ -3462,13 +4074,13 @@ return function(deps)
  start.Activated:Connect(function()
   if pending then return end
   if queued then net.Action:FireServer('cancelReady');return end
-  if #selected~=3 then status.Text='서로 다른 마법을 3개 골라 주세요.';return end
+  if #selected~=4 then status.Text='서로 다른 마법을 4개 골라 주세요.';return end
   pending=true;start.Text='출발 준비 중…';net.Action:FireServer('startRound',table.clone(selected),activeSkill)
   task.delay(2,function()pending=false;refresh()end)
  end)
  net.State.OnClientEvent:Connect(function(s)
   local visible=s.lobby==true
-  if visible and inLobby~=true then selected=table.clone(s.loadout or {});activeSkill=s.activeSkill or 'fireWave';input.SetSuspended(true);hud.Enabled=false end
+  if visible and inLobby~=true then selected=table.clone(s.loadout or {});activeSkill=s.activeSkill or 'fire';input.SetSuspended(true);hud.Enabled=false end
   if not visible and inLobby~=false then
    input.SetSuspended(false);hud.Enabled=true
    local c=player.Character;local root=c and c:FindFirstChild('HumanoidRootPart')
@@ -3497,19 +4109,20 @@ return function(deps)
  local player,net,input,hud=deps.player,deps.net,deps.input,deps.hud
  local theme=require(script.Parent.Parent.Theme);local make,label,round=theme.Make,theme.Label,theme.Round;local palette=theme.Palette
  local spells={
+  {id='lightRing',name='성운 광륜',note='빛나는 초승달 부메랑 · 곡선 왕복 관통'},
+  {id='basic',name='기본 공격 · 별빛 마법탄',note='작은 빛의 탄환 · 누르고 연속 발사',common=true},
   {id='meteor',name='메테오',note='천천히 낙하하는 대형 운석과 충돌 폭발'},
   {id='skyLances',name='천공의 창',note='상공의 마법진에서 차례로 내려오는 다섯 마법 창'},
   {id='blades',name='비전 결정',note='등 뒤의 다섯 결정 · 개별 발사 · 재충전'},
   {id='frost',name='서리 폭발',note='냉기 응축 · 충격파 · 얼음 결정'},
   {id='missile',name='추적 마탄',note='강한 적 하나를 노리는 단일 대상 추적탄'},
   {id='ward',name='수호 결계',note='결계 생성 · 타격 · 보호막 파괴'},
-  {id='fire',name='화염탄',note='불꽃 탄환과 적중 폭발'},
+  {id='fire',name='화염탄 [Q]',note='정면으로 발사하는 불꽃 탄환 · 적중 범위 피해',common=true},
   {id='ice',name='빙결 얼음창',note='정면 마법진 · 얼음창 · 빙결'},
   {id='lightning',name='연쇄 번개',note='하늘에서 내려꽂히는 연쇄 번개'},
-  {id='fireWave',name='화염 파동 [Q]',note='정면으로 퍼지는 부채꼴 화염',common=true},
   {id='thunder',name='뇌창 [Q]',note='정면으로 쏘아 보내는 관통 번개 창',common=true},
   {id='aetherLance',name='성운창 [Q]',note='푸른 아지랑이가 모여 가느다란 창으로 발사',common=true},
-  {id='iceRush',name='빙하 쇄도 [Q]',note='정면에 솟아오르는 얼음 기둥',common=true},
+  {id='iceRush',name='빙하 쇄도 [Q]',note='땅에서 차례로 솟는 얼음 결정 · 빙결과 섬광',common=true},
   {id='golem',name='골렘 대지 강타',note='현재 게임과 같은 5단계 최대 연출',common=true},
   {id='dash',name='대시',note='이동 궤적과 잔상',common=true},
  }

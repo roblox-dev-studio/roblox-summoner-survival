@@ -59,3 +59,30 @@ CC0 드래곤의 꼬리 영역에 길이 축 1.65배 변형과 관절 관성을 
 ## 사용자 제공 반짝임 참고 이미지 (2026-10-17)
 
 `magic-wand-sparkle-trails.zip` 안의 JPG를 열어 푸른/보라색 굽이치는 잔광과 작은 반짝임 구성을 참고했습니다. ZIP에는 JPG/EPS만 있고 이용 조건이나 제작자 표시는 제공되지 않았습니다. 원본 JPG/EPS를 게임·설치기·저장소에 포함하지 않았고 EPS를 실행/가져오지 않았습니다. 성운창은 `AetherLanceArt.luau`의 직접 작성한 형상·Beam/Trail과 Roblox 내장 smoke_main/sparkles_main 텍스처만 사용합니다. 참고 파일 이름/해시/사용 범위는 `assets/vfx/user-sparkle-reference/manifest.json`에 기록했습니다.
+
+## 사용자 제공 Light effects set 참고 이미지 (2026-10-18)
+
+사용자의 `light-effects-set.zip`에는 `8148.jpg`/`8148.eps`만 있으며 제작자·라이선스는 제공되지 않았습니다. JPG의 발광 고리·나선·별빛 레이어만 시각 참고했고 원본 파일은 게임/설치기/저장소에 포함하지 않았습니다. EPS를 실행하거나 가져오지 않았습니다. LightArt/GlacialArt는 직접 작성한 Beam·Trail·입체 형상과 Roblox 내장 sparkles_main 텍스처를 사용합니다. 파일 해시와 사용 범위는 assets/vfx/light-effects-reference/manifest.json에 기록합니다.
+
+
+## 2026-10-18 화염·번개 참고와 직접 만든 불꽃 이미지
+
+[원형 이펙트 01 불꽃](https://www.acon3d.com/ko/product/1000034557)(sozai wo douzo), [화염 PNG 페이지](https://www.pngegg.com/ko/png-dhzhm)(작가 미표시·비상업적 용도 표기), [액션 마법 이펙트 번개](https://www.acon3d.com/ko/product/1000047245)(도토리작가)의 공개 미리보기를 색과 실루엣 참고로 열람했습니다. 상품/PNG 원본을 다운로드·구매·게임에 포함하지 않았습니다. `FlameTexture.luau`는 직접 작성한 곡선·노이즈·색 계산으로128×128 RGBA 불꽃을 생성하고 `FireArt`의 BillboardGui/ImageLabel에서 표시합니다. 신규 `LightningArt`는 직접 작성한 Beam 가지/지면 방전을 사용합니다. 기존 FireArt의 AetherFX MIT 출처와 라이선스는 유지합니다. 참고 범위와 생성기 해시는 `assets/vfx/fire-lightning-reference/manifest.json`에 기록합니다.
+
+
+2026-10-18 후속 수정: 위의 FlameTexture/BillboardGui 방식은 사용자 요청으로 런타임과 소스에서 제거했습니다. 현재 화염은 Roblox 기본 Fire, 내장 입자·Beam·Trail과 직접 작성한 발광 형상으로 표시하며 화염에 Image APIs가 필요하지 않습니다. 사용자가 제공한 `0c0a9cd9a02d9c328f063e70a39fe458.jpg`는 청백색 번개/보라색 지면 충격의 색감·구성 참고로만 열람했습니다. 작가/사용 조건은 미제공이며 원본은 저장소나 게임에 포함하지 않습니다.
+
+
+2026-10-18 연결된 화염 참고: 사용자가 첨부한 iStock 미리보기4개(2202275228/Sensvector, 513381956/Mojito_mak, 182842270/ramihalim, 1352338867/dzika_mrowka)의 밝은 내부·주황색 외곽·이어지는 불길을 시각 참고했습니다. 원본/워터마크 이미지는 편집·추출·임포트·재배포하지 않았습니다. FlameSurface는 직접 작성한 절차적 형상/색 애니메이션이며 참고 파일의 해시와 사용 범위는 기존 fire-lightning-reference manifest에 기록했습니다.
+
+2026-10-18 후속 피드백으로 연결된 FlameSurface 메시를 제거했습니다. 현재 화염 파동은 네이티브 Fire/내장 입자와 독립된3줄기 움직임을 사용하며 참고 사진은 포함하지 않습니다.
+
+
+### Fireball reference silhouette · 2026-10-18
+
+User-provided Fireball.webp and saved PNGEgg png-dhxxq.html (canonical https://www.pngegg.com/ko/png-dhxxq) were viewed/read as visual references only for a bright rounded head and warm tapered tail. Creator/license not established; neither file is imported, uploaded, executed or redistributed. Hashes are recorded in assets/vfx/fire-lightning-reference/manifest.json. Implementation uses existing Roblox built-in textures and original attached beam/particle code.
+
+
+### Long tapered fire tail · 2026-10-18
+
+png-clipart-flame-fire-flame.png: user supplied visual reference for a long teardrop flame silhouette; creator and license unestablished. Not imported/uploaded/redistributed. Hash recorded in fire-lightning-reference manifest. No new texture asset added.

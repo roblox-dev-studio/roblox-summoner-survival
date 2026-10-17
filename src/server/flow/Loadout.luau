@@ -1,6 +1,7 @@
 -- Public spell descriptions and strict server-side loadout validation.
+local SLOT_COUNT=4
 local options={
- {id='fire',name='화염탄',role='빠른 자동 공격',desc='가까운 적에게 불꽃을 쏘고 작은 폭발을 일으킵니다.',color={255,155,82}},
+ {id='lightRing',name='성운 광륜',role='초승달 부메랑 · 왕복 관통',desc='빛나는 초승달이 곡선을 그리며 날아갔다가 돌아오며 다시 타격합니다.',color={204,163,255}},
  {id='ice',name='빙결 얼음창',role='빙결 · 밀치기',desc='마법진에서 얼음창을 쏘아 적을 밀치고 얼립니다.',color={132,218,255}},
  {id='lightning',name='연쇄 번개',role='여러 적 연속 타격',desc='하늘에서 내려꽂힌 번개가 주변 적에게 이어집니다.',color={208,191,255}},
  {id='meteor',name='메테오',role='강력한 광역 폭발',desc='거대한 운석이 하늘에서 낙하해 밀집한 적을 강타합니다.',color={255,188,91}},
@@ -15,18 +16,19 @@ local function validate(ids)
  if type(ids)~='table' then return nil end
  local result,seen,count={},{},0
  for key,id in pairs(ids)do
-  if type(key)~='number' or key%1~=0 or key<1 or key>3 or type(id)~='string' or not allowed[id] or seen[id] then return nil end
+  if type(key)~='number' or key%1~=0 or key<1 or key>SLOT_COUNT or type(id)~='string' or not allowed[id] or seen[id] then return nil end
   seen[id]=true;result[key]=id;count+=1
  end
- if count~=3 or not result[1] or not result[2] or not result[3] then return nil end
+ if count~=SLOT_COUNT then return nil end
+ for i=1,SLOT_COUNT do if not result[i]then return nil end end
  return result
 end
 local activeOptions={
- {id='fireWave',name='화염 파동',desc='정면 부채꼴 · 밀치기 · 7초'},
+ {id='fire',name='화염탄',desc='정면 불꽃 탄환 · 적중 범위 피해 · 7초'},
  {id='thunder',name='뇌창',desc='정면으로 날아가는 번개 창 · 관통 · 7초'},
  {id='aetherLance',name='성운창',desc='아지랑이 빛의 창 · 관통 · 7초'},
  {id='iceRush',name='빙하 쇄도',desc='정면 얼음 기둥 · 빙결 · 7초'},
 }
 local activeNames={};for _,v in ipairs(activeOptions)do activeNames[v.id]=v.name end
 local function validateActive(id)return type(id)=='string' and activeNames[id]~=nil end
-return {Options=options,Validate=validate,Defaults={'fire','meteor','blades'},ActiveOptions=activeOptions,ActiveNames=activeNames,ValidateActive=validateActive}
+return {Options=options,Validate=validate,SlotCount=SLOT_COUNT,Defaults={'ice','meteor','blades','lightRing'},ActiveOptions=activeOptions,ActiveNames=activeNames,ValidateActive=validateActive}

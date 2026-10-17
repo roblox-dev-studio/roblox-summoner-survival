@@ -49,7 +49,18 @@ return function(deps)
  end
  local function begin(spell,level)
   clear();time=0;id=spell;rank=level
-  if id=='meteor' or id=='frost' or id=='ward' then
+  if id=='lightRing'then
+   local point=casterPoint+Vector3.new(0,.8,0);local a=anchor(id,point,3,3.2);a.CFrame=CFrame.lookAt(point,point+forward);a:SetAttribute('Role','ring');play('lightCast',a,id)
+   at(38/34,function()a:SetAttribute('Returning',true)end);at(38/34+38/40,function()a:Destroy()end);duration=3.1
+  elseif id=='basic'then
+   for shot=1,5 do
+    local born=(shot-1)*.3
+    at(born,function()
+     local point=casterPoint+forward*2+Vector3.new(0,.8,0);local a=anchor(id,point,0,1);a:SetAttribute('Born',born);a.CFrame=CFrame.lookAt(point,point+forward);play('basicBolt',a)
+     at(born+28/80,function()a:Destroy();play('basicHit',targetPoint)end)
+    end)
+   end;duration=2.3
+  elseif id=='meteor' or id=='frost' or id=='ward' then
    local seconds=id=='meteor' and 3.2 or(id=='blades' and 6 or(id=='frost' and .75 or 5))
    local point=id=='meteor' and targetPoint or casterPoint
    point=Vector3.new(point.X,.35,point.Z)
@@ -83,7 +94,11 @@ return function(deps)
    for i,offset in ipairs({Vector3.zero,Vector3.new(5,0,0),Vector3.new(0,0,5),Vector3.new(-5,0,0),Vector3.new(0,0,-5)})do at(1.75+(i-1)*.16,function()play('skyLanceHit',point+offset,3.3)end)end
    at(2.65,function()a:Destroy()end);duration=4.1
   elseif id=='fire' then
-   at(.2,function()play('fire',casterPoint,targetPoint,2.5+rank*.6)end);duration=2.4
+   local start=casterPoint+forward*3+Vector3.new(0,1.2,0);local flight=42/58
+   local a=anchor('fire',start,0,.2+flight);a.CFrame=CFrame.lookAt(start,start+forward)
+   at(.2,function()play('fireProjectile',a)end)
+   for i=1,15 do at(.2+flight*i/15,function()if a.Parent then local pos=start+forward*42*i/15;a.CFrame=CFrame.lookAt(pos,pos+forward)end end)end
+   at(.2+flight,function()a:Destroy()end);duration=2.4
   elseif id=='lightning' then
    for hop=1,1+rank do
     at(.2+(hop-1)*.14,function()
@@ -99,8 +114,6 @@ return function(deps)
    play('iceCast',a,frame,.42)
    at(seconds,function()a:Destroy();targets[2]:SetAttribute('Frozen',true);play('iceHit',targets[2],targetPoint,1.2)end)
    at(seconds+1.2,function()targets[2]:SetAttribute('Frozen',false)end);duration=seconds+2
-  elseif id=='fireWave' then
-   at(.25,function()play('fireWave',casterPoint,forward,30)end);duration=2.4
   elseif id=='thunder'or id=='aetherLance' then
    local a=anchor(id,casterPoint,0,.4);a.CFrame=CFrame.lookAt(casterPoint,casterPoint+forward);a:SetAttribute('Range',52)
    play('activeCast',a,id);play(id=='thunder'and'thunderSpear'or'aetherSpear',a)
@@ -140,7 +153,12 @@ return function(deps)
   for _,a in ipairs(anchors)do
    if a.Parent then
     a:SetAttribute('Elapsed',time)
-    if id=='blades' and a:GetAttribute('Role')=='bolt' then
+    if id=='lightRing'then
+     local outward=38/34;local distance=time<=outward and time*34 or math.max(0,38-(time-outward)*40)
+     local point=casterPoint+Vector3.new(0,.8,0)+forward*distance+forward:Cross(Vector3.yAxis)*math.sin(distance/38*math.pi)*(time<=outward and 1.8 or -2);a.CFrame=CFrame.lookAt(point,point+(time<=outward and forward or -forward))
+    elseif id=='basic'then
+     local point=casterPoint+forward*(2+math.max(0,time-a:GetAttribute('Born'))*80)+Vector3.new(0,.8,0);a.CFrame=CFrame.lookAt(point,point+forward)
+    elseif id=='blades' and a:GetAttribute('Role')=='bolt' then
      local point=a:GetAttribute('Origin')+a:GetAttribute('Direction')*math.max(0,time-a:GetAttribute('Born'))*48;a.CFrame=CFrame.lookAt(point,point+a:GetAttribute('Direction'))
     elseif (id=='thunder'or id=='aetherLance')and time>=.4 then
      a:SetAttribute('Launched',true);local p=casterPoint+forward*(3+math.min(52,(time-.4)*48))+Vector3.new(0,1.2,0);a.CFrame=CFrame.lookAt(p,p+forward)
