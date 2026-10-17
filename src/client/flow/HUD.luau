@@ -24,8 +24,18 @@ return function(deps)
 	local skills=label(top,"화염탄 1 · 골렘 1",UDim2.new(1,-24,0,16),UDim2.fromOffset(12,72),nil,palette.text);skills.TextSize=11;skills.TextXAlignment=Enum.TextXAlignment.Left
 	skills.Size=UDim2.new(1,-24,0,26);skills.Position=UDim2.fromOffset(12,68)
 	local golemStatus=label(top,"대지 강타 · 자동",UDim2.new(1,-24,0,16),UDim2.fromOffset(12,96),nil,palette.gold);golemStatus.TextSize=11;golemStatus.TextXAlignment=Enum.TextXAlignment.Left
-	local pulse=make("TextButton",gui,{Name="Pulse",Size=UDim2.fromOffset(108,72),Position=UDim2.new(1,-20,1,-88),AnchorPoint=Vector2.new(1,1),BackgroundColor3=palette.mint,TextColor3=palette.bg,Text="화염 파동\n[Q] 준비",Font=Enum.Font.GothamBold,TextSize=17,AutoButtonColor=true}); round(pulse,16)
+	local pulse=make("TextButton",gui,{Name="Pulse",Size=UDim2.fromOffset(108,72),Position=UDim2.new(1,-20,1,-88),AnchorPoint=Vector2.new(1,1),BackgroundColor3=palette.mint,TextColor3=palette.bg,Text="화염탄\n[Q] 준비",Font=Enum.Font.GothamBold,TextSize=17,AutoButtonColor=true}); round(pulse,16)
 	local dashButton=make("TextButton",gui,{Name="Dash",Size=UDim2.fromOffset(108,58),Position=UDim2.new(1,-20,1,-18),AnchorPoint=Vector2.new(1,1),BackgroundColor3=Color3.fromRGB(135,203,255),TextColor3=palette.bg,Text="대시 [E]\n준비",Font=Enum.Font.GothamBold,TextSize=15,AutoButtonColor=true});round(dashButton,14)
+ local basicButton=make("TextButton",gui,{Name="BasicAttack",Size=UDim2.fromOffset(108,58),Position=UDim2.new(1,-20,1,-172),AnchorPoint=Vector2.new(1,1),BackgroundColor3=Color3.fromRGB(177,210,255),TextColor3=palette.bg,Text="마법탄 [F/R1]\n누르고 연속 발사",Font=Enum.Font.GothamBold,TextSize=13,AutoButtonColor=true});round(basicButton,14)
+ basicButton.InputBegan:Connect(function(key)if key.UserInputType==Enum.UserInputType.MouseButton1 or key.UserInputType==Enum.UserInputType.Touch then deps.input.SetBasicHeld('HUD',true,key)end end)
+ basicButton.InputEnded:Connect(function(key)if key.UserInputType==Enum.UserInputType.MouseButton1 or key.UserInputType==Enum.UserInputType.Touch then deps.input.SetBasicHeld('HUD',false,key)end end)
+ basicButton.SelectionLost:Connect(function()deps.input.SetBasicHeld('HUD',false)end)
+ local returnButton=make('TextButton',gui,{Name='ReturnToLobby',Size=UDim2.fromOffset(132,30),Position=UDim2.new(1,-12,0,82),AnchorPoint=Vector2.new(1,0),BackgroundColor3=palette.card,TextColor3=palette.muted,Text='도전 중단 · 로비',Font=Enum.Font.GothamBold,TextSize=12,Visible=false,ZIndex=30,AutoButtonColor=true});round(returnButton,8)
+ local returning=false
+ returnButton.Activated:Connect(function()
+  if returning then return end;returning=true;deps.input.SetBasicHeld('HUD',false)
+  returnButton.Text='돌아가는 중…';net.Action:FireServer('returnToLobby')
+ end)
 	local function layoutActions()
 		local width=workspace.CurrentCamera.ViewportSize.X
 		top.Size=UDim2.fromOffset(math.clamp(width-152,180,340),116)
@@ -53,11 +63,14 @@ return function(deps)
 	local resultTitle=label(ending,"생존 성공!",UDim2.new(.9,0,0,70),UDim2.fromScale(.5,.32),Enum.Font.GothamBold,palette.mint); resultTitle.AnchorPoint=Vector2.new(.5,.5); resultTitle.TextSize=38; resultTitle.ZIndex=21
 	local resultInfo=label(ending,"",UDim2.new(.9,0,0,60),UDim2.fromScale(.5,.48),nil,palette.text); resultInfo.AnchorPoint=Vector2.new(.5,.5); resultInfo.TextSize=19; resultInfo.ZIndex=21
 	local again=make("TextButton",ending,{Name="Restart",Size=UDim2.fromOffset(220,58),Position=UDim2.fromScale(.5,.65),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.mint,TextColor3=palette.bg,Text="로비로 돌아가기",Font=Enum.Font.GothamBold,TextSize=20,ZIndex=21}); round(again)
-	again.Activated:Connect(function() net.Action:FireServer("restart") end)
+	again.Activated:Connect(function() net.Action:FireServer("returnToLobby") end)
 	pulse.Activated:Connect(deps.input.FireWave)
 	dashButton.Activated:Connect(deps.input.Dash)
 	local lastChoice=""
 	net.State.OnClientEvent:Connect(function(s)
+        returnButton.Visible=s.lobby~=true and s.over~=true
+        if s.lobby then returning=false;returnButton.Text='도전 중단 · 로비'end
+        deps.input.SetBasicBlocked(s.lobby==true or s.over==true or s.offers~=nil or s.paused==true)
         title.Text=s.phase=="boss" and "DRAGON / 시간 제한 없음" or "SURVIVAL / 드래곤 등장까지"
         bossPanel.Visible=s.phase=="boss" and s.boss~=nil and not s.over
         if s.boss then
@@ -71,11 +84,11 @@ return function(deps)
         xpInfo.Text=string.format("경험치 %d/%d",s.xp,s.need)
 		local text={"골렘 "..s.golem}; if s.fire>0 then table.insert(text,"화염탄 "..s.fire)end; if s.lightning>0 then table.insert(text,"번개 "..s.lightning) end; if s.ice>0 then table.insert(text,"얼음 "..s.ice) end
 		if (s.meteor or 0)>0 then table.insert(text,"메테오 "..s.meteor)end
-		for _,v in ipairs({{"blades","결정"},{"frost","서리"},{"ward","결계"},{"missile","마탄"},{"skyLances","천공"}})do if (s[v[1]] or 0)>0 then table.insert(text,v[2].." "..s[v[1]])end end
+		for _,v in ipairs({{"blades","결정"},{"frost","서리"},{"ward","결계"},{"missile","마탄"},{"skyLances","천공"},{"lightRing","광륜"}})do if (s[v[1]] or 0)>0 then table.insert(text,v[2].." "..s[v[1]])end end
 		local lines={}
 		for i=1,#text,3 do table.insert(lines,table.concat(text," · ",i,math.min(i+2,#text)))end
 		skills.Text=table.concat(lines,"\n")
-		local activeName=s.activeName or "화염 파동"
+		local activeName=s.activeName or "화염탄"
 		pulse.Text=activeName.."\n"..(s.cooldown>0 and s.cooldown.."초" or "[Q] 준비")
 		local dashCd=s.dashCooldown or 0
 		dashButton.Text=dashCd>0 and "대시 [E]\n"..string.format("%.1f초",dashCd) or "대시 [E]\n준비"

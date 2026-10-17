@@ -11,7 +11,7 @@ return function(deps)
  local function resize()local v=workspace.CurrentCamera.ViewportSize;scale.Scale=math.min(1,(v.X-24)/960,(v.Y-24)/744)end
  workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'):Connect(resize);resize()
  local heading=label(panel,'ARCANE HAVEN  /  마법사의 안식처',UDim2.fromOffset(900,38),UDim2.fromOffset(28,18),Enum.Font.GothamBold,palette.mint);heading.TextSize=25;heading.TextXAlignment=Enum.TextXAlignment.Left
- local hint=label(panel,'Q 사용 스킬 1개와 자동 마법 3개를 골라 출발하세요.',UDim2.fromOffset(900,24),UDim2.fromOffset(28,62),nil,palette.muted);hint.TextXAlignment=Enum.TextXAlignment.Left;hint.TextSize=15
+ local hint=label(panel,'Q 사용 스킬 1개와 자동 마법 4개를 골라 출발하세요.',UDim2.fromOffset(900,24),UDim2.fromOffset(28,62),nil,palette.muted);hint.TextXAlignment=Enum.TextXAlignment.Left;hint.TextSize=15
  local slots=label(panel,'마법 목록을 불러오는 중…',UDim2.fromOffset(900,24),UDim2.fromOffset(28,196),Enum.Font.GothamBold,palette.gold);slots.Name='SelectedSpells';slots.TextXAlignment=Enum.TextXAlignment.Left;slots.TextSize=15
  local grid=make('ScrollingFrame',panel,{Name='Spells',Size=UDim2.fromOffset(904,390),Position=UDim2.fromOffset(28,232),CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,BackgroundTransparency=1,BorderSizePixel=0})
  make('UIGridLayout',grid,{CellSize=UDim2.new(.5,-8,0,88),CellPadding=UDim2.fromOffset(12,10),SortOrder=Enum.SortOrder.LayoutOrder})
@@ -20,11 +20,11 @@ return function(deps)
  local footer=label(panel,'Q / 패드 R2 선택한 스킬 · E / 패드 B 대시 · 골렘은 기본 동행  |  선택한 마법은 1단계로 시작하고 레벨업으로 강화됩니다.',UDim2.fromOffset(904,26),UDim2.fromOffset(28,704),nil,palette.muted);footer.TextSize=12
  local activeLabel=label(panel,'Q 사용 스킬',UDim2.fromOffset(900,20),UDim2.fromOffset(28,90),Enum.Font.GothamBold,palette.gold);activeLabel.TextSize=13;activeLabel.TextXAlignment=Enum.TextXAlignment.Left
  local selected,options,buttons={},{},{}
- local activeSkill='fireWave';local activeButtons={}
+ local activeSkill='fire';local activeButtons={}
  local queued=false;local inLobby=nil;local pending=false
  local function refresh()
   local names={};for _,id in ipairs(selected)do for _,v in ipairs(options)do if v.id==id then table.insert(names,v.name)end end end
-  slots.Text=string.format('선택 %d / 3   ·   ',#selected)..table.concat(names,'  +  ')
+  slots.Text=string.format('선택 %d / 4   ·   ',#selected)..table.concat(names,'  +  ')
   for id,item in pairs(buttons)do
    local active=table.find(selected,id)~=nil
    item.button.BackgroundColor3=active and Color3.fromRGB(40,65,73) or palette.card
@@ -32,7 +32,7 @@ return function(deps)
   end
   for id,b in pairs(activeButtons)do b.BackgroundColor3=id==activeSkill and Color3.fromRGB(53,89,99) or palette.card end
   start.Text=queued and '준비 취소' or '전투 시작'
-  start.BackgroundColor3=#selected==3 and palette.mint or Color3.fromRGB(92,119,127)
+  start.BackgroundColor3=#selected==4 and palette.mint or Color3.fromRGB(92,119,127)
  end
  local function buildActive(items)
   local width=(904-(#items-1)*10)/#items
@@ -53,7 +53,7 @@ return function(deps)
    b.Activated:Connect(function()
     if queued or pending then return end
     local i=table.find(selected,v.id)
-    if i then table.remove(selected,i)elseif #selected<3 then table.insert(selected,v.id)else status.Text='선택한 마법 하나를 해제한 뒤 다른 마법을 골라 주세요.'end
+    if i then table.remove(selected,i)elseif #selected<4 then table.insert(selected,v.id)else status.Text='선택한 마법 하나를 해제한 뒤 다른 마법을 골라 주세요.'end
     refresh()
    end)
   end
@@ -61,13 +61,13 @@ return function(deps)
  start.Activated:Connect(function()
   if pending then return end
   if queued then net.Action:FireServer('cancelReady');return end
-  if #selected~=3 then status.Text='서로 다른 마법을 3개 골라 주세요.';return end
+  if #selected~=4 then status.Text='서로 다른 마법을 4개 골라 주세요.';return end
   pending=true;start.Text='출발 준비 중…';net.Action:FireServer('startRound',table.clone(selected),activeSkill)
   task.delay(2,function()pending=false;refresh()end)
  end)
  net.State.OnClientEvent:Connect(function(s)
   local visible=s.lobby==true
-  if visible and inLobby~=true then selected=table.clone(s.loadout or {});activeSkill=s.activeSkill or 'fireWave';input.SetSuspended(true);hud.Enabled=false end
+  if visible and inLobby~=true then selected=table.clone(s.loadout or {});activeSkill=s.activeSkill or 'fire';input.SetSuspended(true);hud.Enabled=false end
   if not visible and inLobby~=false then
    input.SetSuspended(false);hud.Enabled=true
    local c=player.Character;local root=c and c:FindFirstChild('HumanoidRootPart')

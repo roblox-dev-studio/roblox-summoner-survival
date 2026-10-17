@@ -1,6 +1,7 @@
 -- Original procedural art. Active casts follow server time, so menu pauses freeze them.
 return function(deps)
  local Run=game:GetService('RunService');local Debris=game:GetService('Debris');local Tween=game:GetService('TweenService')
+ local Players=game:GetService('Players')
  local fx=deps.folder
  local skyLances=require(script.Parent.SkyLanceArt)({folder=fx})
  local gold=Color3.fromRGB(255,171,62);local ice=Color3.fromRGB(158,235,255);local mint=Color3.fromRGB(132,255,220)
@@ -120,7 +121,13 @@ return function(deps)
   destroyConn=anchor.Destroying:Connect(clear)
   conn=Run.RenderStepped:Connect(function()
    if not anchor.Parent then clear();return end
-   local center=anchor.Position;local t=anchor:GetAttribute('Elapsed')or 0;local u=math.clamp(t/duration,0,1)
+   local center=anchor.Position
+   if kind=='ward'then
+    local ownerId=anchor:GetAttribute('OwnerUserId');local owner=ownerId and Players:GetPlayerByUserId(ownerId)
+    local root=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
+    if root then center=root.Position-Vector3.new(0,2.6,0)end
+   end
+   local t=anchor:GetAttribute('Elapsed')or 0;local u=math.clamp(t/duration,0,1)
    for i,p in ipairs(arcs)do
     local a=(i-1)*math.pi/24;local b=i*math.pi/24
     local r=radius*(kind=='meteor' and (.85+u*.15) or(kind=='frost' and .3+u*.7 or 1))

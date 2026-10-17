@@ -60,13 +60,19 @@ net.Action.OnServerEvent:Connect(function(player,kind,id,activeId)
         progression.Sync(s)
         return
     end
+    if kind == "returnToLobby" then
+        if id==nil and activeId==nil then session.ReturnToLobby(s)end
+        return
+    end
     if s.previewDragon or s.previewSkills then return end
     if kind == "startRound" then session.StartRound(s,id,activeId); return end
     if kind == "cancelReady" then session.CancelReady(s); return end
     if s.lobby then return end
     if kind == "restart" then if s.over then session.Restart() end; return end
     if s.over then return end
-    if kind == "choose" then progression.Choose(s,id)
+    if kind == "basicAttack" then
+        if id==nil then combat.RequestBasic(s)end
+    elseif kind == "choose" then progression.Choose(s,id)
     elseif kind == "dash" then
         if movement.RequestDash(s,id) then progression.Sync(s) end
     elseif kind == "fireWave" then

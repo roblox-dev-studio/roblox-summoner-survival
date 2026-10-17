@@ -3,7 +3,7 @@ local createProgression = require("../src/server/flow/Progression")
 local humanoid = {Health=50, MaxHealth=100, WalkSpeed=22}
 local packets, dashStops = {}, 0
 local s = {player={},level=1,xp=5,kills=0,fire=1,lightning=0,ice=0,golem=1,
-    meteor=0,missile=0,blades=0,frost=0,ward=0,vitality=0,agility=0,magnet=0,cooldown=0,over=false}
+    meteor=0,missile=0,skyLances=0,lightRing=0,blades=0,frost=0,ward=0,vitality=0,agility=0,magnet=0,cooldown=0,over=false}
 local progression = createProgression({
     states={s},gems={},rng={NextInteger=function(_,low) return low end},
     rootOf=function() return {},humanoid end, paused=function() return true end,
@@ -33,20 +33,26 @@ assert(s.fire==fire, "Ended round must reject upgrades")
 print("PASS: progression offer validation, single consumption, vitality, end-state guard")
 
 local loadouts=require('../src/server/flow/Loadout')
-assert(loadouts.Validate({'meteor','ward','frost'}))
-for _,invalid in ipairs({{}, {'meteor','meteor','frost'}, {'meteor','gravity','ward'}, {'meteor','frost'}, {'meteor','frost','ward','fire'}, {[2]='meteor',[3]='ward'}, {['1']='meteor',[2]='ward',[3]='frost'}})do
+assert(loadouts.SlotCount==4 and loadouts.Validate({'meteor','ward','frost','lightRing'}))
+for _,invalid in ipairs({{}, {'meteor','meteor','frost','ward'}, {'meteor','gravity','ward','frost'}, {'meteor','frost','ward'}, {'meteor','frost','ward','fire','ice'}, {[2]='meteor',[3]='ward',[4]='ice'}, {['1']='meteor',[2]='ward',[3]='frost',[4]='ice'}})do
  assert(loadouts.Validate(invalid)==nil,'Reject invalid or duplicate loadouts')
 end
-s.over=false;s.offers=nil;s.loadout={'meteor','ward','frost'};s.fire=1;s.golem=5;s.meteor=0;s.ward=0;s.frost=0;s.xp=1000
+s.over=false;s.offers=nil;s.loadout={'meteor','ward','frost','lightRing'};s.fire=1;s.golem=5;s.meteor=0;s.ward=0;s.frost=0;s.xp=1000
 progression.LevelCheck(s)
 for _,offer in ipairs(s.offers)do assert(table.find(s.loadout,offer.id),'Only equipped spells offered when three are available')end
 local previous=s.meteor;s.offers={{id='ward'}};progression.Choose(s,'meteor');assert(s.meteor==previous,'Unchosen spell rejected')
-print('PASS: exact-three loadouts, unknown/duplicate/sparse rejection, equipped-only growth')
+print('PASS: exact-four loadouts, unknown/duplicate/sparse rejection, equipped-only growth')
 
-assert(loadouts.ValidateActive('thunder') and loadouts.ValidateActive('iceRush') and loadouts.ValidateActive('fireWave')and loadouts.ValidateActive('aetherLance'))
+assert(loadouts.ValidateActive('thunder') and loadouts.ValidateActive('iceRush') and loadouts.ValidateActive('fire')and loadouts.ValidateActive('aetherLance'))
 assert(not loadouts.ValidateActive('meteor') and not loadouts.ValidateActive({}) and not loadouts.ValidateActive(7))
 print('PASS: active Q skill whitelist')
 
-assert(loadouts.Validate({'fire','missile','ice'}),'Tracking missile is an allowed automatic spell')
+assert(loadouts.Validate({'ward','missile','ice','lightRing'}),'Tracking missile is an allowed automatic spell')
 
-assert(loadouts.Validate({"skyLances","blades","missile"}),"Sky lances allowed in exact-three loadout")
+assert(loadouts.Validate({"skyLances","blades","missile","lightRing"}),"Sky lances allowed in exact-four loadout")
+
+assert(not loadouts.Validate({'fire','ice','meteor','starVortex'}),'Retired vortex cannot be equipped')
+
+assert(not loadouts.ValidateActive('fireWave'),'Retired wave rejected')
+assert(not loadouts.Validate({'fire','meteor','blades','lightRing'}),'Fireball is Q-only')
+assert(loadouts.Validate(loadouts.Defaults),'Default automatic loadout remains valid')

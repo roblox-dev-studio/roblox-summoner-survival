@@ -25,7 +25,10 @@ return function(deps)
   nextCast+=1
   local anchor=Instance.new('Part');anchor.Name='AreaCast_'..nextCast;anchor:SetAttribute('Kind',kind);anchor.Size=Vector3.one*.1;anchor.Position=point;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
   anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Radius',radius);anchor:SetAttribute('Duration',duration);anchor:SetAttribute('Level',level)
-  if kind=='ward' then s.shield=30+level*12 end
+  if kind=='ward' then
+   s.shield=30+level*12
+   if s.player and type(s.player.UserId)=='number'then anchor:SetAttribute('OwnerUserId',s.player.UserId)end
+  end
   anchor.Parent=world
   table.insert(s.areaCasts,{kind=kind,pos=point,level=level,radius=radius,duration=duration,time=0,hits={},anchor=anchor})
   effect:FireAllClients('areaCast',anchor.Name,kind)

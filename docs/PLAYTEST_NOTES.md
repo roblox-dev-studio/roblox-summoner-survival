@@ -341,3 +341,155 @@ HEAD ec9d339 + 작업본, 기존 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092의 
 기준 HEAD ec9d339 + 전체 작업본. team 원격 fetch 후 main=ec9d339f5ef1eb68360802bfec0ea9baa003e460으로 작업 시작 기준과 같고 HEAD...team/main=0/0을 확인했습니다. 설치기 재생성/일치, Python6, Luau50, 성장/장착/Q 검증, diff 공백 검사 통과. 커밋 대상97파일을 대상으로 GitHub 토큰/개인키 패턴 검사에서 일치 파일이 없고 10MB 초과 파일도 없었습니다.
 
 기존 연결 Studio에서 12개 회귀 fixture(active_spells, arcane_crystals, area_spells, boss_combat, enemies, homing_missiles, lobby, magnet, preview_pause, sky_lances, wave_density, dragon_motion)를 모두 재통과했습니다. 마지막 모션 검사는 실제 EditableMesh의 다리 이동5.70·날개 폭28.98→75.16·날갯짓29.28을 관찰했습니다. 이 검사는 실제 다중 클라이언트 플레이와 구분합니다. 별도의 새 Baseplate 전체 설치를 위한 앱 제어는 시간 초과로 수행하지 못했으므로 기존 미검증 기록을 유지합니다. 실제 모바일/패드, 장시간 최대 부하와 체감 난도도 미검증입니다.
+
+## 2026-10-18 빛 스킬·4개 장착·지팡이 기본 공격
+
+- 기준 main 8316189에서 codex/light-skills-four-loadout 작업본. 기존 연결 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092에 진입점/모듈을 편집 동기화 후 새 Play. 새 Baseplate 전체 설치는 미검증이며 협동 fixture와 실제 다중 클라이언트 플레이를 구분합니다.
+- 실제 엔진: studio_basic_attack의 상태 차단/서버 쿨다운/실제 비행/첫 적 단일 피해/몸 방향/프로필 기본값/선택 정지/벽/정리 통과. studio_light_spells의 왕복 각1회 타격/관통/정지/끌어모으기/보스 이동 면역/.4초 피해/벽/정리 통과. 수정한 studio_lobby와 기존 active_spells/arcane_crystals/homing_missiles도 통과했습니다.
+- 실제 UI: 시작 로비의 선택4/4 확인. 화염탄 대신 소용돌이 선택 후 출발해 lightRing=1/starVortex=1 상태와 두 주문의 실제 전투 이벤트를 관찰했습니다. F 1.25초 홀드에서 마법탄4발, 이후 해제 시 발사 수 유지 확인. 레벨업 중 추가 공격이 차단되는 것도 확인했습니다. 별도 새 Play에서 화면 마법탄 버튼1.15초 홀드로5발, Q 빙하 쇄도1회와 paused=false/activeSkill=iceRush를 확인했습니다.
+- 실제 화면: 미리보기의 나선형 빛/회전 광륜과 뾰족한 얼음 결정8개·푸른 파동 확인. 처음 나선이 가늘게 보여 발광 겹과 움직이는 별빛을 보강해 재동기화했습니다. 런타임 오류는 관찰되지 않았습니다. 실제 패드/모바일 다중 터치·최대 부하·4개 마법과 기본 공격을 더한 장시간 난이도는 사람 검증이 필요합니다. 기본 무기 프로필은1종이며 인벤토리/다른 공격 유형은 미구현입니다.
+- 첨부 ZIP은 JPG만 열람, EPS 미실행/원본 미포함. 출처 상태와 해시 manifest 추가. 임시 이벤트 관찰 연결은 최종 Play 재시작으로 제거합니다. 이번 변경은 GitHub 업로드/PR/게임 게시를 수행하지 않았습니다.
+
+
+## 2026-10-18 결계 즉시 추종·빛 연출 재수정
+
+- 기준 main 8316189 + 현재 작업본. 기존 연결 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092에 변경 모듈을 Edit 동기화 후 새 Play. 별도 새 Baseplate 전체 설치는 미검증입니다.
+- 실제 이동: 수호 결계를 장착해 전투 시작 후 W 이동1.75초와 Space 입력. 렌더 뒤32프레임 표본에서 캐릭터 이동거리39.4849스터드, 결계 중심과 캐릭터 중심의 최대 오차0을 관찰했습니다. 점프 최대 높이는 따로 측정하지 않았습니다. 관찰 연결은 종료·Play 재시작으로 제거했습니다.
+- 실제 엔진: 새 studio_ward_follow에서 오래된 서버 앵커와 별개로 실제 소유자를 따라가는 것, 소유자 없는 갤러리 위치 대체, 정리 통과. 기존 studio_light_spells의 왕복 각1회/정지/벽/끌어모으기/보스 면역/지속 피해/정리, studio_area_spells의 보호막 흡수, studio_active_spells의 Q 회귀 검사 통과.
+- 실제 화면: 면과 밝은 테두리가 있는 보랏빛 초승달, 위로 갈수록 넓어지는 빛 소용돌이를 미리보기에서 확인. 빙하는 중간 수정의 큰 부유 결정과 사각 잔상을 제거하고 낮은 얼음 장식6개·두 겹의 밝은 냉기 초승달 면으로 다시 수정해 최종 미리보기 화면을 확인했습니다. 최종 Client 오류 목록은 비어 있습니다.
+- 자동: 설치기 재생성/일치, Python6, Luau55 문법/전역 검사, 성장·정확한4장착·Q 허용 검사 통과. 실제 게임패드/모바일/다중 클라이언트/장시간 최대 부하와 최종 미적 평가는 미검증입니다. 새 외부 에셋, GitHub 업로드/PR/게임 게시 없음. 최종 Studio에는 빙하 쇄도 미리보기를 열어 두었습니다.
+
+
+## 2026-10-18 광륜 수평 자세·소용돌이 재구성
+
+- main 8316189 기반 작업본, 기존 연결 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092에 LightArt만 Edit 동기화 후 새 Play. 서버 피해/쿨다운/경로 변경 없음.
+- 실제 외형 fixture에서 초승달 면의 법선 Y 절댓값1, 삼각 면 중심 높이 편차 약0.00000024로 지면 평행을 확인했습니다. 두 효과 화면 검토 후 임시 폴더/카메라/UI 관찰은 Play 재시작으로 제거했습니다.
+- 실제 UI에서 P→별빛 소용돌이를 클릭해 넓은 두 빛 띠·바닥 고리 표시 확인. 첫 수정의 사각 연결부를 줄이기 위해 접선/곡률 Beam으로 다시 수정하고 최종 미리보기 화면 확인. 최종 Client 오류 없음, 소용돌이 미리보기 반복 재생 상태로 인계.
+- 설치기 일치·Python6·Luau55·성장/4장착/Q 검사 통과. 새 Baseplate 전체 설치, 실제 모바일/패드/협동/최대 부하와 사람의 최종 미적 평가는 미검증. GitHub 업로드/게시 없음.
+
+
+## 2026-10-18 소용돌이 제거·광륜 잔광·빙하 결정 7열
+
+- 기준 main8316189 + codex/light-skills-four-loadout 작업본. 기존 연결 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092에 변경 모듈10개를 Edit 동기화 후 새 Play. GlacialArt를 재수정한 뒤 해당 모듈도 재동기화/재시작했습니다. 새 Baseplate 전체 설치는 미검증입니다.
+- 실제 서버: studio_active_spells에서 첫 얼음 생성 전 피해 없음→가까운 적 먼저→먼 적 나중, 적별1회 타격/7열 완료/취소 후 남은 열 피해 없음, 기존 Q3종과 가로 판정 회귀 통과. studio_light_spells의 광륜 왕복/벽/정지/정리와 studio_lobby의4장착/준비/이탈/복귀 회귀 통과. 정적 성장 검사에 소용돌이 ID 거부 추가.
+- 실제 클라이언트: 새 studio_glacial_art에서 기둥7열, 앞쪽 먼저 성장/뒤쪽 지연, 생성 섬광14개가 지면 위에 고정, 먼 열 성장, 초승달 없음, 전체 효과 정리 통과. 최초 연출 점검 후 지면 섬광/입자를 결정과 분리해 땅 아래에서 방출되던 문제를 수정했습니다.
+- 실제 UI/화면: P로 미리보기 진입해 광륜의 수평 회전/빛 꼬리, 빙하의 순차 결정과 생성 입자/안개 화면 확인. 로비와 갤러리에 starVortex 버튼 없음 확인. 최종 Client 오류 없음. 임시 fixture 폴더는 정리됐으며 최종 Studio에는 빙하 쇄도 미리보기를 반복 재생 중입니다.
+- 설치기 일치·Python6·Luau55·성장/4장착/Q 검사 통과. 실제 전투에서도 로비에서 빙하 선택→출발→HUD Q 버튼으로 발동해 activeStrike 수신, 서버 앵커 존재와 GlacialEruption 렌더 생성 및 오류 없음까지 확인했습니다. 관찰용 연결/폴더는 Play 재시작으로 제거했습니다. 새 Baseplate 전체 설치/실제 패드·모바일·협동/최대 부하와 최종 미적 평가는 추가 확인이 필요합니다. GitHub 업로드/PR/게시 없음.
+
+
+## 2026-10-18 화염탄·파동·번개 재작업과 주변 얼음
+
+- 기준 main8316189 + 현재 codex/light-skills-four-loadout 작업본. 연결 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092의 변경/신규 클라이언트 모듈5개(Effects/FireArt/FlameTexture/LightningArt/GlacialArt)를 Edit 동기화 후 새 Play. 서버 소스/피해 규칙은 이번에 수정하지 않았습니다. 별도 새 Baseplate 전체 설치는 미검증입니다.
+- 참고3개 페이지는 브라우저 공개 미리보기를 확인했습니다. ACON 두 미리보기 화면과 PNGEgg 페이지/부분 이미지를 열람했으며 원본 파일 다운로드·구매·사용은 없습니다. manifest/ASSET_CREDITS에 참고 범위 기록.
+- 화면 점검 중 내장 불꽃의 어두운 표현과 넓은 무텍스처 Beam의 각진 형태를 확인했습니다. 직접 생성하는 FlameTexture로 교체했습니다. EditableImage를 ParticleEmitter.TextureContent에 대입하는 호출은 성공했지만 이 Studio에서는 입자 그림이 보이지 않아 실제 표시가 확인된 BillboardGui.ImageLabel.ImageContent를 사용합니다. 내장 입자는 보조 잔상으로 남습니다. 원본 이미지는 코드로 재생성되므로 업로드 ID나 별도 로컬 파일이 필요 없습니다.
+- 실제 미리보기: 화염탄의 밝은 몸통/회전한 불꽃 꼬리, 화염 파동의 노란 중심·주황 끝의 불꽃9개, 상공에서 갈라져 떨어지는 번개와 바닥 방전, 빙하 주변에 튀는 작은 파편 화면 확인. 최종 화염 높이 차이 적용 후 새 Play 및 오류 검사. Image APIs 허용 상태의 자체 이미지 생성 성공 확인. 비허용 환경 대체 경로는 실제로 설정을 꺼서 검사하지 않았습니다.
+- 실제 클라이언트 fixture: studio_elemental_art에서 화염탄/9전방 노드/번개 흰 줄기·가지/적중 폭발/방출 종료/수명 정리/부모 조기 삭제 통과. studio_glacial_art의7열 순차 성장/지면 섬광/초승달 제거/정리 회귀 통과. 최종 Client 런타임 오류 없음.
+- 설치기 일치·Python6·Luau57·성장/4장착/Q 검사 통과. 실제 전투에서도 로비에서 비전 결정 대신 연쇄 번개 장착→시작→HUD Q 입력 후 fire/fireWave/lightning 세 이벤트 수신과 각 새 렌더 모델 생성을 모두 관찰했고 오류는 없었습니다. 관찰용 폴더/연결은 최종 Play 재시작으로 제거했습니다. 새 Baseplate 설치/실제 패드·모바일/협동/동시 부하/최종 미적 평가는 추가 확인이 필요합니다. 드래곤 전용 화염 연출은 기존 코드 유지이며 이번 시각 재검사 범위에 포함하지 않았습니다. GitHub 업로드/PR/게임 게시 없음.
+
+최종 Studio는 새 Play에서 화염 파동 미리보기를 반복 재생하도록 남겼습니다.
+
+
+## 2026-10-18 화염 이미지 제거·마법 번개·전투 중 로비 복귀
+
+- main8316189 기반 codex/light-skills-four-loadout 작업본. 기존 연결 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092의 server 진입점/Session/HUD/FireArt/LightningArt를 Edit 동기화 후 새 Play. 제거한 FlameTexture ModuleScript도 Edit에서 제거했습니다. 새 Baseplate 전체 설치는 미검증입니다.
+- 화면: 화염탄의 밝은 핵과 움직이는 불꽃/꼬리, 부채꼴 전선과 불길, 번개의 청백색 줄기/부드러운 보라색 착탄 광선/지면 오라 화면을 확인했습니다. 중간 수정에서 딱딱한 Beam 외곽이 보여 코로나/착탄 광선에 부드러운 내장 텍스처를 적용했습니다. 첨부 JPG는 색/구성 참고만 했습니다. 이미지 화염과 Image APIs 의존은 제거됐습니다.
+- 실제 엔진 fixture: studio_retreat에서 본인 레벨/쿨다운 초기화·조합/Q 보존·대시/발사체/골렘/preview 상태 정리·협동 상대/시간/적/구슬 유지·마지막 참가자 전체 초기화·오래된/로비 요청 거부·패배 후 개별 복귀 통과. studio_lobby 회귀 통과. studio_elemental_art에서 BillboardGui 없음/네이티브 Fire·입자 생성/전방9노드·번개/적중/방출 중지/수명 및 조기 삭제 정리 통과.
+- 실제 UI: 전투 시작→ReturnToLobby 표시/클릭→로비 Enabled와 InLobby=true,4개 조합 유지, 캐릭터 로비 Z152.27/HP150, 중단 버튼 숨김 확인. 다시 전투 시작→InLobby=false/HP150 확인 후 다시 버튼으로 복귀했습니다. Client 오류 없음. 카드 선택 중 버튼 동작/실제 패드·모바일/실제 다중 클라이언트는 아직 별도 사람 확인이 필요하며 서버 fixture와 구분합니다.
+- 설치기 일치·Python6·Luau56·성장/4장착/Q 검사 통과. 새 Baseplate 설치·최대 동시 효과 부하·최종 미적 평가는 미검증. GitHub 업로드/PR/게임 게시 없음.
+
+
+## 2026-10-18 화염 잔광 축소·번개 두께/착탄 보강
+
+- main8316189 기반 현재 작업본, 기존 연결 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092에서 FireArt/LightningArt를 Edit 동기화 후 새 Play. 변경은 클라이언트 표현2개 모듈에 한정하며 새 외부 자산 없음.
+- 미리보기 화면에서 화염 파동의 줄어든 불씨/잔광과 굵어진 번개 줄기·풍부해진 하단 전류/착탄 오라를 확인했습니다. 추가로 탄환 적중/파동 이동 종료 시 Fire를 제거하도록 수정해 재동기화/재시작했습니다.
+- 실제 엔진 studio_elemental_art의 생성/적중/방출 종료/수명 정리/조기 삭제 회귀 통과. 종료 뒤 네이티브 Fire가 남지 않는 검사도 추가했습니다. 설치기 일치·Python6·Luau56·성장/4장착/Q 검사 통과.
+- 별도 새 Baseplate 전체 설치, 실기기/협동/최대 동시 부하와 최종 미적 평가는 미검증입니다. 피해/범위/쿨다운과 드래곤 전용 연출 변경 없음. GitHub 업로드/게시 없음.
+
+
+## 2026-10-18 화염 추가 절제·5갈래·번개 확산 고리
+
+main8316189 기반 현재 작업본, 기존 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092의 FireArt/LightningArt를 Edit 갱신 후 새 Play. 미리보기에서5갈래 파동/줄어든 후속 불씨와 바닥으로 확장하는 청색·보라색 충격 고리를 화면 확인했습니다. 수정한 studio_elemental_art는5개 전방 노드와 시간에 따른 충격 고리 확장, 기존 생성/적중/방출 종료/Fire 잔류 없음/수명 정리/조기 삭제를 통과했습니다. 설치기 일치·Python6·Luau56·성장/4장착/Q 검사와 diff 공백 검사 통과. Client 오류 없음. 새 Baseplate 전체 설치/실기기·협동/최대 부하·최종 미적 평가는 미검증입니다. 최종 Studio는 번개 미리보기 반복 재생 상태입니다. 새 외부 자산 및 GitHub 업로드/게시 없음.
+
+
+## 2026-10-18 연결된 화염 본체와 후속 효과 제거
+
+- main8316189 기반 작업본, 기존 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092에 FireArt/신규 FlameSurface를 Edit 동기화 후 새 Play. 서버·번개·빙하·드래곤 전용 화염은 변경하지 않았습니다. 첨부 iStock4개는 시각 참고만 했으며 원본/워터마크 이미지를 게임에 넣지 않았습니다.
+- 화면 확인: 입자만으로는 띄엄띄엄 보이는 문제가 남아 연결된 메시 본체를 추가했습니다. 초기의 매끈한 흰 띠를 주황색의 휘는 윗불꽃/옅은 내부로 수정한 최종 화면을 확인했습니다.5개의 점 형태는 제거됐으며 실제 설정에서 EditableMesh 생성 성공/주름 애니메이션을 확인했습니다.
+- 실제 엔진: studio_flame_surface의 생성/폭 확대/시간에 따른 형상 변화/메시 정리 통과. 수정된 studio_elemental_art의 단일 볼륨/폭 확장, 탄환 접촉 섬광 조기 소멸/파동 .7초 후 제거, 기존 번개/정리 회귀 통과. Client 오류 없음. 설치기 일치·Python6·Luau57·성장/4장착/Q 검사 통과.
+- 최종 Studio는 화염 파동 미리보기 반복 재생 상태입니다. 새 Baseplate 전체 설치, 실제 전투 입력 연결/모바일·패드·협동·메시 동시 부하, API 미허용 환경 대체 경로와 최종 미적 평가는 미검증입니다. GitHub 업로드/게시 없음.
+
+
+## 2026-10-18 연결된 표면 철회·독립 불길3개
+
+main8316189 기반 현재 작업본. 기존 Studio 4d3ba923-f331-4ae3-aeff-afd675a25092의 FireArt를 Edit 동기화하고 FlameSurface 모듈을 제거한 뒤 새 Play. 첫 동기화는 자동 승인 검토 시간 초과로 실행되지 않았음을 Source 상태로 확인했으며 허용된1회 재시도로 정상 반영했습니다. 실제 미리보기에서 독립된3줄기 불꽃/입자 움직임을 확인했습니다. 갱신한 studio_elemental_art의3줄기 생성/메시·BillboardGui 없음/전진/방출 종료/정리 및 번개 회귀 검사 통과. Client 오류 없음. 설치기 일치·Python6·Luau56·성장/4장착/Q 검사 통과. 연결된 표면/FlameSurface 검사와 API 의존은 제거됐으며 번개는 그대로 유지합니다. 새 Baseplate 전체 설치·실제 전투 입력/실기기·협동·최대 부하·최종 미적 평가는 미검증입니다. 최종 화염 파동 미리보기 재생 상태. 업로드/게시 없음.
+
+
+## 2026-10-18 · Player fire without aftermath
+
+Source: main base 8316189, codex/light-skills-four-loadout working tree. Updated FireArt in existing Studio 4d3ba923-f331-4ae3-aeff-afd675a25092 and restarted Play. Elemental engine fixture passed attached/zero-speed particle invariants, absence of player Fire/Trail/Beam, three moving Q bodies, immediate projectile disposal, short contact flash, lightning regression and early folder removal. Native preview screenshot confirmed three separate bright flame bodies; Client error log was empty. Generated installer/source checks passed (6 Python tests, 56 Luau files, progression/loadout/Q checks). Fresh Baseplate full installation, devices/multiplayer/performance and user aesthetic approval remain unverified.
+
+
+### 2026-10-18 · Keep projectile flame, remove aftermath
+
+Correction after user clarification: restored full moving flame body using four attached layers and reduced the hard luminous sphere. Removed separate impact flash. Working tree on base 8316189; existing Studio 4d3ba923-f331-4ae3-aeff-afd675a25092, Play restarted after module sync. Client engine fixture passed layered-body/locked-particle checks, movement, end-of-travel cleanup, lightning regression and early removal. Native Q preview screenshot shows three independently moving flame bodies, no fixed aftermath; client error log empty. Installer/source checks passed (6 Python tests, 56 Luau files and rule checks). Full fresh Baseplate installation, device/multiplayer/performance and user aesthetic approval remain unverified.
+
+
+### Compact directional fire · 2026-10-18
+
+2026-10-18 compact flame revision, working tree on base 8316189: synced FireArt to existing Studio 4d3ba923-f331-4ae3-aeff-afd675a25092, restarted Play. Reduced nominal player fire body size by 33–39%, reduced opaque core and random spin, tapered rear layers and aligned particle orientation with camera-projected travel. First visual check appeared too pale; adjusted warm orange/gold tint and flame density. Final native Q gallery screenshot checked, client error log empty, elemental engine lifecycle fixture passed. Installer/source checks passed (6 Python tests / 56 Luau files / rule checks). User aesthetic approval and full camera-angle/device/performance coverage pending; no fresh Baseplate installation performed.
+
+
+### Subtle fire wake · 2026-10-18
+
+2026-10-18 subtle fire wake, working tree on base 8316189: updated existing Studio 4d3ba923-f331-4ae3-aeff-afd675a25092 and restarted Play. Native Q gallery screenshot reviewed after narrowing visual fan and adding faint .1s Trail; client errors empty. Elemental engine fixture passed allowed wake duration/transparency, attached flame, movement, cleanup, early removal and lightning regression. Installer/source checks passed (6 Python tests, 56 Luau files and rule checks). Fresh Baseplate full installation, full device/performance/camera coverage and user aesthetic approval remain pending.
+
+
+2026-10-18 narrow fan / slight remnants: working tree based on 8316189, existing Studio 4d3ba923-f331-4ae3-aeff-afd675a25092. Synced FireArt and restarted Play. Elemental engine fixture passed attached main flame, constrained residual lifetime/rate/size, wake duration/transparency, movement/cleanup/early removal and lightning regression. Native Q gallery screenshot reviewed; client errors empty. Installer/source checks passed (6 Python tests, 56 Luau files and rule checks). No new asset imported. User aesthetic approval, fresh Baseplate full installation and full device/performance coverage remain pending.
+
+
+### Round orbiting fire · 2026-10-18
+
+2026-10-18 round/orbiting fire body, working tree based on 8316189. Updated FireArt in existing Studio 4d3ba923-f331-4ae3-aeff-afd675a25092 and restarted Play. Elemental engine fixture passed. Additional Client engine observation over ~.1s measured flame-layer local displacement .67 studs and rotation change 20.69 degrees, confirming deformation independent of projectile translation. Native Q preview screenshot reviewed; Client error log empty. Installer/source checks passed (6 Python tests, 56 Luau files and rule checks). Fresh Baseplate full installation, device/performance coverage and user aesthetic approval remain pending.
+
+
+### Attached flame tail · 2026-10-18
+
+2026-10-18 attached flame tail, working tree based on 8316189. Updated FireArt in existing Studio 4d3ba923-f331-4ae3-aeff-afd675a25092 and restarted Play. Initial native Q screenshot suggested the five-layer tail was too subtle; final implementation uses seven brighter tapering layers with greater length. Final engine fixture passed tail-behind-projectile, attached body, constrained wake/remnants, movement, cleanup, early removal and lightning regression. Native Q preview screenshot reviewed, Client errors empty. Installer/source checks passed (6 Python tests / 56 Luau files / rule checks). Fresh Baseplate full installation, device/performance coverage and user aesthetic approval remain pending.
+
+
+### Fireball reference silhouette · 2026-10-18
+
+2026-10-18 user-reference fire silhouette, working tree based on 8316189. Inspected user Fireball.webp and read saved HTML as data only; no external file imported or executed. Added three continuous tapered textured flame tongues and made head fuller, reducing attached particle tail layers to four. Existing Studio 4d3ba923-f331-4ae3-aeff-afd675a25092 updated and Play restarted. Elemental engine fixture passed attached tapered Beam invariants plus particle/wake/remnant limits, movement/cleanup/early removal and lightning regression. Native Q preview screenshot reviewed; client error log empty. Installer/source checks passed (6 Python tests, 56 Luau files and rule checks). Screenshot confirms runtime rendering, not aesthetic equivalence to reference; user approval, side-view/camera/device/performance coverage and fresh Baseplate full install remain pending.
+
+
+### Long tapered fire tail · 2026-10-18
+
+2026-10-18 long tapered tail based on user flame reference; working tree base 8316189. Existing Studio 4d3ba923-f331-4ae3-aeff-afd675a25092 synced/restarted. Initial screenshot showed visible but overly straight luminous tail; adjusted tangent directions/curve lengths and lowered inner brightness. Final native Q screenshot reviewed and Client error log empty. Engine fixture passed >4 nominal-size tail extent, taper/attachments, particle/wake/remnant bounds, movement/cleanup/early removal and lightning regression. Installer/source checks passed (6 Python tests, 56 Luau files and rule checks). No reference image imported. User aesthetic approval, side-view/device/performance coverage and fresh Baseplate full installation remain pending.
+
+
+## Fireball Q and retired wave · 2026-10-18
+
+2026-10-18 fireball Q / wave retired, working tree on base8316189. Synced 11 changed modules into existing Studio4d3ba923-f331-4ae3-aeff-afd675a25092 and restarted Play. Source/installer checks passed:6 Python tests,56 Luau files, progression/exact-four loadout/Q whitelist checks including automatic-fire and retired-wave rejection. Server engine fixtures studio_active_spells, studio_lobby and studio_retreat all passed, including new fire actual-flight/first-contact splash/off-path+air exclusion/wall/cancel/cooldown and retired-wave rejection, plus existing thunder/aether/ice regressions and fake-participant lobby/return flows.
+
+Native UI: started with default four auto spells, pressed Q; temporary Client observer recorded exactly one fireProjectile event and ActiveFireball rendered=true; HUD showed 화염탄 cooldown and lobby ScreenGui disabled during combat. Returned through actual UI, opened gallery and selected 화염탄[Q]; screenshot reviewed, fireWave gallery entry absent. Client log empty before final gallery check. Fresh Baseplate full install, true multiplayer/device/performance coverage and final balance/aesthetic approval remain pending. No new asset used.
+
+
+### Dimmer red-rimmed fireball · 2026-10-18
+
+2026-10-18 dimmer red-rimmed Q fireball, working tree based on 8316189. Updated FireArt in existing Studio 4d3ba923-f331-4ae3-aeff-afd675a25092 and restarted Play. Native 화염탄[Q] gallery screenshot reviewed: core no longer appears as a large white/yellow disk, red outer flame visible and long tail retained. Elemental engine lifecycle fixture passed attached/tapered tongues, bounded residuals, cleanup/early removal and lightning regression; client errors empty. Installer/source checks passed (6 Python tests, 56 Luau files and rule checks). No combat or new asset changes. User aesthetic approval, full device/performance coverage and fresh Baseplate full install remain pending.
+
+
+### Smaller luminous head / red outline · 2026-10-18
+
+2026-10-18 smaller luminous head / red fire outline, working tree base8316189. Synced FireArt in existing Studio4d3ba923-f331-4ae3-aeff-afd675a25092 and restarted Play. Reduced actual core/halo and central particle size/emission, narrowed beam roots, shifted outer/head/tail colors toward red-orange. Initial native screenshot was too dim; restored some warm-centre and flame brightness while keeping smaller core. Final native Q gallery screenshot reviewed; Client errors empty. Elemental engine lifecycle/cleanup/lightning regression fixture passed; installer/source checks passed (6 Python tests,56 Luau files and rule checks). No new asset or gameplay changes. User aesthetic approval, device/performance/side-view coverage and fresh Baseplate full install remain pending.
+
+
+2026-10-18 small core restoration: working tree base8316189, existing Studio4d3ba923-f331-4ae3-aeff-afd675a25092. Core diameter .13→.18 nominal size, transparency .86→.70, slightly warmer orange. Outer red flames, halo, tail and gameplay unchanged. Installer/source checks passed (6 Python tests,56 Luau files and rule checks); module synced and Play restarted, native Q gallery screenshot reviewed. No engine lifecycle fixture rerun for these visual constants. User aesthetic approval and prior fresh-install/device gaps remain pending.
+
+
+2026-10-18 user-requested visual rollback: restored FireArt values from the first dimmer red-rim revision (core .22/.8, halo .52/.9, original red-rim particle scale/rates, beam widths/brightness and orbit positions), undoing the last two head-reduction/restoration tweaks. Q-only gameplay and retired-wave state retained. Source/installer checks passed; synced existing Studio4d3ba923-f331-4ae3-aeff-afd675a25092, restarted Play and reviewed native Q gallery screenshot. Full prior engine fixture not rerun for visual-constant rollback; earlier coverage gaps remain.
+
+
+## PR integration verification · 2026-10-18
+
+Branch codex/light-skills-four-loadout, baseline8316189. Fetched team/main and confirmed no divergence (0/0) before PR. Final installer/source checks and git diff --check passed. Re-ran eight fixtures on existing Studio4d3ba923-f331-4ae3-aeff-afd675a25092: Server basic_attack/light_spells/active_spells/lobby/retreat and Client ward_follow/glacial_art/elemental_art, all passed. Client error log empty after run. Final fire appearance is the restored first red-rim version. Consolidated current architecture and playtest checklist; iteration observations above are history. No secrets detected in project scan; attached reference files remain reference-only manifests. Existing preview-max golem effects and starting-health150 values are intentional user-requested prototype settings carried from baseline. Fresh Baseplate full installation, true multiplayer/device/performance and final aesthetic/balance acceptance are not verified in this integration run.
