@@ -7,7 +7,9 @@ return function(deps)
 		p.Color=color; p.Material=material or Enum.Material.SmoothPlastic; p.Parent=parent
 		return p
 	end
-	local function creature(name, color, golem)
+	local createEnemy=require(script.Parent.EnemyModels)({block=block})
+	local function creature(name, color, golem, kind)
+        if not golem then return createEnemy(name,kind or "stalker",world) end
 		local m=Instance.new("Model"); m.Name=name
 		local size=golem and 1.2 or 0.85
 		local root=block(m,"Core",Vector3.new(2.6,2.5,1.8)*size,Vector3.new(0,3,0),color,Enum.Material.Slate)
