@@ -1348,7 +1348,7 @@ return function(deps)
   end end
   if not target then return end
   local lead=Vector3.zero
-  if not target.isBoss and not target.isFieldBoss and target.kind~='caster'and not target.detonating and(target.frozen or 0)<=0 then
+  if not target.isBoss and not target.isFieldBoss and(target.role or target.kind)~='caster'and not target.detonating and(target.frozen or 0)<=0 then
    local delta=Vector3.new(root.Position.X-target.pos.X,0,root.Position.Z-target.pos.Z)
    if delta.Magnitude>.01 then lead=delta.Unit*math.min(math.max(0,delta.Magnitude-3),(target.speed or 0)*1.3)end
   end
@@ -1863,12 +1863,19 @@ end
 -- Source: src/server/shared/EnemyModels.luau
 addModule(modules,{"shared","EnemyModels"},[====[
 -- Distinct silhouettes share only their invisible hit anchor.
+local catalog=require(script.Parent.Parent.world.EnemyCatalog)
 return function(deps)
  local block=deps.block
  local function make(name,kind,world)
   local m=Instance.new('Model');m.Name=name
-  local visualAssets={commander='CloakedCommander_QuaterniusHorse',stalker='KayKitSkeletonWarrior',skitter='KayKitSkeletonRogue',brute='KayKitSkeletonWarriorHeavy',caster='KayKitSkeletonMage',ember='KayKitSkeletonMinionBomber',charger='AshHound'}
-  m:SetAttribute('VisualAsset',visualAssets[kind])
+  local definition=catalog.Get(kind)
+  m:SetAttribute('VisualAsset',definition and definition.visualAsset or(kind=='commander'and 'CloakedCommander_QuaterniusHorse'or nil))
+  if definition then
+   m:SetAttribute('EnemyRole',definition.role);m:SetAttribute('EnemyFamily',definition.family);m:SetAttribute('EnemyVariant',definition.variant)
+   m:SetAttribute('FamilyName',definition.familyName);m:SetAttribute('DisplayName',definition.displayName)
+   if definition.projectileHeight then m:SetAttribute('ProjectileHeight',definition.projectileHeight)end
+   m:SetAttribute('Role',definition.roleLabel);m:SetAttribute('Description',definition.description);m:SetAttribute('Order',definition.order)
+  end
   local root=block(m,'Core',Vector3.one,CFrame.identity.Position,Color3.new());root.Transparency=1;root.Position=Vector3.new(0,3,0);m.PrimaryPart=root
   local function p(label,size,position,color,shape,rotation)
    local cf=CFrame.new(position)*(rotation or CFrame.identity)
@@ -1881,7 +1888,33 @@ return function(deps)
   local function limb(a,b,width,color)
    local v=p('Limb',Vector3.new(width,width,(b-a).Magnitude), (a+b)/2,color,'ball');v.CFrame=CFrame.lookAt((a+b)/2,b)
   end
-  if kind=='skitter'then
+  if definition and definition.family=='slime'then
+   -- These native Parts stay visible until the client has a complete authored rig.
+   local heavy=kind=='slime_bulwark'
+   local width=heavy and 5 or(kind=='slime_spitter'and 3.3 or 3.7)
+   local height=heavy and 3.6 or 2.8
+   local green=heavy and Color3.fromRGB(59,125,88)or Color3.fromRGB(113,207,79)
+   local body=p('SlimeBody',Vector3.new(width,height,width*.84),Vector3.new(0,height*.5+.15,0),green,'ball');body.Material=Enum.Material.SmoothPlastic
+   for _,side in ipairs({-1,1})do neon('Eye',Vector3.new(.35,.45,.22),Vector3.new(side*width*.18,height*.62,-width*.37),Color3.fromRGB(229,255,177),'ball')end
+   if heavy then
+    for i=-1,1 do p('ShellPlate',Vector3.new(1.6,.8,3.6),Vector3.new(i*1.3,3.25,.2),Color3.fromRGB(82,104,117),'wedge',CFrame.Angles(0,0,-i*.25))end
+   elseif kind=='slime_spitter'then
+    neon('SlimeSac',Vector3.new(1.2,1.2,1.2),Vector3.new(0,2.85,.15),Color3.fromRGB(171,240,74),'ball')
+    p('Spout',Vector3.new(.85,.65,1),Vector3.new(0,1.5,-1.35),green,'ball')
+   end
+  elseif definition and definition.family=='crystal'then
+   local lancer=kind=='crystal_lancer';local mage=kind=='crystal_mage'
+   local blue=Color3.fromRGB(91,196,222)
+   local center=Vector3.new(0,mage and 2.8 or 1.8,0)
+   p('CrystalBody',Vector3.new(lancer and 1.8 or 2,mage and 2.8 or 2.2,lancer and 4.7 or 2),center,blue,'wedge')
+   neon('CrystalCore',Vector3.new(.8,.9,.8),center+Vector3.new(0,0,-.7),Color3.fromRGB(188,249,255),'ball')
+   if lancer then
+    p('CrystalLance',Vector3.new(.7,.85,3.4),Vector3.new(0,2.1,-2.5),Color3.fromRGB(160,234,247),'wedge')
+   else
+    local count=mage and 6 or 3
+    for i=1,count do local angle=i*math.pi*2/count;p('CrystalShard',Vector3.new(.45,mage and 1 or .7,.65),center+Vector3.new(math.cos(angle)*1.65,mage and 0 or -.6,math.sin(angle)*1.65),blue,'wedge',CFrame.Angles(0,-angle,0))end
+   end
+  elseif kind=='skitter'then
    local green=Color3.fromRGB(91,167,126)
    p('Abdomen',Vector3.new(3,1.8,3.5),Vector3.new(0,2.2,.5),green,'ball')
    p('Head',Vector3.new(2.2,1.3,1.8),Vector3.new(0,2,-1.7),Color3.fromRGB(30,64,57),'ball')
@@ -2224,22 +2257,85 @@ return function(deps)
  return {Step=step,Resolve=resolve,Reset=reset}
 end
 ]====])
+-- Source: src/server/world/EnemyCatalog.luau
+addModule(modules,{"world","EnemyCatalog"},[====[
+-- Server-owned identity, unlock and balance catalog. No Roblox dependencies.
+-- Role weights preserve the original wave mix; variant weights divide those slots.
+local families=table.freeze({undead='망자',beast='야수',slime='슬라임',crystal='결정체'})
+local roles={
+ stalker={unlock=0,weight=6,hpScale=1,speedScale=1,contactDamage=8},
+ skitter={unlock=12,weight=3,hpScale=.7,speedScale=1.18,contactDamage=6},
+ brute={unlock=28,weight=2,hpScale=1.5,speedScale=.68,contactDamage=11},
+ caster={unlock=42,weight=2,hpScale=1,speedScale=.85,contactDamage=0},
+ ember={unlock=60,weight=1,hpScale=1,speedScale=1,contactDamage=0},
+ charger={unlock=32,weight=2,hpScale=1.15,speedScale=1,contactDamage=12},
+}
+local roleOrder=table.freeze({'stalker','skitter','brute','caster','ember','charger'})
+local entries={
+ {id='stalker',family='undead',role='stalker',variant='soldier',unlock=0,weight=2,visualAsset='KayKitSkeletonWarrior',displayName='잿빛 해골 병사',roleLabel='해골 근접형',description='고대 왕국의 해골 병사. 플레이어를 추적하며 가까이 붙으면 공격합니다. 정예는 검과 방패로 무장합니다.'},
+ {id='skitter',family='undead',role='skitter',variant='rogue',unlock=12,weight=1,visualAsset='KayKitSkeletonRogue',displayName='쌍검 해골 도적',roleLabel='빠른 측면 접근',description='두 자루의 검과 두건을 쓴 해골 도적. 옆으로 파고들어 플레이어를 포위합니다.'},
+ {id='brute',family='undead',role='brute',variant='executioner',unlock=28,weight=1,visualAsset='KayKitSkeletonWarriorHeavy',displayName='철갑 해골 집행자',roleLabel='느리고 튼튼한 중갑형',description='큰 도끼와 방패를 든 중갑 해골. 느리지만 체력과 접촉 피해가 높습니다.'},
+ {id='caster',family='undead',role='caster',variant='mage',unlock=42,weight=2,visualAsset='KayKitSkeletonMage',displayName='황혼 해골 마도사',roleLabel='지팡이 원거리 마법탄',description='커다란 모자와 지팡이를 든 해골 마법사. 거리를 유지하며 힘을 모아 보라색 마법탄을 쏩니다.',cueColor={226,126,255}},
+ {id='ember',family='undead',role='ember',variant='bomber',unlock=60,weight=1,visualAsset='KayKitSkeletonMinionBomber',displayName='불씨 폭탄 운반꾼',roleLabel='폭탄을 안고 접근 후 자폭',description='불붙은 폭탄을 안고 달려옵니다. 붉은 범위가 나타나면 폭발 전에 벗어나거나 처치하세요.'},
+ {id='charger',family='beast',role='charger',variant='hound',unlock=32,weight=1,visualAsset='AshHound',displayName='잿불 뿔사냥개',roleLabel='사족 보행과 직선 돌진',description='갈비 갑옷과 긴 꼬리, 잿빛 두개골을 가진 사냥개. 주황색 경로를 예고한 뒤 직선으로 돌진합니다.',cueColor={255,151,75}},
+ {id='slime_blob',family='slime',role='stalker',variant='blob',unlock=8,weight=1,visualAsset='VerdantSlime',displayName='초록 방울 슬라임',roleLabel='통통 튀는 근접형',description='초록 젤 몸통으로 통통 튀며 다가오는 슬라임. 가까이 붙으면 몸을 부딪쳐 공격합니다.'},
+ {id='slime_spitter',projectileHeight=-.8,family='slime',role='caster',variant='spitter',unlock=48,weight=1,visualAsset='SlimeSpitter',displayName='독방울 슬라임',roleLabel='준비 후 초록 탄환 발사',description='몸을 부풀려 힘을 모은 뒤 초록 점액탄을 쏩니다. 발사 준비를 보고 옆으로 움직이세요. 점액탄은 지속 피해를 남기지 않습니다.',cueColor={145,245,82}},
+ {id='slime_bulwark',family='slime',role='brute',variant='bulwark',unlock=36,weight=1,visualAsset='SlimeBulwark',displayName='철갑 왕슬라임',roleLabel='크고 느린 중갑형',description='단단한 갑각을 두른 커다란 슬라임. 이동은 느리지만 체력과 접촉 피해가 높습니다.'},
+ {id='crystal_scout',family='crystal',role='skitter',variant='scout',unlock=20,weight=1,visualAsset='CrystalScout',displayName='수정 척후병',roleLabel='작고 빠른 측면 접근',description='작은 수정 조각들이 모인 척후병. 빠르게 옆으로 파고들어 거리를 좁힙니다.'},
+ {id='crystal_lancer',family='crystal',role='charger',variant='lancer',unlock=52,weight=1,visualAsset='CrystalLancer',displayName='수정 창돌격병',roleLabel='경로 예고 후 직선 돌진',description='길고 뾰족한 수정 창날을 앞세운 돌격병. 청록색 경로가 나타나면 옆으로 피하세요. 돌진 도중에는 방향을 바꾸지 않습니다.',cueColor={93,231,255}},
+ {id='crystal_mage',projectileHeight=0,family='crystal',role='caster',variant='mage',unlock=74,weight=1,visualAsset='CrystalMage',displayName='수정 고리술사',roleLabel='회전 고리와 원거리 결정탄',description='공중에 떠 보이는 수정 핵 주위를 고리가 맴돕니다. 힘을 모은 뒤 청록색 결정탄을 발사하며, 모든 지상 공격에 맞습니다.',cueColor={109,221,255}},
+}
+local byId={}
+for order,entry in ipairs(entries)do
+ local role=roles[entry.role]
+ entry.order=order;entry.familyName=families[entry.family]
+ entry.hpScale=role.hpScale;entry.speedScale=role.speedScale;entry.contactDamage=role.contactDamage
+ if entry.role=='caster'and entry.projectileHeight==nil then entry.projectileHeight=1.1 end
+ if entry.cueColor then table.freeze(entry.cueColor)end
+ table.freeze(entry);byId[entry.id]=entry
+end
+for _,role in pairs(roles)do table.freeze(role)end
+table.freeze(entries);table.freeze(roles);table.freeze(byId)
+local function get(kind)return byId[kind]end
+local function role(kindOrRole)local entry=byId[kindOrRole];return roles[entry and entry.role or kindOrRole]end
+local function pool(elapsed,fieldBossActive)
+ local result={}
+ for _,id in ipairs(roleOrder)do
+  local data=roles[id]
+  if elapsed>=data.unlock and not(id=='ember'and fieldBossActive)then
+   for _=1,data.weight do table.insert(result,id)end
+  end
+ end
+ return result
+end
+local function choose(roleId,elapsed,sequence)
+ local total=0
+ for _,entry in ipairs(entries)do if entry.role==roleId and elapsed>=entry.unlock then total+=entry.weight end end
+ if total==0 then return nil end
+ local slot=((sequence or 1)-1)%total+1
+ for _,entry in ipairs(entries)do
+  if entry.role==roleId and elapsed>=entry.unlock then
+   slot-=entry.weight;if slot<=0 then return entry.id end
+  end
+ end
+ return nil
+end
+return table.freeze({Entries=entries,Families=families,Roles=roles,Get=get,Role=role,Pool=pool,Choose=choose})
+]====])
 -- Source: src/server/world/EnemyGallery.luau
 addModule(modules,{"world","EnemyGallery"},[====[
 -- Studio-only visual templates. Replicate model instances, never server modules or AI.
+local catalog=require(script.Parent.EnemyCatalog)
 return function(deps)
  local folder=Instance.new('Folder');folder.Name='EnemyPreviewModels'
- local entries={
-  {'stalker','잿빛 해골 병사','해골 근접형','고대 왕국의 해골 병사. 플레이어를 추적하며 가까이 붙으면 공격합니다. 정예는 검과 방패로 무장합니다.'},
-  {'skitter','쌍검 해골 도적','빠른 측면 접근','두 자루의 검과 두건을 쓴 해골 도적. 옆으로 파고들어 플레이어를 포위합니다.'},
-  {'brute','철갑 해골 집행자','느리고 튼튼한 중갑형','큰 도끼와 방패를 든 중갑 해골. 느리지만 체력과 접촉 피해가 높습니다.'},
-  {'caster','황혼 해골 마도사','지팡이 원거리 마법탄','커다란 모자와 지팡이를 든 해골 마법사. 거리를 유지하며 힘을 모아 보라색 마법탄을 쏩니다.'},
-  {'ember','불씨 폭탄 운반꾼','폭탄을 안고 접근 후 자폭','불붙은 폭탄을 안고 달려옵니다. 붉은 범위가 나타나면 폭발 전에 벗어나거나 처치하세요.'},
-  {'charger','잿불 뿔사냥개','사족 보행과 직선 돌진','갈비 갑옷과 긴 꼬리, 잿빛 두개골을 가진 사냥개. 주황색 경로를 예고한 뒤 직선으로 돌진합니다.'},
- }
- for index,entry in ipairs(entries)do
-  local model=deps.create(entry[2],entry[1],folder)
-  model.Name=entry[1];model:SetAttribute('DisplayName',entry[2]);model:SetAttribute('Role',entry[3]);model:SetAttribute('Description',entry[4]);model:SetAttribute('Order',index)
+ for _,entry in ipairs(catalog.Entries)do
+  local model=deps.create(entry.displayName,entry.id,folder)
+  model.Name=entry.id
+  model:SetAttribute('EnemyKind',entry.id);model:SetAttribute('EnemyRole',entry.role)
+  model:SetAttribute('EnemyFamily',entry.family);model:SetAttribute('EnemyVariant',entry.variant)
+  model:SetAttribute('FamilyName',entry.familyName);model:SetAttribute('DisplayName',entry.displayName)
+  if entry.projectileHeight then model:SetAttribute('ProjectileHeight',entry.projectileHeight)end
+  model:SetAttribute('Role',entry.roleLabel);model:SetAttribute('Description',entry.description);model:SetAttribute('Order',entry.order)
  end
  folder.Parent=deps.parent;return folder
 end
@@ -2430,29 +2526,35 @@ end
 -- Source: src/server/world/Waves.luau
 addModule(modules,{"world","Waves"},[====[
 -- Mixed packs, flanking skitters, strafing casters and telegraphed chargers.
+local catalog=require(script.Parent.EnemyCatalog)
 return function(deps)
  local applyDamage=require(script.Parent.Parent.shared.PlayerDamage)
  local states,enemies,rng=deps.states,deps.enemies,deps.rng
  local creature,rootOf,roundLength=deps.creature,deps.rootOf,deps.roundLength
  local spawnClock,nextEnemy,time=0,0,0
  local nextPack=18
+ local variants={}
  local shots={}
  local function flat(v)return Vector3.new(v.X,0,v.Z)end
  local function bound(p)local f=flat(p);if f.Magnitude>81 then f=f.Unit*81 end;return Vector3.new(f.X,p.Y,f.Z)end
- local function create(kind,pos,elapsed)
+ local function create(role,pos,elapsed)
   if #enemies>=84 then return end
+  variants[role]=(variants[role]or 0)+1
+  local kind=catalog.Choose(role,elapsed,variants[role])
+  local definition=catalog.Get(kind)
+  if not definition then return end
   nextEnemy+=1
   local m=creature('Shade_'..nextEnemy,Color3.new(),false,kind);m:PivotTo(CFrame.new(pos))
   local elite=elapsed>=65 and nextEnemy%9==0
-  local hpScale=kind=='brute'and 1.5 or(kind=='skitter'and .7 or(kind=='charger'and 1.15 or 1))
-  local speedScale=kind=='brute'and .68 or(kind=='skitter'and 1.18 or(kind=='caster'and .85 or 1))
+  local hpScale=definition.hpScale
+  local speedScale=definition.speedScale
   local hp=math.floor((26+elapsed*.35)*hpScale*(elite and 1.75 or 1))
   if elite then
    m:ScaleTo(1.2);m:SetAttribute('Elite',true)
    local crest=Instance.new('Part');crest.Name='EliteCrown';crest.Shape=Enum.PartType.Ball;crest.Size=Vector3.new(.6,.6,.6);crest.Position=pos+Vector3.new(0,4.8,0);crest.Material=Enum.Material.Neon;crest.Color=Color3.fromRGB(255,215,111);crest.Anchored=true;crest.CanCollide=false;crest.CanTouch=false;crest.CanQuery=false;crest.Parent=m
   end
   m:SetAttribute('HP',hp)
-  table.insert(enemies,{model=m,pos=pos,hp=hp,maxHp=hp,kind=kind,elite=elite,speed=(9+math.min(4.8,elapsed/36))*speedScale,hitClock=0,slow=0,castClock=rng:NextNumber(1,3),seed=nextEnemy})
+  table.insert(enemies,{model=m,pos=pos,hp=hp,maxHp=hp,kind=kind,role=role,family=definition.family,elite=elite,speed=(9+math.min(4.8,elapsed/36))*speedScale,hitClock=0,slow=0,castClock=rng:NextNumber(1,3),seed=nextEnemy})
  end
  local function spawn(dt,alive,elapsed)
   if elapsed>=roundLength or(deps.clock and deps.clock.phase~='survival')then return end
@@ -2460,12 +2562,7 @@ return function(deps)
   if spawnClock>0 or #enemies>=84 then return end
   local fieldActive=deps.clock and deps.clock.fieldBoss~=nil
   spawnClock=math.max(.28,.8-elapsed*.0035)/math.max(1,alive*.65)/(fieldActive and .6 or 1)
-  local pool={'stalker','stalker','stalker','stalker','stalker','stalker'}
-  if elapsed>=12 then table.insert(pool,'skitter');table.insert(pool,'skitter');table.insert(pool,'skitter')end
-  if elapsed>=28 then table.insert(pool,'brute');table.insert(pool,'brute')end
-  if elapsed>=42 then table.insert(pool,'caster');table.insert(pool,'caster')end
-  if elapsed>=60 and not fieldActive then table.insert(pool,'ember')end
-  if elapsed>=32 then table.insert(pool,'charger');table.insert(pool,'charger')end
+  local pool=catalog.Pool(elapsed,fieldActive)
   local a=rng:NextNumber(0,math.pi*2)
   create(pool[rng:NextInteger(1,#pool)],Vector3.new(math.cos(a)*77,3,math.sin(a)*77),elapsed)
   if elapsed>=nextPack and not fieldActive then
@@ -2484,9 +2581,13 @@ return function(deps)
  local function shoot(e,direction)
   e.model:SetAttribute('AttackSequence',(e.model:GetAttribute('AttackSequence')or 0)+1)
   if #shots>=20 then return end
-  local p=Instance.new('Part');p.Name='EnemyArcaneBolt';p.Shape=Enum.PartType.Ball;p.Size=Vector3.one*.75;p.Color=Color3.fromRGB(226,126,255);p.Material=Enum.Material.Neon;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Position=e.pos+Vector3.new(0,1.1,0);p.Parent=deps.world
+  local definition=catalog.Get(e.kind)
+  local rgb=definition and definition.cueColor or {226,126,255}
+  local color=Color3.fromRGB(rgb[1],rgb[2],rgb[3])
+  local p=Instance.new('Part');p.Name='EnemyArcaneBolt';p.Shape=Enum.PartType.Ball;p.Size=Vector3.one*.75;p.Color=color;p.Material=Enum.Material.Neon;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Position=e.pos+Vector3.new(0,definition and definition.projectileHeight or 1.1,0)
+  p:SetAttribute('EnemyKind',e.kind);p:SetAttribute('EnemyFamily',definition and definition.family or 'undead');p.Parent=deps.world
   local a=Instance.new('Attachment');a.Position=Vector3.new(0,.2,0);a.Parent=p;local b=Instance.new('Attachment');b.Position=Vector3.new(0,-.2,0);b.Parent=p
-  local trail=Instance.new('Trail');trail.Attachment0=a;trail.Attachment1=b;trail.Lifetime=.23;trail.Color=ColorSequence.new(Color3.fromRGB(239,179,255));trail.Transparency=NumberSequence.new(.15,1);trail.LightEmission=1;trail.Parent=p
+  local trail=Instance.new('Trail');trail.Attachment0=a;trail.Attachment1=b;trail.Lifetime=.23;trail.Color=ColorSequence.new(color:Lerp(Color3.new(1,1,1),.4));trail.Transparency=NumberSequence.new(.15,1);trail.LightEmission=1;trail.Parent=p
   table.insert(shots,{part=p,pos=p.Position,direction=direction,life=3.4})
  end
  local function stepShots(dt)
@@ -2510,6 +2611,9 @@ return function(deps)
    local e=enemies[i]
    if e.isBoss or e.isFieldBoss then continue end
    if e.hp<=0 then table.remove(enemies,i);continue end
+   -- Legacy fixtures/actors may omit role; resolve identity through the catalog.
+   local definition=catalog.Get(e.kind)
+   local role=e.role or(definition and definition.role)or e.kind
    local target,dist=nil,math.huge
    for _,s in pairs(states)do local r=rootOf(s);if r then local d=flat(r.Position-e.pos).Magnitude;if d<dist then target,dist=s,d end end end
    if not target then continue end
@@ -2519,7 +2623,7 @@ return function(deps)
    local moving=e.frozen<=0
    local move=diff.Magnitude>.01 and diff.Unit or Vector3.zero
    local speed=e.speed*(e.slow>0 and .45 or 1)
-   if e.kind=='charger'then
+   if role=='charger'then
     e.castClock=math.max(0,(e.castClock or 0)-(moving and dt or 0))
     if e.chargeTime then
      if moving then e.chargeTime-=dt end
@@ -2531,13 +2635,14 @@ return function(deps)
      moving=false
      local marker=e.model:FindFirstChild('ChargeWarning')
      if not marker then
-      marker=Instance.new('Part');marker.Name='ChargeWarning';marker.Size=Vector3.new(4,.06,23);marker.Color=Color3.fromRGB(255,151,75);marker.Material=Enum.Material.Neon;marker.Transparency=.7;marker.Anchored=true;marker.CanCollide=false;marker.CanTouch=false;marker.CanQuery=false;marker.Parent=e.model
+      local rgb=definition and definition.cueColor or {255,151,75}
+      marker=Instance.new('Part');marker.Name='ChargeWarning';marker.Size=Vector3.new(4,.06,23);marker.Color=Color3.fromRGB(rgb[1],rgb[2],rgb[3]);marker.Material=Enum.Material.Neon;marker.Transparency=.7;marker.Anchored=true;marker.CanCollide=false;marker.CanTouch=false;marker.CanQuery=false;marker.Parent=e.model
      end
      local start=Vector3.new(e.pos.X,.18,e.pos.Z);marker.CFrame=CFrame.lookAt(start+e.chargeDirection*11.5,start+e.chargeDirection*23)
-     if (e.chargeWindup or 0)>=.85 then marker:Destroy();e.chargeTime=.65;e.chargeWindup=0 end
+     if (e.chargeWindup or 0)>=.85 then marker:Destroy();e.chargeTime=.65;e.chargeWindup=0;e.model:SetAttribute('AttackSequence',(e.model:GetAttribute('AttackSequence')or 0)+1)end
     else e.chargeDirection=nil end
-   elseif e.kind=='caster'then
-    e.castClock-=moving and dt or 0
+   elseif role=='caster'then
+    e.castClock=(e.castClock or 0)-(moving and dt or 0)
     if moving and dist<34 and e.castClock<=0 then
      moving=false;e.windup=(e.windup or 0)+dt
      if not e.castDirection then e.castDirection=move end
@@ -2546,7 +2651,7 @@ return function(deps)
     elseif dist<18 then
      if moving then move=Vector3.new(-move.Z,0,move.X)*(e.seed%2==0 and 1 or -1);speed*=.65 end
     end
-   elseif e.kind=='ember'and(e.detonating or dist<8)then
+   elseif role=='ember'and(e.detonating or dist<8)then
     if not e.detonating then
      e.detonating=true;e.blastPoint=e.pos;e.fuse=0
      local marker=Instance.new('Part');marker.Name='EnemyBlastWarning';marker.Shape=Enum.PartType.Cylinder;marker.Size=Vector3.new(.08,12,12);marker.CFrame=CFrame.new(e.pos.X,.17,e.pos.Z)*CFrame.Angles(0,0,math.pi/2);marker.Material=Enum.Material.Neon;marker.Color=Color3.fromRGB(255,74,45);marker.Transparency=.78;marker.Anchored=true;marker.CanCollide=false;marker.CanTouch=false;marker.CanQuery=false;marker.Parent=e.model
@@ -2560,23 +2665,24 @@ return function(deps)
      if deps.drop then deps.drop(e.pos)end;e.hp=0;e.model:Destroy();continue
     end
    end
-   if e.kind=='skitter'and dist>7 and dist<35 then
+   if role=='skitter'and dist>7 and dist<35 then
     local tangent=Vector3.new(-move.Z,0,move.X)*(e.seed%2==0 and 1 or -1)
     move=(move+tangent*.65).Unit
    end
    if moving and dist>2.5 then e.pos=bound(e.pos+move*math.min(dist-2.5,speed*dt))end
-   if e.model.Parent then e.model:SetAttribute('Preparing',(e.windup or 0)>0);e.model:SetAttribute('Detonating',e.detonating==true)end
+   if e.model.Parent then e.model:SetAttribute('Preparing',(e.windup or 0)>0 or(e.chargeWindup or 0)>0);e.model:SetAttribute('Detonating',e.detonating==true)end
    if e.model.Parent and diff.Magnitude>.01 then
-    local bob=e.kind=='caster'and math.sin(time*2+e.seed)*.25 or math.sin(time*(e.kind=='skitter'and 9 or 4)+e.seed)*.08
+    -- New families animate only in the client; their damage anchor stays grounded.
+    local bob=definition and(definition.family=='slime'or definition.family=='crystal')and 0 or(e.kind=='caster'and math.sin(time*2+e.seed)*.25 or math.sin(time*(e.kind=='skitter'and 9 or 4)+e.seed)*.08)
     e.model:PivotTo(CFrame.lookAt(e.pos+Vector3.new(0,bob,0),e.pos+Vector3.new(0,bob,0)+move))
    end
-   if e.kind~='caster'and e.kind~='ember'and dist<4 and e.hitClock<=0 and e.frozen<=0 then
-    if harm(target,e.kind=='brute'and 11 or(e.kind=='charger'and 12 or(e.kind=='skitter'and 6 or 8)))then e.hitClock=.95;e.model:SetAttribute('AttackSequence',(e.model:GetAttribute('AttackSequence')or 0)+1)end
+   if role~='caster'and role~='ember'and dist<4 and e.hitClock<=0 and e.frozen<=0 then
+    if harm(target,definition and definition.contactDamage or 8)then e.hitClock=.95;e.model:SetAttribute('AttackSequence',(e.model:GetAttribute('AttackSequence')or 0)+1)end
    end
   end
  end
  local function resetSpawn()
-  spawnClock=0;time=0;nextPack=18
+  spawnClock=0;time=0;nextPack=18;table.clear(variants)
   for _,s in ipairs(shots)do s.part:Destroy()end;table.clear(shots)
  end
  return {Spawn=spawn,Step=step,ResetSpawn=resetSpawn}
@@ -2954,17 +3060,22 @@ local styles=require(script.Parent.AugmentStyles)
 local known={};for _,entries in pairs(styles)do for _,v in ipairs(entries)do known[v.id]=true end end
 local colors={ice=Color3.fromRGB(130,236,255),lightning=Color3.fromRGB(170,192,255),meteor=Color3.fromRGB(255,142,58),blades=Color3.fromRGB(146,255,215),frost=Color3.fromRGB(177,244,255),ward=Color3.fromRGB(255,222,137),missile=Color3.fromRGB(205,155,255),skyLances=Color3.fromRGB(255,222,148),lightRing=Color3.fromRGB(143,218,255),fire=Color3.fromRGB(255,123,48),thunder=Color3.fromRGB(130,188,255),aether=Color3.fromRGB(211,165,255),iceRush=Color3.fromRGB(134,229,255)}
 local tau=math.pi*2
+local polished={meteor_wide=true,meteor_echo=true,frost_wide=true,frost_echo=true,ward_pulse=true,fire_blast=true}
+local white=Color3.fromRGB(242,255,255)
+local warm=Color3.fromRGB(255,237,177)
+local function phase(t,start,finish)return math.clamp((t-start)/(finish-start),0,1)end
+local function outCubic(t)return 1-(1-t)^3 end
 local function ids(csv)
  local result={};for id in string.gmatch(type(csv)=='string'and csv or '','[^,]+')do if known[id]then table.insert(result,id)end end;return result
 end
 return function(deps)
  local folder=deps.folder
- local container,arcFree,shardFree,jobs=nil,{},{},{}
- local arcCount,shardCount,active=0,0,0
+ local container,arcFree,shardFree,particleFree,jobs=nil,{},{},{},{}
+ local arcCount,shardCount,particleCount,active=0,0,0,0
  local function ensure()
   if not container or not container.Parent then
    container=Instance.new('Folder');container.Name='AugmentVisuals';container.Parent=folder
-   arcFree={};shardFree={};arcCount=0;shardCount=0
+   arcFree={};shardFree={};particleFree={};arcCount=0;shardCount=0;particleCount=0
   end
  end
  local function visible(point)
@@ -2983,6 +3094,49 @@ return function(deps)
   end
   p.Color=color;p.Transparency=1;return p
  end
+ -- 24 holders, each with two disabled emitters. An impact emits 24 particles;
+ -- cast emissions are >=.16s apart with <=.46s lifetime (at most nine alive).
+ -- One owner keeps the holder until its particles expire; cancellation clears both.
+ local function particles(id,casting)
+  ensure();local q=table.remove(particleFree)
+  if not q then
+   if particleCount>=24 then return end
+   particleCount+=1
+   local holder=Instance.new('Part');holder.Name='AugmentParticles';holder.Size=Vector3.one*.1
+   holder.Anchored=true;holder.Transparency=1;holder.CanCollide=false;holder.CanTouch=false;holder.CanQuery=false;holder.CastShadow=false;holder.Parent=container
+   local sparks=Instance.new('ParticleEmitter');sparks.Name='Sparks';sparks.Parent=holder
+   local haze=Instance.new('ParticleEmitter');haze.Name='Haze';haze.Parent=holder
+   q={holder=holder,sparks=sparks,haze=haze}
+  end
+  local hot=id=='meteor_wide'or id=='meteor_echo'or id=='fire_blast'
+  local color=colors[id:match('^([^_]+)')]or colors.aether
+  q.holder:SetAttribute('Augment',id);q.holder:SetAttribute('Phase',casting and 'cast'or 'impact')
+  for _,em in ipairs({q.sparks,q.haze})do
+   em:Clear();em.Enabled=false;em.Rate=0;em.LockedToPart=false;em.VelocityInheritance=0
+   em.EmissionDirection=Enum.NormalId.Top;em.SpreadAngle=Vector2.new(casting and 24 or 65,casting and 24 or 65)
+   em.Color=ColorSequence.new(hot and warm or white,color);em.LightEmission=hot and .8 or .6;em.LightInfluence=0
+   em.Rotation=NumberRange.new(0,360);em.RotSpeed=NumberRange.new(-40,40)
+  end
+  q.sparks.Texture=hot and 'rbxasset://textures/particles/fire_sparks_main.dds'or 'rbxasset://textures/particles/sparkles_main.dds'
+  q.sparks.Lifetime=NumberRange.new(casting and .2 or .35,casting and .38 or .65)
+  q.sparks.Speed=NumberRange.new(casting and 2 or 7,casting and 5 or 14);q.sparks.Drag=4
+  q.sparks.Acceleration=Vector3.new(0,hot and -9 or 1,0)
+  q.sparks.Orientation=Enum.ParticleOrientation.VelocityParallel
+  q.sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,casting and .18 or .3),NumberSequenceKeypoint.new(.2,casting and .28 or .5),NumberSequenceKeypoint.new(1,0)})
+  q.sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.15),NumberSequenceKeypoint.new(.55,.3),NumberSequenceKeypoint.new(1,1)})
+  q.haze.Texture=id=='fire_blast'and 'rbxasset://textures/particles/fire_main.dds'or 'rbxasset://textures/particles/smoke_main.dds'
+  q.haze.Lifetime=NumberRange.new(casting and .25 or .4,casting and .46 or .7)
+  q.haze.Speed=NumberRange.new(casting and 1 or 2,casting and 3 or 6);q.haze.Drag=3
+  q.haze.Acceleration=Vector3.new(0,2,0);q.haze.Orientation=Enum.ParticleOrientation.FacingCamera
+  q.haze.Size=NumberSequence.new(casting and .6 or 1.2,casting and 1.5 or 3.5)
+  q.haze.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.86),NumberSequenceKeypoint.new(.16,.77),NumberSequenceKeypoint.new(1,1)})
+  return q
+ end
+ local function emit(q,frame,sparks,haze)
+  if not q then return end
+  q.holder.CFrame=frame -- Emit samples the position immediately.
+  q.sparks:Emit(sparks);q.haze:Emit(haze)
+ end
  local function construct(id,narcs,nshards)
   local color=colors[id:match('^([^_]+)')]or colors.aether
   local a,p={},{}
@@ -2992,16 +3146,19 @@ return function(deps)
   for _,v in ipairs(p)do v:SetAttribute('Augment',id)end
   return a,p
  end
- local function release(a,p)
-  for _,v in ipairs(a)do if v.holder.Parent then v:setEnabled(false);table.insert(arcFree,v)end end
-  for _,v in ipairs(p)do if v.Parent then v.Transparency=1;v.CFrame=CFrame.new(0,-50000,0);table.insert(shardFree,v)end end
+ local function release(a,p,q)
+  for _,v in ipairs(a)do if container and container.Parent and v.holder.Parent==container then v:setEnabled(false);table.insert(arcFree,v)end end
+  for _,v in ipairs(p)do if container and container.Parent and v.Parent==container then v.Transparency=1;v.CFrame=CFrame.new(0,-50000,0);table.insert(shardFree,v)end end
+  if q and container and container.Parent and q.holder.Parent==container then
+   q.sparks:Clear();q.haze:Clear();q.holder.CFrame=CFrame.new(0,-50000,0);table.insert(particleFree,q)
+  end
  end
- local function run(seconds,a,p,step)
-  active+=1;local handle
+ local function run(seconds,a,p,step,q)
+  active+=1;local handle;local ownerContainer=container
   handle=Animator.play(seconds,function(t,dt,age)
-   if not folder.Parent or not container or not container.Parent then handle:cancel();return end
+   if not folder.Parent or not ownerContainer or not ownerContainer.Parent or container~=ownerContainer then handle:cancel();return end
    if step(t,dt,age)==false then handle:cancel()end
-  end,{onComplete=function()release(a,p);active-=1;jobs[handle]=nil end})
+  end,{onComplete=function()release(a,p,q);active-=1;jobs[handle]=nil end})
   jobs[handle]=true;return handle
  end
  local function curve(a,frame,r,start,sweep,width,alpha)
@@ -3011,12 +3168,24 @@ return function(deps)
  local function facet(p,frame,size,alpha)
   if not p then return end;p.CFrame=frame;p.Size=size;p.Transparency=math.clamp(alpha,0,1)
  end
+ local function stroke(p,from,to,width,alpha)
+  local length=(to-from).Magnitude
+  if length<.01 then if p then p.Transparency=1 end;return end
+  facet(p,CFrame.lookAt((from+to)*.5,to),Vector3.new(width,width,length),alpha)
+ end
+ local function accents(a,p,id)
+  local hot=id=='meteor_wide'or id=='meteor_echo'or id=='fire_blast'
+  for i,v in ipairs(a)do if i%2==1 then v:setColor(hot and warm or white)end end
+  for i,v in ipairs(p)do if i%3==0 then v.Color=hot and warm or white end end
+ end
  local function castOne(anchor,kind,id,role)
   if role=='aura'and kind=='blades'and id~='blades_volley'then return end
   if active>=40 or not visible(anchor.Position)then return end
   local ground=kind=='meteor'or kind=='frost'or kind=='ward'or kind=='skyLances'
-  local a,p=construct(id,kind=='ward'and 3 or 2,(id=='blades_volley'or id=='skyLances_rain')and 7 or 6)
-  local returning=false
+  local a,p=construct(id,(kind=='ward'or polished[id])and 3 or 2,polished[id]and 12 or((id=='blades_volley'or id=='skyLances_rain')and 7 or 6))
+  local q=polished[id]and id~='ward_pulse'and particles(id,true)or nil
+  if polished[id]then accents(a,p,id)end
+  local returning=false;local lastEmission=-1
   run(math.huge,a,p,function(_,_,age)
    if not anchor.Parent then return false end
    local t=anchor:GetAttribute('Elapsed')or age
@@ -3048,22 +3217,75 @@ return function(deps)
     for i,v in ipairs(a)do curve(v,high*CFrame.Angles(0,spin*(i==1 and 1 or -1),0),6+i,0,tau,.16,.22)end
     for i,v in ipairs(p)do local ang=i*tau/#p;facet(v,high*CFrame.new(math.cos(ang)*7,math.sin(t+i)*.3,math.sin(ang)*7)*CFrame.Angles(0,ang,math.pi/4),Vector3.new(.17,id=='skyLances_execute'and 3 or 1.4,.7),.12)end
    elseif id=='meteor_wide'or id=='meteor_echo' then
+    local duration=anchor:GetAttribute('Duration')or 3.2
+    local charge=phase(t,0,duration)
     local center=frame*CFrame.new(0,.2,0)
     if id=='meteor_wide'then
-     -- Match AreaArt's actual diagonal fall, including windup and level size.
-     local duration=anchor:GetAttribute('Duration')or 3.2
+     -- Keep the core exactly on AreaArt's diagonal fall and level-dependent size.
      local fall=math.clamp((t-.35)/math.max(duration-.35,.01),0,1)
      local size=10+(anchor:GetAttribute('Level')or 1)*.6
      center=CFrame.new(point+Vector3.new(20*(1-fall),76*(1-fall)^1.3+size*.3,0))
+     for i,v in ipairs(a)do
+      local orbit=center*CFrame.Angles(.35+i*.3,spin*(i%2==0 and -1 or 1)+(i-1)*tau/3,.18*i)
+      curve(v,orbit,size*(.66+i*.055),-.5,math.pi*1.35,.16+.1*charge,.25+(i-1)*.1)
+     end
+     for i,v in ipairs(p)do
+      local ang=i*tau/#p-spin;local reach=size*(.63+(i%2)*.1)
+      local cf=center*CFrame.new(math.cos(ang)*reach,(i%3)*.8,math.sin(ang)*reach)*CFrame.Angles(.4,-ang,.25)
+      facet(v,cf,Vector3.new(.12,.3+(i%3)*.2,1.6+charge*1.6),.24)
+     end
+     if t>=lastEmission+.16 then emit(q,center*CFrame.new(0,size*.6,0),2,1);lastEmission=t end
+    else
+     -- Six broken seams close toward the landing point before the delayed rupture.
+     for i,v in ipairs(a)do curve(v,center*CFrame.Angles(0,(i-1)*tau/3-spin*.16,0),radius*(.8-.12*charge),-.72,1.44,.14+.08*charge,.42-.18*charge)end
+     for i,v in ipairs(p)do
+      local spoke=math.floor((i-1)/2);local ang=spoke*tau/6
+      local inner=radius*(i%2==1 and .25 or .47);local outer=radius*(i%2==1 and .5 or .73)
+      local base=center.Position;local bend=ang+(i%2==1 and .05 or -.1)
+      stroke(v,base+Vector3.new(math.cos(ang)*inner,.02,math.sin(ang)*inner),base+Vector3.new(math.cos(bend)*outer,.02,math.sin(bend)*outer),.08+.06*charge,.55-.25*charge)
+     end
+     if t>=lastEmission+.16 then local ang=t*2;emit(q,center*CFrame.new(math.cos(ang)*radius*.55,.15,math.sin(ang)*radius*.55),2,0);lastEmission=t end
     end
-    for i,v in ipairs(a)do curve(v,center*CFrame.Angles(id=='meteor_wide'and .35*i or 0,spin*(i==1 and 1 or -1),0),id=='meteor_wide'and(7+i)or radius*(.65+i*.12),-.3,tau*.84,.22,.25)end
-    for i,v in ipairs(p)do local ang=i*tau/#p-spin;facet(v,center*CFrame.new(math.cos(ang)*8,.3,math.sin(ang)*8)*CFrame.Angles(.5,ang,1),Vector3.new(.18,2.4,.7),.18)end
    elseif id=='frost_wide'or id=='frost_echo' then
-    for i,v in ipairs(a)do curve(v,frame*CFrame.Angles(0,spin*(i==1 and 1 or -1),0),radius*(.65+.13*i),0,tau,.12,.3)end
-    for i,v in ipairs(p)do local ang=i*tau/#p;facet(v,frame*CFrame.Angles(0,ang,0)*CFrame.new(0,.3,-radius*.72)*CFrame.Angles(0,0,math.pi/2),Vector3.new(.1,2.8,1.3),.28)end
+    local charge=phase(t,0,anchor:GetAttribute('Duration')or .75)
+    local wide=id=='frost_wide';local reach=radius*(wide and(.88-.3*charge)or(.7-.46*charge))
+    for i,v in ipairs(a)do
+     local plane=frame*CFrame.new(0,wide and .1 or .7+charge*.7,0)*CFrame.Angles(0,(i-1)*tau/3+(wide and spin*.2 or -spin),0)
+     curve(v,plane,reach,-.82,1.64,.12+.1*charge,.48-.2*charge)
+    end
+    for i,v in ipairs(p)do
+     local spoke=math.floor((i-1)/2);local ang=spoke*tau/6+(wide and 0 or -spin*.6)
+     local cf=frame*CFrame.Angles(0,ang,0)*CFrame.new((i%2==0 and .22 or -.22)*(1-charge*.3),wide and .45 or 1.2+charge*1.4,-reach)
+     facet(v,cf*CFrame.Angles(0,0,(i%2==0 and 1 or -1)*.42),Vector3.new(.09,.7+charge*1.5,.7+charge*.7),.38-charge*.18)
+    end
+    if t>=lastEmission+.16 then
+     local ang=t*7;emit(q,frame*CFrame.new(math.cos(ang)*reach,.4,math.sin(ang)*reach),2,0);lastEmission=t
+    end
    elseif id=='ward_pulse' then
-    for i,v in ipairs(a)do curve(v,frame*CFrame.new(0,.4+i*.2,0)*CFrame.Angles(0,spin,0),4.4,0,tau,.13,.35)end
-    for i,v in ipairs(p)do local ang=i*tau/#p-spin;facet(v,frame*CFrame.new(math.cos(ang)*4.8,3.6,math.sin(ang)*4.8)*CFrame.Angles(0,-ang,math.pi/4),Vector3.new(.22,1.7,1.2),.15)end
+    -- Open arches above six paired rune panels; leave the protected player readable.
+    for i,v in ipairs(a)do
+     local cf=frame*CFrame.new(0,2.4,0)*CFrame.Angles(0,(i-1)*tau/3+spin*.18,0)*CFrame.Angles(math.pi/2,0,0)
+     curve(v,cf,4.6,-.74,1.48,.12,.48)
+    end
+    for i,v in ipairs(p)do
+     local ang=math.floor((i-1)/2)*tau/6-spin*.2;local side=i%2==0 and 1 or -1
+     local cf=frame*CFrame.Angles(0,ang,0)*CFrame.new(side*.22,3.1+math.sin(t*1.3+ang)*.2,-4.6)*CFrame.Angles(0,0,side*.55)
+     facet(v,cf,Vector3.new(.1,1.05,.7),.25)
+    end
+   elseif id=='fire_blast' then
+    -- Tapered corkscrew wake, aligned with the actual projectile frame (+Z trails).
+    for i,v in ipairs(a)do
+     local cf=frame*CFrame.new(0,0,.6+i*.9)*CFrame.Angles(math.pi/2,0,spin*3+(i-1)*tau/3)
+     curve(v,cf,1.8-i*.28,-.4,math.pi*1.2,.32-i*.06,.16+i*.13)
+    end
+    for i,v in ipairs(p)do
+     local ang=math.floor((i-1)/2)*tau/6+spin*2;local rear=i%2==0
+     facet(v,frame*CFrame.new(math.cos(ang)*(rear and .85 or 1.3),math.sin(ang)*(rear and .85 or 1.3),rear and 3 or 1.1)*CFrame.Angles(0,0,ang),Vector3.new(.1,rear and .3 or .6,rear and 2.8 or 1.5),rear and .5 or .18)
+    end
+    if t>=lastEmission+.16 then
+     local tail=frame:PointToWorldSpace(Vector3.new(0,0,2.5))
+     emit(q,CFrame.lookAt(tail,tail+frame.ZVector)*CFrame.Angles(-math.pi/2,0,0),2,1);lastEmission=t
+    end
    elseif id=='missile_hunter'or id=='blades_pierce'or id=='ice_shatter' then
     for i,v in ipairs(a)do curve(v,frame*CFrame.new(0,0,i*.8)*CFrame.Angles(math.pi/2,spin,0),id=='ice_shatter'and 1.6 or .65,0,math.pi*1.5,.09,.3)end
     for i,v in ipairs(p)do
@@ -3072,7 +3294,7 @@ return function(deps)
      facet(v,frame*CFrame.new(math.cos(theta)*reach,math.sin(theta)*reach,-.5)*CFrame.Angles(0,0,theta),Vector3.new(.12,id=='ice_shatter'and 1.1 or .5,id=='blades_pierce'and 3.8 or 1.8),.12)
     end
    else
-    local scale=id=='fire_blast'and 1.7 or(id=='iceRush_wide'and 3.6 or 1)
+    local scale=id=='iceRush_wide'and 3.6 or 1
     if kind=='lightRing'then frame=CFrame.new(point)*CFrame.Angles(0,t*7,0);scale=2.8 end
     for i,v in ipairs(a)do
      local cf=frame*CFrame.new(0,0,(i-1)*1.8)*CFrame.Angles(math.pi/2,spin+(i-1)*math.pi,0)
@@ -3083,12 +3305,101 @@ return function(deps)
      facet(v,frame*CFrame.new(math.cos(ang)*scale,math.sin(ang)*scale,.8)*CFrame.Angles(0,0,ang),size,.18)
     end
    end
-  end)
+  end,q)
  end
  local function cast(anchor,kind,role)
   if type(anchor)=='string'then local world=workspace:FindFirstChild('SummonerRuntime');anchor=world and world:FindFirstChild(anchor)end
   if not anchor or not anchor.Parent then return end
   for _,id in ipairs(ids(anchor:GetAttribute('VFXAugments')))do castOne(anchor,kind,id,role)end
+ end
+ local function polishedImpact(point,radius,id)
+  local r=math.clamp(radius or 4,1,24)
+  local a,p=construct(id,3,id=='frost_wide'and 18 or 12)
+  local q=particles(id,false);accents(a,p,id)
+  local duration=id=='ward_pulse'and 1.15 or 1.3
+  local emitted=false
+  run(duration,a,p,function(_,_,age)
+   local out=outCubic(phase(age,0,.48));local fade=phase(age,.38,duration)
+   local center=CFrame.new(point+Vector3.new(0,.3,0))
+   if not emitted then
+    -- Six local bursts give the rim some texture without covering the whole area.
+    for i=1,6 do local angle=i*tau/6;emit(q,center*CFrame.new(math.cos(angle)*r*.35,.3,math.sin(angle)*r*.35),3,1)end
+    emitted=true
+   end
+   if id=='meteor_wide'then
+    for i,v in ipairs(a)do
+     local u=phase(age,(i-1)*.065,.6+(i-1)*.065)
+     local cf=center*CFrame.new(0,.15+i*.08,0)*CFrame.Angles(0,(i-1)*tau/3,0)*CFrame.Angles(.16,0,.1)
+     curve(v,cf,r*(.18+.82*outCubic(u)),-.9,1.8,.62*(1-u)+.04,math.max(fade,u*.8))
+    end
+    for i,v in ipairs(p)do
+     local ang=i*tau/#p;local travel=r*(.17+.75*out);local height=math.max(0,(5+i%3*1.4)*math.sin(math.min(age/.95,1)*math.pi))
+     local cf=center*CFrame.new(math.cos(ang)*travel,height,math.sin(ang)*travel)*CFrame.Angles(age*3,ang,age*1.6)
+     facet(v,cf,Vector3.new(.14,1.8*(1-fade)+.15,.7*(1-fade)+.12),.18+.82*fade)
+    end
+   elseif id=='meteor_echo'then
+    for i,v in ipairs(a)do
+     local u=phase(age,(i-1)*.06,.65+(i-1)*.06)
+     local cf=center*CFrame.Angles(0,(i-1)*tau/3,0)*CFrame.new(0,.2,0)*CFrame.Angles(.5,0,0)
+     curve(v,cf,r*(.25+.68*outCubic(u)),-.65,1.3,.5*(1-u),.2+.8*math.max(fade,u*.7))
+    end
+    for i,v in ipairs(p)do
+     local ang=math.floor((i-1)/2)*tau/6;local odd=i%2==1
+     local base=center.Position;local inner=r*(odd and .08 or .4)*out;local outer=r*(odd and .43 or .82)*out
+     stroke(v,base+Vector3.new(math.cos(ang)*inner,.03,math.sin(ang)*inner),base+Vector3.new(math.cos(ang+(odd and .08 or -.1))*outer,.03,math.sin(ang+(odd and .08 or -.1))*outer),(.26-.2*fade)*(odd and 1 or .7),.18+.82*fade)
+    end
+   elseif id=='frost_wide'then
+    for i,v in ipairs(a)do
+     local u=phase(age,(i-1)*.05,.55+(i-1)*.05)
+     curve(v,center*CFrame.Angles(0,(i-1)*tau/3,0),r*(.25+.7*outCubic(u)),-.7,1.4,.18*(1-u)+.025,.35+.65*fade)
+    end
+    -- A six-arm, forked snowflake grows outward in a readable low plane.
+    for i,v in ipairs(p)do
+     local spoke=math.floor((i-1)/3);local branch=(i-1)%3;local ang=spoke*tau/6
+     local radial=Vector3.new(math.cos(ang),0,math.sin(ang));local base=center.Position
+     local from=base+radial*r*(branch==0 and .05 or .51)*out
+     local to
+     if branch==0 then to=base+radial*r*.93*out
+     else local theta=ang+(branch==1 and 1 or -1)*math.pi/3;to=from+Vector3.new(math.cos(theta),0,math.sin(theta))*r*.28*out end
+     stroke(v,from,to,(branch==0 and .18 or .12)*(1-fade)+.025,.23+.77*fade)
+    end
+   elseif id=='frost_echo'then
+    local unfurl=outCubic(phase(age,0,.32))
+    for i,v in ipairs(a)do
+     local cf=center*CFrame.new(0,.5+unfurl*.8,0)*CFrame.Angles(0,(i-1)*tau/3-age*2,0)*CFrame.Angles(.22,0,0)
+     curve(v,cf,r*(.2+.64*out),-.8,1.6,.22*(1-fade),.25+.75*fade)
+    end
+    for i,v in ipairs(p)do
+     local ang=math.floor((i-1)/2)*tau/6-age*.45;local side=i%2==0 and 1 or -1
+     local reach=r*(.28+.4*unfurl);local height=(1.2+(i%3)*.6)*math.sin(math.min(age,1)*math.pi)
+     local cf=center*CFrame.Angles(0,ang,0)*CFrame.new(side*(.15+.5*unfurl),.4+height,-reach)*CFrame.Angles(side*.2,0,side*(.18+.8*unfurl))
+     facet(v,cf,Vector3.new(.1,(1.1+r*.12)*(1-fade)+.1,.75*(1-fade)+.1),.2+.8*fade)
+    end
+   elseif id=='ward_pulse'then
+    local open=outCubic(phase(age,0,.45));local split=phase(age,.16,.65)
+    for i,v in ipairs(a)do
+     local cf=center*CFrame.new(0,2.3*(1-open),0)*CFrame.Angles(0,(i-1)*tau/3,0)*CFrame.Angles(math.pi/2*(1-open),0,0)
+     curve(v,cf,3.8+(r-3.8)*open,-.78,1.56,.25*(1-fade),.3+.7*fade)
+    end
+    for i,v in ipairs(p)do
+     local ang=math.floor((i-1)/2)*tau/6;local side=i%2==0 and 1 or -1
+     local cf=center*CFrame.Angles(0,ang,0)*CFrame.new(side*(.25+split*.65),2.4+math.sin(open*math.pi)*.8,-r*(.35+.6*open))*CFrame.Angles(0,side*split*.8,side*(.5+split))
+     facet(v,cf,Vector3.new(.12,1.6*(1-fade)+.1,.95*(1-fade)+.1),.18+.82*fade)
+    end
+   elseif id=='fire_blast'then
+    for i,v in ipairs(a)do
+     local u=phase(age,(i-1)*.06,.48+(i-1)*.06)
+     local cf=center*CFrame.new(0,.4+(1-u)*i*.25,0)*CFrame.Angles(.14,age*1.8+(i-1)*tau/3,.12)
+     curve(v,cf,r*(.16+.8*outCubic(u)),-.95,1.9,.55*(1-u)+.025,.18+.82*math.max(fade,u*.65))
+    end
+    for i,v in ipairs(p)do
+     local ang=math.floor((i-1)/2)*tau/6+age*.35;local tip=i%2==0
+     local rise=math.sin(math.min(age/.75,1)*math.pi);local reach=r*(.16+.55*out)+(tip and .5 or 0)
+     local cf=center*CFrame.new(math.cos(ang)*reach,.5+rise*(tip and 4.2 or 2.4),math.sin(ang)*reach)*CFrame.Angles(.25,-ang,.2+age*1.3)
+     facet(v,cf,Vector3.new(.14,(tip and 1.5 or 2.7)*(1-fade)+.08,.65*(1-fade)+.1),.2+.8*fade)
+    end
+   end
+  end,q)
  end
  local function impact(point,radius,meta)
   if type(meta)~='table'or active>=40 or not visible(point)then return end
@@ -3097,26 +3408,25 @@ return function(deps)
    local bonus=id=='missile_hunter'or id=='skyLances_execute'or id=='aether_execute'or id=='lightning_frozen'
    local echo=id=='meteor_echo'or id=='frost_echo'
    if (not bonus or meta.empowered)and(not echo or meta.phase=='echo')and(id~='lightRing_return'or meta.phase=='return')then
-    local crown=id=='fire_blast'or id=='meteor_wide'
-    local a,p=construct(id,crown and 4 or(echo and 3 or 2),12)
+    if polished[id]then polishedImpact(point,radius,id);continue end
+    local a,p=construct(id,2,12)
     local r=math.clamp(radius or 4,1,24)
-    run(echo and 1.05 or .7,a,p,function(t)
+    run(.7,a,p,function(t)
      local out=1-(1-t)^3;local fade=math.clamp((t-.18)/.82,0,1)
      local center=CFrame.new(point+Vector3.new(0,.2,0))
-     if id=='ward_pulse'then center=CFrame.new(point+Vector3.new(0,2,0))end
      for i,v in ipairs(a)do
       local u=math.clamp((t-(i-1)*.08)*1.3,0,1)
-      local plane=crown and (CFrame.Angles(0,(i-1)*math.pi/2,0)*CFrame.Angles(math.pi/2,0,0))or(bonus and CFrame.Angles(math.pi/2,0,(i-1)*math.pi/2)or CFrame.Angles(0,i*t,0))
-      curve(v,center*plane,r*(.12+.88*(1-(1-u)^3)),crown and -math.pi/2 or 0,crown and math.pi or(bonus and math.pi*1.6 or tau),(bonus and .45 or .3)*(1-u),fade)
+      local plane=bonus and CFrame.Angles(math.pi/2,0,(i-1)*math.pi/2)or CFrame.Angles(0,i*t,0)
+      curve(v,center*plane,r*(.12+.88*(1-(1-u)^3)),0,bonus and math.pi*1.6 or tau,(bonus and .45 or .3)*(1-u),fade)
      end
      for i,v in ipairs(p)do
       local theta=i*tau/#p
-      local y=(id=='fire_blast'or id=='meteor_wide')and math.sin(t*math.pi)*4 or math.sin(t*math.pi)*(i%3)*.65
+      local y=math.sin(t*math.pi)*(i%3)*.65
       local cf=center*CFrame.new(math.cos(theta)*r*out,y,math.sin(theta)*r*out)*CFrame.Angles(.3,theta,bonus and math.pi/4 or t*2)
       if bonus and i<=4 then
        cf=center*CFrame.Angles(0,0,(i-1)*math.pi/2)*CFrame.new(0,2*out,0)
        facet(v,cf,Vector3.new(.14,5*(1-t)+.1,.3),fade)
-      elseif id=='frost_wide'or id=='lightning_frozen'then
+      elseif id=='lightning_frozen'then
        cf=center*CFrame.Angles(0,theta,0)*CFrame.new(0,.12,-r*.5*out)
        facet(v,cf,Vector3.new(.08,.22,i%2==0 and r*.85*out+.1 or r*.3*out+.1),fade)
       else facet(v,cf,Vector3.new(.12,(id=='ice_shatter'and 3 or 1.6)*(1-t)+.1,.7*(1-t)+.08),fade)end
@@ -3153,9 +3463,9 @@ return function(deps)
   local pending={};for h in pairs(jobs)do table.insert(pending,h)end
   for _,h in ipairs(pending)do h:cancel()end
   if container then container:Destroy();container=nil end
-  arcFree={};shardFree={};arcCount=0;shardCount=0
+  arcFree={};shardFree={};particleFree={};arcCount=0;shardCount=0;particleCount=0
  end
- return {Cast=cast,Impact=impact,Arc=connection,Corridor=corridor,Clear=clear,Stats=function()return {active=active,arcs=arcCount,shards=shardCount,freeArcs=#arcFree,freeShards=#shardFree}end}
+ return {Cast=cast,Impact=impact,Arc=connection,Corridor=corridor,Clear=clear,Stats=function()return {active=active,arcs=arcCount,shards=shardCount,freeArcs=#arcFree,freeShards=#shardFree,particles=particleCount,freeParticles=#particleFree}end}
 end
 ]====])
 -- Source: src/client/combat/AugmentStyles.luau
@@ -3164,14 +3474,14 @@ addModule(modules,{"combat","AugmentStyles"},[====[
 return {
  ice={{id='ice_twin',name='쌍빙창',note='겹친 냉기 나선 · 두 발'},{id='ice_shatter',name='빙쇄',note='회전 파편 · 방사형 얼음 파쇄'}},
  lightning={{id='lightning_fork',name='갈래 번개',note='교차 전류 · 연쇄 +2'},{id='lightning_frozen',name='빙결 전도',note='서리 전류 · 빙결 적에 눈꽃 방전'}},
- meteor={{id='meteor_wide',name='거대 운석',note='운석 궤도 · 넓은 불꽃 왕관'},{id='meteor_echo',name='운석의 여진',note='균열 봉인 · 지연 폭발 고리'}},
+ meteor={{id='meteor_wide',name='거대 운석',note='분절 궤도 · 용암 파편 충격파'},{id='meteor_echo',name='운석의 여진',note='수렴 균열 · 여진의 불씨'}},
  blades={{id='blades_volley',name='칠성 결정',note='일곱 별의 후광 · 7발'},{id='blades_pierce',name='관통 결정',note='날카로운 결정 날 · 관통 섬광'}},
- frost={{id='frost_wide',name='광역 한파',note='육각 눈꽃 · 넓은 냉기 경계'},{id='frost_echo',name='이중 서리',note='역회전 서리 고리 · 두 번째 파동'}},
- ward={{id='ward_reservoir',name='깊은 결계',note='교차하는 룬 돔'},{id='ward_pulse',name='결계 해방',note='떠 있는 보호 룬 · 금빛 파쇄'}},
+ frost={{id='frost_wide',name='광역 한파',note='서리 응축 · 가지치는 육각 눈꽃'},{id='frost_echo',name='이중 서리',note='역회전 응축 · 피어나는 서리 결정'}},
+ ward={{id='ward_reservoir',name='깊은 결계',note='교차하는 룬 돔'},{id='ward_pulse',name='결계 해방',note='보호 룬 아치 · 열리는 금빛 결계'}},
  missile={{id='missile_salvo',name='추적 탄막',note='쌍나선 탄두 · 추가 마탄'},{id='missile_hunter',name='거수 사냥꾼',note='사냥꾼 화살촉 · 정예 적중 표식'}},
  skyLances={{id='skyLances_rain',name='칠성 창우',note='일곱 별의 천공진 · 7자루'},{id='skyLances_execute',name='천공의 심판',note='금빛 심판진 · 저체력 처형 십자'}},
  lightRing={{id='lightRing_twin',name='쌍월',note='엇갈린 두 초승달'},{id='lightRing_return',name='귀환의 칼날',note='귀환 때 펼쳐지는 세 겹 칼날'}},
- fire={{id='fire_blast',name='작열 화염탄',note='불꽃 궤도 · 작열 왕관'}},
+ fire={{id='fire_blast',name='작열 화염탄',note='나선 화염 꼬리 · 솟아오르는 작열'}},
  thunder={{id='thunder_chain',name='뇌창 전도',note='회전 전류 · 연결 방전'}},
  aetherLance={{id='aether_execute',name='성운 처형',note='성운 궤도 · 저체력 십자 폭발'}},
  iceRush={{id='iceRush_wide',name='빙하 대로',note='넓은 빙하 위로 이어지는 서리 관문'}},
@@ -6076,6 +6386,125 @@ function Skull.destroy(rig)if not rig or rig.destroyed then return end;rig.destr
 function Skull.releaseUnused()if cache and cache.users==0 and not building then cache.part:Destroy();cache.editable:Destroy();cache=nil end end
 return Skull
 ]====])
+-- Source: src/client/world/CrystalMesh.luau
+addModule(modules,{"world","CrystalMesh"},[====[
+-- Original native wedge/crystal rigs; no mesh upload, runtime mesh API or extra loop.
+local Mesh={}
+local profiles={
+ crystal_scout={name='CrystalScout',stride=7.4,cycle=.62,color=Color3.fromRGB(72,111,133)},
+ crystal_lancer={name='CrystalLancer',stride=8.6,cycle=.78,color=Color3.fromRGB(69,105,124)},
+ crystal_mage={name='CrystalMage',stride=6.7,cycle=1.05,color=Color3.fromRGB(91,94,133)},
+}
+local edge=Color3.fromRGB(113,155,170);local dark=Color3.fromRGB(36,52,66);local light=Color3.fromRGB(155,220,227)
+local function part(rig,name,size,color,wedge)
+ local p=Instance.new(wedge and'WedgePart'or'Part');p.Name=name;p.Size=size*rig.scale;p.Color=color;p.Material=Enum.Material.SmoothPlastic
+ p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Parent=rig.visual;return p
+end
+local function fixed(rig,name,size,frame,color,group,wedge)
+ local p=part(rig,name,size,color,wedge);table.insert(rig.pieces,{part=p,frame=frame,group=group or'body'});return p
+end
+-- Four native triangular prisms form a long, bevelled diamond cross-section.
+local function shard(rig,name,size,frame,color,group)
+ local w,h,d=size.X,size.Y,size.Z
+ for _,vertical in ipairs({-1,1})do
+  for _,front in ipairs({-1,1})do
+   local rot=vertical==1 and CFrame.Angles(0,front==1 and math.pi or 0,0)or CFrame.Angles(math.pi,front==1 and 0 or math.pi,0)
+   fixed(rig,name,Vector3.new(w,h/2,d/2),frame*CFrame.new(0,vertical*h/4,front*d/4)*rot,vertical==1 and color or color:Lerp(dark,.2),group,true)
+  end
+ end
+end
+local function segment(p,a,b,width,depth)
+ p.Size=Vector3.new(width,depth,(b-a).Magnitude);p.CFrame=CFrame.lookAt((a+b)/2,b)
+end
+function Mesh.create(model)
+ local kind=model:GetAttribute('EnemyKind');local profile=profiles[kind];if not profile or not model.Parent then return nil end
+ local visual=Instance.new('Model');visual.Name=profile.name
+ local rig={model=model,visual=visual,profile=profile,scale=model:GetScale(),stride=profile.stride,pieces={},legs={},hidden={}}
+ local mage=kind=='crystal_mage';local lancer=kind=='crystal_lancer';local y=mage and 2.8 or(lancer and 1.9 or 1.4)
+ shard(rig,'HeartCarapace',mage and Vector3.new(1.25,2.1,1.3)or(lancer and Vector3.new(1.45,2.4,2.4)or Vector3.new(1.25,1.55,1.9)),CFrame.new(0,y,0)*CFrame.Angles(mage and 0 or .12,math.pi/4,0),profile.color)
+ rig.core=fixed(rig,'SmallArcaneHeart',Vector3.new(.38,.5,.3),CFrame.new(0,y+.07,mage and -.87 or -1.05),light);rig.core.Shape=Enum.PartType.Ball;rig.core.Material=Enum.Material.Neon
+ for _,side in ipairs({-1,1})do
+  fixed(rig,'SplitVisor',Vector3.new(.6,.2,.34),CFrame.new(side*.36,y+.39,-.97)*CFrame.Angles(0,side*-.2,side*.12),dark,'body',true)
+ end
+ if mage then
+  for i=1,4 do
+   local a=i*math.pi/2;fixed(rig,'SuspendedSkirt',Vector3.new(.53,1.1,.66),CFrame.new(math.cos(a)*.7,1.45,math.sin(a)*.7)*CFrame.Angles(.25,a,-.15),profile.color,'skirt',true)
+  end
+  for i=1,6 do
+   local a=(i-1)*math.pi/3
+   fixed(rig,'OuterCrownPoint',Vector3.new(.35,1.04,.58),CFrame.new(math.cos(a)*1.45,4.05,math.sin(a)*1.45)*CFrame.Angles(.32,-a,math.cos(a)*.18),edge,'crown',true)
+  end
+  for i=1,3 do
+   local a=(i-1)*math.pi*2/3
+   shard(rig,'OrbitingFacet',Vector3.new(.28,.65,.37),CFrame.new(math.cos(a)*1.06,3.52,math.sin(a)*1.06)*CFrame.Angles(0,a,.22),Color3.fromRGB(123,132,174),'orbit')
+  end
+  local shadow=fixed(rig,'GroundShadow',Vector3.new(2.7,.035,2.5),CFrame.new(0,.03,0),dark,'ground');shadow.Shape=Enum.PartType.Ball;shadow.Transparency=.55;shadow.CastShadow=false
+ else
+  for _,side in ipairs({-1,1})do
+   for front=1,2 do
+    local z=front==1 and -.7 or .85
+    table.insert(rig.legs,{side=side,z=z,phase=(side==(front==1 and 1 or -1))and 0 or math.pi,
+     upper=part(rig,'ArticulatedShardThigh',Vector3.one,profile.color,true),lower=part(rig,'ArticulatedShardShin',Vector3.one,edge,true),foot=part(rig,'GroundClaw',Vector3.new(.42,.28,.72),dark,true)})
+   end
+   fixed(rig,'SweptShoulder',Vector3.new(.67,lancer and 1.5 or .95,1.14),CFrame.new(side*.94,y+.29,.3)*CFrame.Angles(.35,side*.38,-side*.65),edge,'body',true)
+  end
+  if lancer then
+   shard(rig,'ForwardLance',Vector3.new(.58,3.8,.72),CFrame.new(0,1.72,-2.18)*CFrame.Angles(-math.pi/2,0,0),edge,'lance')
+   fixed(rig,'LanceGuardLeft',Vector3.new(.38,.8,.62),CFrame.new(-.53,1.75,-1.14)*CFrame.Angles(0,0,-.65),dark,'body',true)
+   fixed(rig,'LanceGuardRight',Vector3.new(.38,.8,.62),CFrame.new(.53,1.75,-1.14)*CFrame.Angles(0,0,.65),dark,'body',true)
+   fixed(rig,'RearKeel',Vector3.new(.48,.85,1.58),CFrame.new(0,1.7,1.26)*CFrame.Angles(-.45,0,0),profile.color,'body',true)
+  else
+   for _,side in ipairs({-1,1})do
+    fixed(rig,'ForwardMandible',Vector3.new(.3,.44,.95),CFrame.new(side*.62,.9,-1.23)*CFrame.Angles(.15,-side*.23,0),edge,'body',true)
+    fixed(rig,'SplitBackFin',Vector3.new(.31,.95,.88),CFrame.new(side*.39,2.02,.58)*CFrame.Angles(.4,side*.2,-side*.2),profile.color,'body',true)
+   end
+  end
+ end
+ if model:GetAttribute('Elite')then
+  fixed(rig,'EliteGoldDiadem',Vector3.new(.6,.24,.45),CFrame.new(0,y+.73,-.69),Color3.fromRGB(200,161,82),'body',true)
+ end
+ for _,p in ipairs(model:GetDescendants())do if p:IsA('BasePart')and p.Name~='Core'and p.Name~='EliteCrown'and p.Name~='ChargeWarning'then rig.hidden[p]=p.LocalTransparencyModifier;p.LocalTransparencyModifier=1 end end
+ visual.Parent=model;model:SetAttribute('SkeletonMeshStatus','Ready');model:SetAttribute('VisualProfile',profile.name);model:SetAttribute('EnemyVisualFamily','crystal')
+ Mesh.pose(rig,model:GetPivot(),0,'idle');return rig
+end
+function Mesh.duration(rig,mode)return mode=='walk'and rig.profile.cycle or(mode=='prepare'and .8 or .7)end
+function Mesh.pose(rig,origin,time,mode)
+ if rig.destroyed then return end
+ local kind=rig.model:GetAttribute('EnemyKind');local mage=kind=='crystal_mage';local lancer=kind=='crystal_lancer';local scale=rig.scale
+ local phase=time/rig.profile.cycle*math.pi*2;local moving=mode=='walk'or(lancer and mode=='attack')
+ local prepare=mode=='prepare'and math.min(time/.8,1)or 0
+ local impact=mode=='attack'and math.sin(math.clamp(time/.7,0,1)*math.pi)or 0
+ local bob=mage and math.sin(time*2.1)*.14 or(moving and math.sin(phase*2)*.075 or math.sin(time*2)*.025)
+ local tilt=lancer and(prepare*.16-impact*.12)or impact*-.09
+ local base=origin*CFrame.new(0,-3,0);local body=base*CFrame.new(0,bob*scale,0)*CFrame.Angles(tilt,0,0)
+ for _,v in ipairs(rig.pieces)do
+  local frame=v.frame;local group=v.group;local target=body
+  if group=='ground'then target=base
+  elseif group=='crown'then frame=CFrame.Angles(0,time*.52,0)*CFrame.new(0,prepare*.3+impact*.16,0)*frame
+  elseif group=='orbit'then frame=CFrame.Angles(0,-time*.86,0)*CFrame.new(0,-prepare*.25,0)*frame
+  elseif group=='skirt'then frame=CFrame.Angles(0,math.sin(time*1.5)*.07,0)*frame
+  elseif group=='lance'then frame=CFrame.new(0,prepare*-.1,-impact*.22)*frame end
+  v.part.CFrame=target*CFrame.new(frame.Position*scale)*frame.Rotation
+ end
+ for _,leg in ipairs(rig.legs)do
+  local wave=moving and math.sin(phase+leg.phase)or 0;local lift=moving and math.max(0,math.cos(phase+leg.phase))*.35 or 0
+  local spread=lancer and 1.55 or 1.4;local height=lancer and 1.7 or 1.25
+  local hip=body*Vector3.new(leg.side*.65*scale,height*scale,leg.z*scale)
+  local foot=base*Vector3.new(leg.side*(spread+prepare*.1)*scale,(.16+lift)*scale,(leg.z+wave*.6)*scale)
+  local knee=base*Vector3.new(leg.side*(spread+.15)*scale,(height*.8+lift*.2)*scale,(leg.z+wave*.18+.23)*scale)
+  segment(leg.upper,hip,knee,.35*scale,.4*scale);segment(leg.lower,knee,foot,.2*scale,.3*scale)
+  leg.foot.CFrame=CFrame.new(foot)*origin.Rotation*CFrame.Angles(0,leg.side*-.18,0)
+ end
+ rig.origin=origin;rig.time=time;rig.mode=mode;rig.model:SetAttribute('SkeletonMotion',mode)
+end
+function Mesh.place(rig,origin)Mesh.pose(rig,origin,rig.time or 0,rig.mode or'idle')end
+function Mesh.destroy(rig)
+ if not rig or rig.destroyed then return end;rig.destroyed=true
+ for p,previous in pairs(rig.hidden)do if p.Parent then p.LocalTransparencyModifier=previous end end
+ rig.visual:Destroy()
+end
+return Mesh
+]====])
 -- Source: src/client/world/DragonMesh.luau
 addModule(modules,{"world","DragonMesh"},[====[
 -- Cethiel/Drummyfish CC0 geometry + original Collada animation tracks.
@@ -6511,7 +6940,7 @@ return function()
     -- Far actors keep the shared mesh, but skip bone evaluation until near the camera.
     if not camera or(camera.CFrame.Position-target.Position).Magnitude<110 then
      local preparing=model:GetAttribute('Preparing')
-     if not preparing then rig.prepareTime=0 elseif not frozen then rig.prepareTime+=delta end
+     if not frozen then if preparing then rig.prepareTime+=delta else rig.prepareTime=0 end end
      rig.charging=preparing or model:GetAttribute('Detonating')
      local mode=preparing and'prepare'or(rig.attackTime<mesh.duration(rig,'attack')and'attack'or(rig.motion.speed>.35 and'walk'or'idle'))
      if frozen then mode=rig.mode or'idle'end;rig.mode=mode
@@ -6520,7 +6949,9 @@ return function()
       local action=model:GetAttribute('FieldAction')or'idle'
       mesh.pose(rig,visualFrame,(action=='approach'or action=='charge')and rig.motion.gait or rig.motion.time,action)
      else
-     mesh.pose(rig,visualFrame,mode=='prepare'and rig.prepareTime or(mode=='attack'and rig.attackTime or(mode=='walk'and rig.motion.gait or rig.motion.time)),mode)
+     local clock=mode=='prepare'and rig.prepareTime or(mode=='attack'and rig.attackTime or(mode=='walk'and rig.motion.gait or rig.motion.time))
+     if frozen then clock=rig.poseTime or clock else rig.poseTime=clock end
+     mesh.pose(rig,visualFrame,clock,mode)
      end
     else mesh.place(rig,rig.frame)end
    end
@@ -6542,7 +6973,8 @@ return function(deps)
  local title=label(overlay,'몹 미리보기',UDim2.new(1,-150,0,32),UDim2.fromOffset(20,14),Enum.Font.GothamBold,colors.gold);title.TextSize=21;title.TextXAlignment=Enum.TextXAlignment.Left
  local description=label(overlay,'외형은 실전 모델 · 행동은 피해 없는 시연 · 드래그 회전 / 휠 확대',UDim2.new(1,-40,0,42),UDim2.fromOffset(20,51),nil,colors.muted);description.TextSize=13;description.TextXAlignment=Enum.TextXAlignment.Left;description.TextWrapped=true
  local close=make('TextButton',overlay,{Name='Close',Size=UDim2.fromOffset(92,34),Position=UDim2.new(1,-112,0,14),Text='닫기 [N]',BackgroundColor3=colors.card,TextColor3=colors.text,Font=Enum.Font.GothamBold,TextSize=13});round(close,8)
- local list=make('ScrollingFrame',overlay,{Name='Enemies',Size=UDim2.new(0,194,1,-116),Position=UDim2.fromOffset(16,100),BackgroundTransparency=1,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,BorderSizePixel=0})
+ local familyFilter=make('TextButton',overlay,{Name='FamilyFilter',Text='종족: 전체',Size=UDim2.fromOffset(194,32),Position=UDim2.fromOffset(16,100),BackgroundColor3=colors.card,TextColor3=colors.mint,Font=Enum.Font.GothamBold,TextSize=13});round(familyFilter,8)
+ local list=make('ScrollingFrame',overlay,{Name='Enemies',Size=UDim2.new(0,194,1,-158),Position=UDim2.fromOffset(16,142),BackgroundTransparency=1,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,BorderSizePixel=0})
  make('UIListLayout',list,{Padding=UDim.new(0,8),SortOrder=Enum.SortOrder.LayoutOrder})
  local view=make('ViewportFrame',overlay,{Name='Viewport',Size=UDim2.new(1,-238,1,-174),Position=UDim2.fromOffset(222,100),BackgroundColor3=Color3.fromRGB(22,31,45),Ambient=Color3.fromRGB(185,192,210),LightColor=Color3.fromRGB(255,237,215),LightDirection=Vector3.new(-.6,-1,-1),Active=true});round(view,12)
  local camera=make('Camera',view,{Name='EnemyCamera',FieldOfView=42});view.CurrentCamera=camera
@@ -6553,12 +6985,14 @@ return function(deps)
   local b=make('TextButton',bar,{Name=item[1],Text=item[2],Size=UDim2.new(.25,-8,1,0),Position=UDim2.new((i-1)*.25,0,0,0),BackgroundColor3=colors.card,TextColor3=colors.text,Font=Enum.Font.GothamBold,TextSize=13});round(b,8);actions[item[1]]=b
  end
  local opened,lastLobby,elite,playing=false,false,false,true
- local selected,templates=nil,{};local buttons={};local modes={'idle','walk','attack'};local names={'대기','이동','공격 시연'};local modeIndex=1
+ local selected,templates=nil,{};local buttons={};local familyHeaders={};local familyIndex=1
+ local families={'all','undead','beast','slime','crystal'};local familyNames={all='전체',undead='망자',beast='야수',slime='슬라임',crystal='결정체'}
+ local modes={'idle','walk','attack'};local names={'대기','이동','공격 시연'};local modeIndex=1
  local yaw,pitch,distance=-.35,.3,30;local dragging,touch,lastPosition=false,nil,nil;local stick=Vector2.zero
  local oldSelection,controls,oldCamera
  local function replay()
   if selected then scene.Play(selected,elite,modes[modeIndex]);title.Text='몹 미리보기 · '..selected:GetAttribute('DisplayName')..(elite and ' · 정예'or'')
-   description.Text=selected:GetAttribute('Role')..'  |  '..selected:GetAttribute('Description')..'\n외형은 실전 모델 · 행동은 피해 없는 시연 · 드래그 회전 / 휠 확대' end
+   description.Text=(selected:GetAttribute('FamilyName')or familyNames[selected:GetAttribute('EnemyFamily')]or'종족')..' · '..selected:GetAttribute('Role')..'  |  '..selected:GetAttribute('Description')..'\n외형은 실전 모델 · 행동은 피해 없는 시연 · 드래그 회전 / 휠 확대' end
   actions.Mode.Text='행동: '..names[modeIndex];actions.Elite.Text=elite and '정예 · 크기 1.2배'or'일반 몹';actions.Pause.Text=playing and '일시정지'or'재생'
   for id,b in pairs(buttons)do b.BackgroundColor3=selected and selected.Name==id and colors.mint or colors.card;b.TextColor3=selected and selected.Name==id and colors.bg or colors.text end
   gui:SetAttribute('SelectedEnemy',selected and selected.Name);gui:SetAttribute('Elite',elite);gui:SetAttribute('Mode',modes[modeIndex])
@@ -6584,11 +7018,26 @@ return function(deps)
  if folder then
   templates=folder:GetChildren();table.sort(templates,function(a,b)return a:GetAttribute('Order')<b:GetAttribute('Order')end)
   for i,model in ipairs(templates)do
-   local b=make('TextButton',list,{Name='Enemy_'..model.Name,Text=model:GetAttribute('DisplayName')..'\n'..model:GetAttribute('Role'),Size=UDim2.new(1,-6,0,64),LayoutOrder=i,BackgroundColor3=colors.card,TextColor3=colors.text,Font=Enum.Font.GothamBold,TextSize=13});round(b,9);buttons[model.Name]=b
+   local family=model:GetAttribute('EnemyFamily')or(model.Name=='charger'and'beast'or'undead')
+   if not familyHeaders[family]then
+    local heading=label(list,model:GetAttribute('FamilyName')or familyNames[family]or family,UDim2.new(1,-6,0,24),UDim2.new(),Enum.Font.GothamBold,colors.muted);heading.Name='Family_'..family;heading.LayoutOrder=i*2-1;heading.TextSize=12;heading.TextXAlignment=Enum.TextXAlignment.Left;familyHeaders[family]=heading
+   end
+   local b=make('TextButton',list,{Name='Enemy_'..model.Name,Text=model:GetAttribute('DisplayName')..'\n'..model:GetAttribute('Role'),Size=UDim2.new(1,-6,0,64),LayoutOrder=i*2,BackgroundColor3=colors.card,TextColor3=colors.text,Font=Enum.Font.GothamBold,TextSize=13});round(b,9);buttons[model.Name]=b
    b.Activated:Connect(function()selected=model;playing=true;replay()end)
   end
   selected=templates[1]
  else description.Text='몹 모델을 준비하지 못했어요. Studio를 다시 재생해 주세요.'end
+ local function filterFamilies()
+  local family=families[familyIndex];local first;local count=0
+  for _,model in ipairs(templates)do
+   local group=model:GetAttribute('EnemyFamily')or(model.Name=='charger'and'beast'or'undead');local visible=family=='all'or group==family
+   buttons[model.Name].Visible=visible;if visible then first=first or model;count+=1 end
+  end
+  for group,heading in pairs(familyHeaders)do heading.Visible=family=='all'or group==family end
+  if selected and not buttons[selected.Name].Visible then selected=first;replay()end
+  familyFilter.Text='종족: '..familyNames[family]..' · '..count;gui:SetAttribute('SelectedFamily',family);list.CanvasPosition=Vector2.zero
+ end
+ familyFilter.Activated:Connect(function()familyIndex=familyIndex%#families+1;filterFamilies()end);filterFamilies()
  button.Activated:Connect(function()setOpen(true)end);close.Activated:Connect(function()setOpen(false)end)
  actions.Mode.Activated:Connect(function()modeIndex=modeIndex%#modes+1;playing=true;replay()end)
  actions.Elite.Activated:Connect(function()elite=not elite;replay()end)
@@ -6642,7 +7091,7 @@ return function(deps)
  end
  local floor=part('DisplayFloor',Vector3.new(42,.2,42),CFrame.new(0,-.15,0),Color3.fromRGB(37,48,65));floor.Material=Enum.Material.SmoothPlastic
  local effects=Instance.new('Folder');effects.Name='Demonstration';effects.Parent=world
- local actor;local kind,mode,time='stalker','idle',0
+ local actor;local kind,role,family,mode,time='stalker','stalker','undead','idle',0
  local orb,warning,burst
  local function clear()
   generation+=1;if rig then skeleton.destroy(rig);rig=nil end
@@ -6654,10 +7103,10 @@ return function(deps)
   local p=visual(name,Vector3.new(.06,radius*2,radius*2),CFrame.new(point)*CFrame.Angles(0,0,math.pi/2),color,Enum.PartType.Cylinder);p.Transparency=.65;return p
  end
  local function play(template,isElite,action)
-  clear();kind=template.Name;mode=action;time=0
+  clear();kind=template.Name;role=template:GetAttribute('EnemyRole')or kind;family=template:GetAttribute('EnemyFamily')or'undead';mode=action;time=0
   actor=template:Clone();actor.Name='PreviewEnemy';actor.Parent=world
   if isElite then
-   actor:ScaleTo(1.2);actor:SetAttribute('Elite',true)
+   actor:ScaleTo(actor:GetScale()*1.2);actor:SetAttribute('Elite',true)
    local crown=part('EliteCrown',Vector3.one*.6,CFrame.new(actor:GetPivot().Position+Vector3.new(0,4.8,0)),Color3.fromRGB(255,215,111),Enum.PartType.Ball);crown.Parent=actor
   end
   actor:PivotTo(CFrame.new(0,3,3))
@@ -6669,21 +7118,21 @@ return function(deps)
  end
  local function step(dt)
   if not actor then return end
-  time+=dt;local t=time%4;local pos=Vector3.new(0,3,3);local bob=math.sin(time*(kind=='skitter'and 9 or 4))*.08
+  time+=dt;local t=time%4;local pos=Vector3.new(0,3,3);local bob=(family=='slime'or family=='crystal')and 0 or math.sin(time*(role=='skitter'and 9 or 4))*.08
   if mode=='walk'then
-   local speed=kind=='brute'and .68 or(kind=='skitter'and 1.18 or(kind=='caster'and .85 or 1));local progress=(time*speed/4)%1;pos=Vector3.new(kind=='skitter'and math.sin(progress*math.pi)*3 or(kind=='caster'and math.sin(progress*math.pi*2)*3 or 0),3,6-progress*10)
+   local speed=role=='brute'and .68 or(role=='skitter'and 1.18 or(role=='caster'and .85 or 1));local progress=(time*speed/4)%1;pos=Vector3.new(role=='skitter'and math.sin(progress*math.pi)*3 or(role=='caster'and math.sin(progress*math.pi*2)*3 or 0),3,6-progress*10)
   elseif mode=='attack'then
-   if kind=='charger'then
+   if role=='charger'then
     if t<.85 then
-     if not warning then warning=visual('ChargeWarning',Vector3.new(4,.06,23),CFrame.new(0,.1,-8.5),Color3.fromRGB(255,151,75));warning.Transparency=.7 end
+     if not warning then warning=visual('ChargeWarning',Vector3.new(4,.06,23),CFrame.new(0,.1,-8.5),family=='crystal'and Color3.fromRGB(111,208,225)or Color3.fromRGB(255,151,75));warning.Transparency=.7 end
     else if warning then warning:Destroy();warning=nil end;pos=Vector3.new(0,3,3-math.min(t-.85,.65)*34)end
-   elseif kind=='caster'then
+   elseif role=='caster'then
     local staff=actor:FindFirstChild('StaffOrb');if staff then staff.Color=t<.8 and Color3.fromRGB(255,230,255)or Color3.fromRGB(214,127,255)end
     if t>=.8 and t<2 then
-     if not orb then orb=visual('EnemyArcaneBolt',Vector3.one*.75,CFrame.new(),Color3.fromRGB(226,126,255),Enum.PartType.Ball)end
-     orb.Position=Vector3.new(0,4.1,3-(t-.8)*22)
+     if not orb then orb=visual('EnemyArcaneBolt',Vector3.one*.75,CFrame.new(),family=='slime'and Color3.fromRGB(185,222,110)or(family=='crystal'and Color3.fromRGB(151,218,232)or Color3.fromRGB(226,126,255)),Enum.PartType.Ball)end
+     orb.Position=Vector3.new(0,3+(actor:GetAttribute('ProjectileHeight')or 1.1),3-(t-.8)*22)
     elseif orb then orb:Destroy();orb=nil end
-   elseif kind=='ember'then
+   elseif role=='ember'then
     if t<1.2 then
      if not warning then warning=disc('EnemyBlastWarning',6,Vector3.new(0,.08,3),Color3.fromRGB(255,74,45))end
      local core=actor:FindFirstChild('FurnaceCore');if core then core.Color=Color3.fromRGB(255,180+math.floor(60*math.sin(time*16)),90)end
@@ -6695,8 +7144,8 @@ return function(deps)
      elseif burst then burst:Destroy();burst=nil end
     end
    else
-    pos=Vector3.new(kind=='skitter'and math.sin(math.min(t,1.1)/1.1*math.pi)*3 or 0,3,3-math.min(t,1.1)*8)
-    if t>=1.1 and t<1.5 and not warning then warning=disc('ContactAttack',kind=='brute'and 4 or 2,Vector3.new(pos.X,.1,pos.Z-1.4),Color3.fromRGB(231,89,92))end
+    pos=Vector3.new(role=='skitter'and math.sin(math.min(t,1.1)/1.1*math.pi)*3 or 0,3,3-math.min(t,1.1)*8)
+    if t>=1.1 and t<1.5 and not warning then warning=disc('ContactAttack',role=='brute'and 4 or 2,Vector3.new(pos.X,.1,pos.Z-1.4),Color3.fromRGB(231,89,92))end
     if t>=1.5 and warning then warning:Destroy();warning=nil end
    end
    if t<.03 then if orb then orb:Destroy();orb=nil end;if burst then burst:Destroy();burst=nil end end
@@ -6705,12 +7154,12 @@ return function(deps)
   if rig then
    local motion=mode;local clock=time
    if mode=='attack'then
-    if kind=='caster'then motion=t<.8 and'prepare'or(t<1.6 and'attack'or'idle');clock=motion=='attack'and(t-.8)or t
-    elseif kind=='ember'then motion=t<1.2 and'idle'or'attack';clock=math.max(0,t-1.2)
-    elseif kind=='charger'then motion=t<.85 and'idle'or(t<1.5 and'attack'or'idle');clock=t
+    if role=='caster'then motion=t<.8 and'prepare'or(t<1.6 and'attack'or'idle');clock=motion=='attack'and(t-.8)or t
+    elseif role=='ember'then motion=t<1.2 and'idle'or'attack';clock=math.max(0,t-1.2)
+    elseif role=='charger'then motion=t<.85 and'prepare'or(t<1.5 and'attack'or'idle');clock=motion=='attack'and(t-.85)or t
     else motion=t<1.1 and'walk'or(t<2.1 and'attack'or'idle');clock=motion=='attack'and(t-1.1)or time end
    end
-   rig.charging=mode=='attack'and((kind=='caster'and t<.8)or(kind=='ember'and t<1.2))
+   rig.charging=mode=='attack'and((role=='caster'and t<.8)or(role=='ember'and t<1.2))
    local origin=actor:GetPivot();local delta=origin.Position-rig.previous;rig.previous=origin.Position
    variation.advance(rig.motion,dt,Vector3.new(delta.X,0,delta.Z).Magnitude,rig.stride,false)
    if motion=='walk'then clock=rig.motion.gait elseif motion=='idle'then clock=rig.motion.time end
@@ -6725,6 +7174,12 @@ end
 addModule(modules,{"world","EnemyProfiles"},[====[
 -- Presentation choices only. Enemy IDs and combat rules stay on the server.
 return {
+ slime_blob={family='slime',stride=5.2},
+ slime_spitter={family='slime',stride=5.8},
+ slime_bulwark={family='slime',stride=5.4},
+ crystal_scout={family='crystal',stride=7.4},
+ crystal_lancer={family='crystal',stride=8.6},
+ crystal_mage={family='crystal',stride=6.7},
  commander={stride=10,originalKnight=true},
  stalker={folder='skeleton',size=1,stride=7},
  skitter={folder='skeletonRogue',size=.82,stride=10,gear={{'Blade','handslot.r'},{'Blade','handslot.l'}}},
@@ -6738,11 +7193,14 @@ addModule(modules,{"world","EnemyVisuals"},[====[
 local skeleton=require(script.Parent.SkeletonMesh)
 local hound=require(script.Parent.HoundMesh)
 local mount=require(script.Parent.CommanderMount)
+local slime=require(script.Parent.SlimeMesh)
+local crystal=require(script.Parent.CrystalMesh)
 local profiles=require(script.Parent.EnemyProfiles)
 local Visuals={}
 function Visuals.supports(kind)return profiles[kind]~=nil or kind=='charger'end
 function Visuals.create(model)
- local kind=model:GetAttribute('EnemyKind');local renderer=kind=='commander'and mount or(kind=='charger'and hound or skeleton)
+ local kind=model:GetAttribute('EnemyKind');local profile=profiles[kind]
+ local renderer=kind=='commander'and mount or(kind=='charger'and hound or(profile and profile.family=='slime'and slime or(profile and profile.family=='crystal'and crystal or skeleton)))
  local rig=renderer.create(model);if rig then rig.renderer=renderer end;return rig
 end
 function Visuals.pose(rig,origin,time,mode)rig.renderer.pose(rig,origin,time,mode)end
@@ -7167,6 +7625,112 @@ function Mesh.place(rig,origin)rig.asset.place(rig,origin)end
 function Mesh.duration(rig,mode)return rig.asset.clip(rig,mode).duration end
 function Mesh.destroy(rig)if rig then rig.asset.destroy(rig)end end
 function Mesh.releaseUnused()for _,asset in pairs(assets)do asset.releaseUnused()end;gear.releaseUnused()end
+return Mesh
+]====])
+-- Source: src/client/world/SlimeMesh.luau
+addModule(modules,{"world","SlimeMesh"},[====[
+-- Original native-part slime family. The server root remains the ground combat anchor.
+-- Smooth lobes deform together; mouth, crest and stone mantle distinguish the roles.
+local Mesh={}
+local profiles={
+ slime_blob={name='VerdantSlime',body=Vector3.new(3.6,2.7,3.2),color=Color3.fromRGB(79,126,83),stride=5.2,cycle=.72},
+ slime_spitter={name='SlimeSpitter',body=Vector3.new(3.1,3.7,2.9),color=Color3.fromRGB(91,120,68),stride=5.8,cycle=.84},
+ slime_bulwark={name='SlimeBulwark',body=Vector3.new(5.1,3.15,4.3),color=Color3.fromRGB(66,106,96),stride=5.4,cycle=1.08},
+}
+local dark=Color3.fromRGB(27,43,39)
+local acid=Color3.fromRGB(187,226,111)
+local stone=Color3.fromRGB(69,83,83)
+local function piece(rig,name,size,position,color,group,shape,rotation)
+ local p=Instance.new(shape=='wedge'and'WedgePart'or'Part');p.Name=name;p.Size=size*rig.scale;p.Color=color
+ p.Material=group=='armor'and Enum.Material.Slate or Enum.Material.SmoothPlastic
+ p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=group~='glow'
+ if shape~='wedge'then p.Shape=Enum.PartType.Ball end
+ if group=='glow'then p.Material=Enum.Material.Neon end
+ p.Parent=rig.visual
+ table.insert(rig.pieces,{part=p,size=size,position=position,rotation=rotation or CFrame.identity,group=group})
+ return p
+end
+function Mesh.create(model)
+ local profile=profiles[model:GetAttribute('EnemyKind')];if not profile or not model.Parent then return nil end
+ local visual=Instance.new('Model');visual.Name=profile.name
+ local rig={model=model,visual=visual,profile=profile,scale=model:GetScale(),stride=profile.stride,pieces={},hidden={}}
+ local size=profile.body;local w,h,d=size.X,size.Y,size.Z
+ rig.body=piece(rig,'GelBody',size,Vector3.new(0,h*.5+.22,0),profile.color,'gel')
+ piece(rig,'LowerLobe',Vector3.new(w*.94,h*.43,d*.92),Vector3.new(0,h*.22,-.12),profile.color,'gel')
+ for _,side in ipairs({-1,1})do
+  piece(rig,'SidePseudopod',Vector3.new(w*.36,.52,d*.51),Vector3.new(side*w*.34,.3,.18),profile.color,'foot')
+  piece(rig,'ForwardPseudopod',Vector3.new(w*.27,.42,d*.42),Vector3.new(side*w*.24,.25,-d*.33),profile.color,'foot')
+  local eyeY=h*.62;local eyeX=w*.185;local eyeZ=-d*.437
+  piece(rig,'EyeSocket',Vector3.new(.53,.6,.22),Vector3.new(side*eyeX,eyeY,eyeZ),dark,'face',nil,CFrame.Angles(0,side*-.18,-side*.15))
+  piece(rig,'AcidEye',Vector3.new(.18,.32,.12),Vector3.new(side*eyeX,eyeY,eyeZ-.11),acid,'glow')
+  piece(rig,'HeavyBrow',Vector3.new(.67,.18,.34),Vector3.new(side*eyeX,eyeY+.34,eyeZ-.015),profile.color,'face',nil,CFrame.Angles(0,0,-side*.22))
+ end
+ piece(rig,'WetHighlight',Vector3.new(w*.15,.17,.13),Vector3.new(-w*.22,h*.83,-d*.31),Color3.fromRGB(157,185,132),'face',nil,CFrame.Angles(-.3,0,-.3))
+ if model:GetAttribute('EnemyKind')=='slime_spitter'then
+  rig.throat=piece(rig,'VenomThroat',Vector3.new(1.55,1.1,.8),Vector3.new(0,1.4,-1.22),Color3.fromRGB(123,151,73),'throat')
+  piece(rig,'RaisedMuzzle',Vector3.new(1.28,.95,.9),Vector3.new(0,2.05,-1.45),profile.color,'mouth')
+  rig.mouth=piece(rig,'SpitMouth',Vector3.new(.77,.53,.14),Vector3.new(0,2.12,-1.9),dark,'mouth')
+  piece(rig,'LowerLip',Vector3.new(.95,.2,.35),Vector3.new(0,1.76,-1.82),Color3.fromRGB(141,164,88),'mouth')
+  for i=-1,1 do
+   piece(rig,'LeafCrest',Vector3.new(.48,1.3-math.abs(i)*.25,.85),Vector3.new(i*.48,3.74-math.abs(i)*.18,.25),Color3.fromRGB(64,89,63),'crest','wedge',CFrame.Angles(-.38,0,-i*.28))
+  end
+  for _,side in ipairs({-1,1})do piece(rig,'VenomSac',Vector3.new(.73,1.05,.95),Vector3.new(side*1.27,1.05,.18),Color3.fromRGB(128,146,71),'throat')end
+ elseif model:GetAttribute('EnemyKind')=='slime_bulwark'then
+  piece(rig,'GrimMouth',Vector3.new(1.2,.2,.12),Vector3.new(0,1.15,-2.05),dark,'face')
+  for _,side in ipairs({-1,1})do
+   for row=1,3 do
+    piece(rig,'MantlePlate',Vector3.new(1.25,.64,1.42),Vector3.new(side*(row==1 and 1.48 or 1.28),2.5-(row-1)*.13,-1.05+(row-1)*1.1),stone,'armor','wedge',CFrame.Angles(.12,side*.18,-side*.43))
+   end
+   piece(rig,'CheekGuard',Vector3.new(.64,.86,.9),Vector3.new(side*1.63,1.58,-1.69),Color3.fromRGB(96,112,107),'armor','wedge',CFrame.Angles(0,side*.25,-side*.25))
+  end
+  for row=1,3 do piece(rig,'DorsalPlate',Vector3.new(1.02,.66,1.26),Vector3.new(0,3.1-(row-1)*.14,-.6+(row-1)*1.05),Color3.fromRGB(91,103,97),'armor','wedge',CFrame.Angles(.22,0,0))end
+ else
+  piece(rig,'MouthCrease',Vector3.new(.79,.19,.13),Vector3.new(0,1.08,-1.53),dark,'face')
+  piece(rig,'CrownBud',Vector3.new(.8,.56,.75),Vector3.new(-.28,2.84,.12),Color3.fromRGB(110,148,90),'gel')
+  piece(rig,'TrailingLobe',Vector3.new(1.55,.57,1.34),Vector3.new(.34,.32,1.13),profile.color,'foot')
+ end
+ if model:GetAttribute('Elite')then
+  for i=-1,1 do piece(rig,'EliteAmberStud',Vector3.new(.22,.3,.22),Vector3.new(i*.37,h+.2, -.2),Color3.fromRGB(205,167,83),'crest','wedge')end
+ end
+ for _,p in ipairs(model:GetDescendants())do if p:IsA('BasePart')and p.Name~='Core'and p.Name~='EliteCrown'and p.Name~='ChargeWarning'then rig.hidden[p]=p.LocalTransparencyModifier;p.LocalTransparencyModifier=1 end end
+ visual.Parent=model;model:SetAttribute('SkeletonMeshStatus','Ready');model:SetAttribute('VisualProfile',profile.name);model:SetAttribute('EnemyVisualFamily','slime')
+ Mesh.pose(rig,model:GetPivot(),0,'idle');return rig
+end
+function Mesh.duration(rig,mode)return mode=='walk'and rig.profile.cycle or(mode=='prepare'and .8 or .72)end
+function Mesh.pose(rig,origin,time,mode)
+ if rig.destroyed then return end
+ local heavy=rig.model:GetAttribute('EnemyKind')=='slime_bulwark'
+ local phase=time/rig.profile.cycle*math.pi*2
+ local walk=mode=='walk';local prepare=mode=='prepare';local attack=mode=='attack'
+ local lift=walk and math.max(0,math.sin(phase))*(heavy and .14 or .48)or 0
+ local impact=attack and math.sin(math.clamp(time/.72,0,1)*math.pi)or 0
+ local charge=prepare and math.min(time/.8,1)or 0
+ local squash=walk and math.cos(phase*2)*(heavy and .035 or .105)or math.sin(time*2.4)*.025
+ squash-=charge*.12;squash+=impact*.12
+ local width=1-squash*.42;local height=1+squash
+ local recoil=attack and math.sin(math.clamp(time/.4,0,1)*math.pi)*.24 or 0
+ local base=origin*CFrame.new(0,-3,0);local scale=rig.scale
+ for _,v in ipairs(rig.pieces)do
+  local p=v.position;local size=v.size;local group=v.group
+  local foot=group=='foot';local armor=group=='armor';local stiffness=armor and .25 or 1
+  local sx=1+(width-1)*stiffness;local sy=1+(height-1)*stiffness
+  local pos=Vector3.new(p.X*width,p.Y*height+(foot and 0 or lift),p.Z*(1+charge*.12)+recoil)
+  local rotation=v.rotation
+  if group=='crest'then rotation=CFrame.Angles(math.sin(time*3+p.X)*.08+charge*.25,0,0)*rotation end
+  if group=='mouth'then sy*=1+charge*.5;pos+=Vector3.new(0,charge*.12,-charge*.15)end
+  if group=='throat'then sx*=1+charge*.23;sy*=1+charge*.24 end
+  if foot then sy=1+math.cos(phase+p.X)* (walk and .14 or .02);pos=Vector3.new(pos.X,.3*sy,p.Z)end
+  v.part.Size=Vector3.new(size.X*sx,size.Y*sy,size.Z*(1+charge*.08))*scale
+  v.part.CFrame=base*CFrame.new(pos*scale)*rotation
+ end
+ rig.origin=origin;rig.time=time;rig.mode=mode;rig.model:SetAttribute('SkeletonMotion',mode)
+end
+function Mesh.place(rig,origin)Mesh.pose(rig,origin,rig.time or 0,rig.mode or'idle')end
+function Mesh.destroy(rig)
+ if not rig or rig.destroyed then return end;rig.destroyed=true
+ for p,previous in pairs(rig.hidden)do if p.Parent then p.LocalTransparencyModifier=previous end end
+ rig.visual:Destroy()
+end
 return Mesh
 ]====])
 -- Source: src/client/world/clips/NinjaJump_Idle_Loop.luau

@@ -1,10 +1,17 @@
 -- Distinct silhouettes share only their invisible hit anchor.
+local catalog=require(script.Parent.Parent.world.EnemyCatalog)
 return function(deps)
  local block=deps.block
  local function make(name,kind,world)
   local m=Instance.new('Model');m.Name=name
-  local visualAssets={commander='CloakedCommander_QuaterniusHorse',stalker='KayKitSkeletonWarrior',skitter='KayKitSkeletonRogue',brute='KayKitSkeletonWarriorHeavy',caster='KayKitSkeletonMage',ember='KayKitSkeletonMinionBomber',charger='AshHound'}
-  m:SetAttribute('VisualAsset',visualAssets[kind])
+  local definition=catalog.Get(kind)
+  m:SetAttribute('VisualAsset',definition and definition.visualAsset or(kind=='commander'and 'CloakedCommander_QuaterniusHorse'or nil))
+  if definition then
+   m:SetAttribute('EnemyRole',definition.role);m:SetAttribute('EnemyFamily',definition.family);m:SetAttribute('EnemyVariant',definition.variant)
+   m:SetAttribute('FamilyName',definition.familyName);m:SetAttribute('DisplayName',definition.displayName)
+   if definition.projectileHeight then m:SetAttribute('ProjectileHeight',definition.projectileHeight)end
+   m:SetAttribute('Role',definition.roleLabel);m:SetAttribute('Description',definition.description);m:SetAttribute('Order',definition.order)
+  end
   local root=block(m,'Core',Vector3.one,CFrame.identity.Position,Color3.new());root.Transparency=1;root.Position=Vector3.new(0,3,0);m.PrimaryPart=root
   local function p(label,size,position,color,shape,rotation)
    local cf=CFrame.new(position)*(rotation or CFrame.identity)
@@ -17,7 +24,33 @@ return function(deps)
   local function limb(a,b,width,color)
    local v=p('Limb',Vector3.new(width,width,(b-a).Magnitude), (a+b)/2,color,'ball');v.CFrame=CFrame.lookAt((a+b)/2,b)
   end
-  if kind=='skitter'then
+  if definition and definition.family=='slime'then
+   -- These native Parts stay visible until the client has a complete authored rig.
+   local heavy=kind=='slime_bulwark'
+   local width=heavy and 5 or(kind=='slime_spitter'and 3.3 or 3.7)
+   local height=heavy and 3.6 or 2.8
+   local green=heavy and Color3.fromRGB(59,125,88)or Color3.fromRGB(113,207,79)
+   local body=p('SlimeBody',Vector3.new(width,height,width*.84),Vector3.new(0,height*.5+.15,0),green,'ball');body.Material=Enum.Material.SmoothPlastic
+   for _,side in ipairs({-1,1})do neon('Eye',Vector3.new(.35,.45,.22),Vector3.new(side*width*.18,height*.62,-width*.37),Color3.fromRGB(229,255,177),'ball')end
+   if heavy then
+    for i=-1,1 do p('ShellPlate',Vector3.new(1.6,.8,3.6),Vector3.new(i*1.3,3.25,.2),Color3.fromRGB(82,104,117),'wedge',CFrame.Angles(0,0,-i*.25))end
+   elseif kind=='slime_spitter'then
+    neon('SlimeSac',Vector3.new(1.2,1.2,1.2),Vector3.new(0,2.85,.15),Color3.fromRGB(171,240,74),'ball')
+    p('Spout',Vector3.new(.85,.65,1),Vector3.new(0,1.5,-1.35),green,'ball')
+   end
+  elseif definition and definition.family=='crystal'then
+   local lancer=kind=='crystal_lancer';local mage=kind=='crystal_mage'
+   local blue=Color3.fromRGB(91,196,222)
+   local center=Vector3.new(0,mage and 2.8 or 1.8,0)
+   p('CrystalBody',Vector3.new(lancer and 1.8 or 2,mage and 2.8 or 2.2,lancer and 4.7 or 2),center,blue,'wedge')
+   neon('CrystalCore',Vector3.new(.8,.9,.8),center+Vector3.new(0,0,-.7),Color3.fromRGB(188,249,255),'ball')
+   if lancer then
+    p('CrystalLance',Vector3.new(.7,.85,3.4),Vector3.new(0,2.1,-2.5),Color3.fromRGB(160,234,247),'wedge')
+   else
+    local count=mage and 6 or 3
+    for i=1,count do local angle=i*math.pi*2/count;p('CrystalShard',Vector3.new(.45,mage and 1 or .7,.65),center+Vector3.new(math.cos(angle)*1.65,mage and 0 or -.6,math.sin(angle)*1.65),blue,'wedge',CFrame.Angles(0,-angle,0))end
+   end
+  elseif kind=='skitter'then
    local green=Color3.fromRGB(91,167,126)
    p('Abdomen',Vector3.new(3,1.8,3.5),Vector3.new(0,2.2,.5),green,'ball')
    p('Head',Vector3.new(2.2,1.3,1.8),Vector3.new(0,2,-1.7),Color3.fromRGB(30,64,57),'ball')

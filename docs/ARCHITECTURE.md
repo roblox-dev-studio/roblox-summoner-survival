@@ -416,6 +416,42 @@ State 패킷에 `fieldBoss={name,hp,maxHp,action}?`, `fieldBossTest`, `fieldBoss
 
 가져온 MIT 보조 모듈3개의 원본·고정 리비전·해시는 `assets/vfx/roblox-mesh-vfx/manifest.json`과 ASSET_CREDITS에 기록합니다.
 
+## 2026-10-18 종족·개체·행동 분리
+
+`server/world/EnemyCatalog`가 일반 적12종의 ID·종족·행동 역할·해금 시점·역할 내 비중과 기존 역할 수치를 소유합니다.
+`Get(id)`는 개체, `Role(idOrRole)`은 행동 수치, `Pool(elapsed, fieldBossActive)`은 기존6역할 가중치,
+`Choose(role, elapsed, sequence)`는 해금된 변종을 역할 안에서 순환 선택합니다.
+새 종족은 기존 생성 슬롯을 나눠 쓰며84마리/탄환20개 상한·필드보스 때 무리/자폭 억제·120초 보스 전환을 유지합니다.
+
+적 레코드의 `kind`는 개체 ID, `role`은 stalker/skitter/brute/caster/ember/charger,
+`family`는 undead/beast/slime/crystal입니다. `Waves`는 role로 AI를 실행합니다.
+`SkyLances`도 role로 원거리 적을 구분해 점액탄/결정탄 시전자에게 잘못된 전진 예측을 적용하지 않습니다.
+새 카탈로그는 서버 아래에만 설치됩니다. 클라이언트에는 `EnemyKind`, `EnemyRole`, `EnemyFamily`,
+`EnemyVariant`, `FamilyName`, `DisplayName`, `Role`(표시명), `Description`, `Order`, `VisualAsset`, `ProjectileHeight` 속성만 전달합니다.
+
+`EnemyModels`는 클라이언트 렌더러가 준비되기 전의 경량 외형을 만듭니다.
+`EnemyVisuals`는 새 종족을 `SlimeMesh`/`CrystalMesh`로 보내며 기존 해골/사냥개/군단장 경로를 유지합니다.
+새 모델과 모션은 프로젝트에서 작성한 Part/WedgePart 기반이며 외부 메시/API 권한이 필요하지 않습니다.
+같은 create/place/pose/duration/destroy 계약을 N 뷰어와 실전 표시기가 공유합니다.
+클라이언트의 젤 변형/고리 부유는 시각만 바꾸고 서버 Core는 지상 높이3을 유지하므로 지상 마법이 정상적으로 판정합니다.
+`Preparing`, `AttackSequence`, `Frozen`은 기존 서버 신호를 그대로 사용합니다.
+빙결 중 준비 상태가 바뀌어도 마지막 포즈 시간을 보존하며, 멀리 있는 개체의 기존110스터드 관절 계산 제한을 유지합니다.
+
+N 뷰어는 종족별 필터/제목을 표시하고 행동 시연은 EnemyRole로 선택합니다.
+이 시연은 실제 표시기와 외형을 공유하지만 서버 AI·피해 목록에는 들어가지 않습니다.
+순수 카탈로그 회귀는 `tools/check.py`에 포함하고, 실제 엔진/화면 결과는 PLAYTEST_NOTES에 별도로 기록합니다.
+
+### 증강6개 연출 보강
+
+`AugmentArt`의 meteor_wide/meteor_echo/frost_wide/frost_echo/ward_pulse/fire_blast는 준비와 충격 형태가 서로 다릅니다.
+6개만 저밀도 입자를 사용하며 새 풀은 홀더24개, 홀더당 비활성 방출기2개입니다.
+충격은18+6개를1회 방출하고, 준비/비행은 최소0.16초마다 최대3개·수명 최대0.46초입니다.
+이 추가 레이어의 이론상 최대 입자는576개이며 전체 게임의 성능 측정치는 아닙니다.
+기존40작업/128곡선 홀더/192파편 제한과 거리 제한은 유지합니다.
+시전 입자는 복제된 Elapsed가 멈추면 추가 방출하지 않고 이미 나온 입자는 소멸합니다.
+정상 종료·Clear·취소·부모 제거·같은 프레임 컨테이너 교체 시 소유 자원만 반환합니다.
+피해·쿨다운·증강 자격·네트워크 이벤트는 이번 연출 보강에서 바꾸지 않았습니다.
+
 ### 군단장 외형 정정 · CC0 군마와 양손 대검
 
 현재 CommanderMount의 왕실 금빛 기사/도끼창 절차 모델은 폐기했습니다. 군단장 기수는 자체 후드·철갑·망토/대검이고, 군마는 HorseMesh + horse/ 생성 모듈을 사용하는 Quaternius CC0 네이티브 스킨입니다. 기존 도형 군마 부품은 생성하지 않습니다. CommanderStyle은 CloakedGreatswordCommander입니다.

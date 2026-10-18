@@ -10,7 +10,8 @@ return function(deps)
  local title=label(overlay,'몹 미리보기',UDim2.new(1,-150,0,32),UDim2.fromOffset(20,14),Enum.Font.GothamBold,colors.gold);title.TextSize=21;title.TextXAlignment=Enum.TextXAlignment.Left
  local description=label(overlay,'외형은 실전 모델 · 행동은 피해 없는 시연 · 드래그 회전 / 휠 확대',UDim2.new(1,-40,0,42),UDim2.fromOffset(20,51),nil,colors.muted);description.TextSize=13;description.TextXAlignment=Enum.TextXAlignment.Left;description.TextWrapped=true
  local close=make('TextButton',overlay,{Name='Close',Size=UDim2.fromOffset(92,34),Position=UDim2.new(1,-112,0,14),Text='닫기 [N]',BackgroundColor3=colors.card,TextColor3=colors.text,Font=Enum.Font.GothamBold,TextSize=13});round(close,8)
- local list=make('ScrollingFrame',overlay,{Name='Enemies',Size=UDim2.new(0,194,1,-116),Position=UDim2.fromOffset(16,100),BackgroundTransparency=1,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,BorderSizePixel=0})
+ local familyFilter=make('TextButton',overlay,{Name='FamilyFilter',Text='종족: 전체',Size=UDim2.fromOffset(194,32),Position=UDim2.fromOffset(16,100),BackgroundColor3=colors.card,TextColor3=colors.mint,Font=Enum.Font.GothamBold,TextSize=13});round(familyFilter,8)
+ local list=make('ScrollingFrame',overlay,{Name='Enemies',Size=UDim2.new(0,194,1,-158),Position=UDim2.fromOffset(16,142),BackgroundTransparency=1,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,BorderSizePixel=0})
  make('UIListLayout',list,{Padding=UDim.new(0,8),SortOrder=Enum.SortOrder.LayoutOrder})
  local view=make('ViewportFrame',overlay,{Name='Viewport',Size=UDim2.new(1,-238,1,-174),Position=UDim2.fromOffset(222,100),BackgroundColor3=Color3.fromRGB(22,31,45),Ambient=Color3.fromRGB(185,192,210),LightColor=Color3.fromRGB(255,237,215),LightDirection=Vector3.new(-.6,-1,-1),Active=true});round(view,12)
  local camera=make('Camera',view,{Name='EnemyCamera',FieldOfView=42});view.CurrentCamera=camera
@@ -21,12 +22,14 @@ return function(deps)
   local b=make('TextButton',bar,{Name=item[1],Text=item[2],Size=UDim2.new(.25,-8,1,0),Position=UDim2.new((i-1)*.25,0,0,0),BackgroundColor3=colors.card,TextColor3=colors.text,Font=Enum.Font.GothamBold,TextSize=13});round(b,8);actions[item[1]]=b
  end
  local opened,lastLobby,elite,playing=false,false,false,true
- local selected,templates=nil,{};local buttons={};local modes={'idle','walk','attack'};local names={'대기','이동','공격 시연'};local modeIndex=1
+ local selected,templates=nil,{};local buttons={};local familyHeaders={};local familyIndex=1
+ local families={'all','undead','beast','slime','crystal'};local familyNames={all='전체',undead='망자',beast='야수',slime='슬라임',crystal='결정체'}
+ local modes={'idle','walk','attack'};local names={'대기','이동','공격 시연'};local modeIndex=1
  local yaw,pitch,distance=-.35,.3,30;local dragging,touch,lastPosition=false,nil,nil;local stick=Vector2.zero
  local oldSelection,controls,oldCamera
  local function replay()
   if selected then scene.Play(selected,elite,modes[modeIndex]);title.Text='몹 미리보기 · '..selected:GetAttribute('DisplayName')..(elite and ' · 정예'or'')
-   description.Text=selected:GetAttribute('Role')..'  |  '..selected:GetAttribute('Description')..'\n외형은 실전 모델 · 행동은 피해 없는 시연 · 드래그 회전 / 휠 확대' end
+   description.Text=(selected:GetAttribute('FamilyName')or familyNames[selected:GetAttribute('EnemyFamily')]or'종족')..' · '..selected:GetAttribute('Role')..'  |  '..selected:GetAttribute('Description')..'\n외형은 실전 모델 · 행동은 피해 없는 시연 · 드래그 회전 / 휠 확대' end
   actions.Mode.Text='행동: '..names[modeIndex];actions.Elite.Text=elite and '정예 · 크기 1.2배'or'일반 몹';actions.Pause.Text=playing and '일시정지'or'재생'
   for id,b in pairs(buttons)do b.BackgroundColor3=selected and selected.Name==id and colors.mint or colors.card;b.TextColor3=selected and selected.Name==id and colors.bg or colors.text end
   gui:SetAttribute('SelectedEnemy',selected and selected.Name);gui:SetAttribute('Elite',elite);gui:SetAttribute('Mode',modes[modeIndex])
@@ -52,11 +55,26 @@ return function(deps)
  if folder then
   templates=folder:GetChildren();table.sort(templates,function(a,b)return a:GetAttribute('Order')<b:GetAttribute('Order')end)
   for i,model in ipairs(templates)do
-   local b=make('TextButton',list,{Name='Enemy_'..model.Name,Text=model:GetAttribute('DisplayName')..'\n'..model:GetAttribute('Role'),Size=UDim2.new(1,-6,0,64),LayoutOrder=i,BackgroundColor3=colors.card,TextColor3=colors.text,Font=Enum.Font.GothamBold,TextSize=13});round(b,9);buttons[model.Name]=b
+   local family=model:GetAttribute('EnemyFamily')or(model.Name=='charger'and'beast'or'undead')
+   if not familyHeaders[family]then
+    local heading=label(list,model:GetAttribute('FamilyName')or familyNames[family]or family,UDim2.new(1,-6,0,24),UDim2.new(),Enum.Font.GothamBold,colors.muted);heading.Name='Family_'..family;heading.LayoutOrder=i*2-1;heading.TextSize=12;heading.TextXAlignment=Enum.TextXAlignment.Left;familyHeaders[family]=heading
+   end
+   local b=make('TextButton',list,{Name='Enemy_'..model.Name,Text=model:GetAttribute('DisplayName')..'\n'..model:GetAttribute('Role'),Size=UDim2.new(1,-6,0,64),LayoutOrder=i*2,BackgroundColor3=colors.card,TextColor3=colors.text,Font=Enum.Font.GothamBold,TextSize=13});round(b,9);buttons[model.Name]=b
    b.Activated:Connect(function()selected=model;playing=true;replay()end)
   end
   selected=templates[1]
  else description.Text='몹 모델을 준비하지 못했어요. Studio를 다시 재생해 주세요.'end
+ local function filterFamilies()
+  local family=families[familyIndex];local first;local count=0
+  for _,model in ipairs(templates)do
+   local group=model:GetAttribute('EnemyFamily')or(model.Name=='charger'and'beast'or'undead');local visible=family=='all'or group==family
+   buttons[model.Name].Visible=visible;if visible then first=first or model;count+=1 end
+  end
+  for group,heading in pairs(familyHeaders)do heading.Visible=family=='all'or group==family end
+  if selected and not buttons[selected.Name].Visible then selected=first;replay()end
+  familyFilter.Text='종족: '..familyNames[family]..' · '..count;gui:SetAttribute('SelectedFamily',family);list.CanvasPosition=Vector2.zero
+ end
+ familyFilter.Activated:Connect(function()familyIndex=familyIndex%#families+1;filterFamilies()end);filterFamilies()
  button.Activated:Connect(function()setOpen(true)end);close.Activated:Connect(function()setOpen(false)end)
  actions.Mode.Activated:Connect(function()modeIndex=modeIndex%#modes+1;playing=true;replay()end)
  actions.Elite.Activated:Connect(function()elite=not elite;replay()end)

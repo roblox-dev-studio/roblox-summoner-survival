@@ -16,7 +16,13 @@ local ok,result=xpcall(function()
  local predicted;for _,v in ipairs(folder:GetChildren())do if v.Name:match('SkyLanceCast_')then predicted=v end end
  assert(predicted and math.abs(predicted.Position.Z+17)<.01,'Predict advancing enemies instead of aiming behind them')
  spells.Clear(s)
+ for _,kind in ipairs({'slime_spitter','crystal_mage'})do
+  e.kind=kind;e.role='caster';s.skyLancesClock=0;spells.Step(s,root,.01)
+  local cast;for _,v in ipairs(folder:GetChildren())do if v.Name:match('SkyLanceCast_')then cast=v end end
+  assert(cast and math.abs(cast.Position.Z-e.pos.Z)<.01,'Caster family retains non-advancing aim: '..kind)
+  spells.Clear(s)
+ end
  for _,v in ipairs(folder:GetChildren())do assert(not v.Name:match('SkyLanceCast_'),'Death cancels pending lances')end
- return {warning=true,pause=true,fallingHit=true,five=true,cleanup=true}
+ return {warning=true,pause=true,fallingHit=true,five=true,casterFamilyAim=true,cleanup=true}
 end,debug.traceback)
 folder:Destroy();if not ok then error(result)end;return result

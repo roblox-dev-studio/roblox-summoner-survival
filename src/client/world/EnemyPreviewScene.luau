@@ -9,7 +9,7 @@ return function(deps)
  end
  local floor=part('DisplayFloor',Vector3.new(42,.2,42),CFrame.new(0,-.15,0),Color3.fromRGB(37,48,65));floor.Material=Enum.Material.SmoothPlastic
  local effects=Instance.new('Folder');effects.Name='Demonstration';effects.Parent=world
- local actor;local kind,mode,time='stalker','idle',0
+ local actor;local kind,role,family,mode,time='stalker','stalker','undead','idle',0
  local orb,warning,burst
  local function clear()
   generation+=1;if rig then skeleton.destroy(rig);rig=nil end
@@ -21,10 +21,10 @@ return function(deps)
   local p=visual(name,Vector3.new(.06,radius*2,radius*2),CFrame.new(point)*CFrame.Angles(0,0,math.pi/2),color,Enum.PartType.Cylinder);p.Transparency=.65;return p
  end
  local function play(template,isElite,action)
-  clear();kind=template.Name;mode=action;time=0
+  clear();kind=template.Name;role=template:GetAttribute('EnemyRole')or kind;family=template:GetAttribute('EnemyFamily')or'undead';mode=action;time=0
   actor=template:Clone();actor.Name='PreviewEnemy';actor.Parent=world
   if isElite then
-   actor:ScaleTo(1.2);actor:SetAttribute('Elite',true)
+   actor:ScaleTo(actor:GetScale()*1.2);actor:SetAttribute('Elite',true)
    local crown=part('EliteCrown',Vector3.one*.6,CFrame.new(actor:GetPivot().Position+Vector3.new(0,4.8,0)),Color3.fromRGB(255,215,111),Enum.PartType.Ball);crown.Parent=actor
   end
   actor:PivotTo(CFrame.new(0,3,3))
@@ -36,21 +36,21 @@ return function(deps)
  end
  local function step(dt)
   if not actor then return end
-  time+=dt;local t=time%4;local pos=Vector3.new(0,3,3);local bob=math.sin(time*(kind=='skitter'and 9 or 4))*.08
+  time+=dt;local t=time%4;local pos=Vector3.new(0,3,3);local bob=(family=='slime'or family=='crystal')and 0 or math.sin(time*(role=='skitter'and 9 or 4))*.08
   if mode=='walk'then
-   local speed=kind=='brute'and .68 or(kind=='skitter'and 1.18 or(kind=='caster'and .85 or 1));local progress=(time*speed/4)%1;pos=Vector3.new(kind=='skitter'and math.sin(progress*math.pi)*3 or(kind=='caster'and math.sin(progress*math.pi*2)*3 or 0),3,6-progress*10)
+   local speed=role=='brute'and .68 or(role=='skitter'and 1.18 or(role=='caster'and .85 or 1));local progress=(time*speed/4)%1;pos=Vector3.new(role=='skitter'and math.sin(progress*math.pi)*3 or(role=='caster'and math.sin(progress*math.pi*2)*3 or 0),3,6-progress*10)
   elseif mode=='attack'then
-   if kind=='charger'then
+   if role=='charger'then
     if t<.85 then
-     if not warning then warning=visual('ChargeWarning',Vector3.new(4,.06,23),CFrame.new(0,.1,-8.5),Color3.fromRGB(255,151,75));warning.Transparency=.7 end
+     if not warning then warning=visual('ChargeWarning',Vector3.new(4,.06,23),CFrame.new(0,.1,-8.5),family=='crystal'and Color3.fromRGB(111,208,225)or Color3.fromRGB(255,151,75));warning.Transparency=.7 end
     else if warning then warning:Destroy();warning=nil end;pos=Vector3.new(0,3,3-math.min(t-.85,.65)*34)end
-   elseif kind=='caster'then
+   elseif role=='caster'then
     local staff=actor:FindFirstChild('StaffOrb');if staff then staff.Color=t<.8 and Color3.fromRGB(255,230,255)or Color3.fromRGB(214,127,255)end
     if t>=.8 and t<2 then
-     if not orb then orb=visual('EnemyArcaneBolt',Vector3.one*.75,CFrame.new(),Color3.fromRGB(226,126,255),Enum.PartType.Ball)end
-     orb.Position=Vector3.new(0,4.1,3-(t-.8)*22)
+     if not orb then orb=visual('EnemyArcaneBolt',Vector3.one*.75,CFrame.new(),family=='slime'and Color3.fromRGB(185,222,110)or(family=='crystal'and Color3.fromRGB(151,218,232)or Color3.fromRGB(226,126,255)),Enum.PartType.Ball)end
+     orb.Position=Vector3.new(0,3+(actor:GetAttribute('ProjectileHeight')or 1.1),3-(t-.8)*22)
     elseif orb then orb:Destroy();orb=nil end
-   elseif kind=='ember'then
+   elseif role=='ember'then
     if t<1.2 then
      if not warning then warning=disc('EnemyBlastWarning',6,Vector3.new(0,.08,3),Color3.fromRGB(255,74,45))end
      local core=actor:FindFirstChild('FurnaceCore');if core then core.Color=Color3.fromRGB(255,180+math.floor(60*math.sin(time*16)),90)end
@@ -62,8 +62,8 @@ return function(deps)
      elseif burst then burst:Destroy();burst=nil end
     end
    else
-    pos=Vector3.new(kind=='skitter'and math.sin(math.min(t,1.1)/1.1*math.pi)*3 or 0,3,3-math.min(t,1.1)*8)
-    if t>=1.1 and t<1.5 and not warning then warning=disc('ContactAttack',kind=='brute'and 4 or 2,Vector3.new(pos.X,.1,pos.Z-1.4),Color3.fromRGB(231,89,92))end
+    pos=Vector3.new(role=='skitter'and math.sin(math.min(t,1.1)/1.1*math.pi)*3 or 0,3,3-math.min(t,1.1)*8)
+    if t>=1.1 and t<1.5 and not warning then warning=disc('ContactAttack',role=='brute'and 4 or 2,Vector3.new(pos.X,.1,pos.Z-1.4),Color3.fromRGB(231,89,92))end
     if t>=1.5 and warning then warning:Destroy();warning=nil end
    end
    if t<.03 then if orb then orb:Destroy();orb=nil end;if burst then burst:Destroy();burst=nil end end
@@ -72,12 +72,12 @@ return function(deps)
   if rig then
    local motion=mode;local clock=time
    if mode=='attack'then
-    if kind=='caster'then motion=t<.8 and'prepare'or(t<1.6 and'attack'or'idle');clock=motion=='attack'and(t-.8)or t
-    elseif kind=='ember'then motion=t<1.2 and'idle'or'attack';clock=math.max(0,t-1.2)
-    elseif kind=='charger'then motion=t<.85 and'idle'or(t<1.5 and'attack'or'idle');clock=t
+    if role=='caster'then motion=t<.8 and'prepare'or(t<1.6 and'attack'or'idle');clock=motion=='attack'and(t-.8)or t
+    elseif role=='ember'then motion=t<1.2 and'idle'or'attack';clock=math.max(0,t-1.2)
+    elseif role=='charger'then motion=t<.85 and'prepare'or(t<1.5 and'attack'or'idle');clock=motion=='attack'and(t-.85)or t
     else motion=t<1.1 and'walk'or(t<2.1 and'attack'or'idle');clock=motion=='attack'and(t-1.1)or time end
    end
-   rig.charging=mode=='attack'and((kind=='caster'and t<.8)or(kind=='ember'and t<1.2))
+   rig.charging=mode=='attack'and((role=='caster'and t<.8)or(role=='ember'and t<1.2))
    local origin=actor:GetPivot();local delta=origin.Position-rig.previous;rig.previous=origin.Position
    variation.advance(rig.motion,dt,Vector3.new(delta.X,0,delta.Z).Magnitude,rig.stride,false)
    if motion=='walk'then clock=rig.motion.gait elseif motion=='idle'then clock=rig.motion.time end
