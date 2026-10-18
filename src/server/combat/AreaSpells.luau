@@ -1,4 +1,5 @@
 -- All spell timing and damage belong to the shared server simulation clock.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
  local enemies,world,effect=deps.enemies,deps.world,deps.effect
  local nextCast=0
@@ -17,20 +18,22 @@ return function(deps)
  end
  local function clear(s)
   for _,cast in ipairs(s.areaCasts or {})do if cast.anchor.Parent then cast.anchor:Destroy()end end
-  s.areaCasts={};s.shield=0
+  s.areaCasts={};s.shield=0;s.areaEchoes={}
  end
  local function start(s,kind,point,level)
   local radius=kind=='meteor' and 14+level or(kind=='frost' and 12+level or(kind=='blades' and 11+level*.7 or 4))
+  if kind=='meteor'and A.Has(s,'meteor_wide')then radius*=1.35 elseif kind=='frost'and A.Has(s,'frost_wide')then radius*=1.3 end
   local duration=kind=='meteor' and 3.2 or(kind=='frost' and .75 or(kind=='blades' and 6 or 5))
+  if kind=='ward'and A.Has(s,'ward_reservoir')then duration=7 end
   nextCast+=1
   local anchor=Instance.new('Part');anchor.Name='AreaCast_'..nextCast;anchor:SetAttribute('Kind',kind);anchor.Size=Vector3.one*.1;anchor.Position=point;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
   anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Radius',radius);anchor:SetAttribute('Duration',duration);anchor:SetAttribute('Level',level)
   if kind=='ward' then
-   s.shield=30+level*12
+   s.shield=(30+level*12)*(A.Has(s,'ward_reservoir')and 1.5 or 1)
    if s.player and type(s.player.UserId)=='number'then anchor:SetAttribute('OwnerUserId',s.player.UserId)end
   end
-  anchor.Parent=world
-  table.insert(s.areaCasts,{kind=kind,pos=point,level=level,radius=radius,duration=duration,time=0,hits={},anchor=anchor})
+  A.Stamp(anchor,s,kind);anchor.Parent=world
+  table.insert(s.areaCasts,{kind=kind,pos=point,level=level,radius=radius,duration=duration,time=0,hits={},anchor=anchor,shield=s.shield or 0})
   effect:FireAllClients('areaCast',anchor.Name,kind)
  end
  local function hit(cast,s,amount)
@@ -45,7 +48,15 @@ return function(deps)
   end
  end
  local function step(s,root,dt)
-  s.areaCasts=s.areaCasts or {}
+  s.areaCasts=s.areaCasts or {};s.areaEchoes=s.areaEchoes or {}
+  for i=#s.areaEchoes,1,-1 do
+   local echo=s.areaEchoes[i];echo.delay-=dt
+   if echo.delay<=0 then
+    if echo.kind=='frost'then echo.pos=Vector3.new(root.Position.X,.35,root.Position.Z)end
+    hit(echo,s,echo.amount);effect:FireAllClients(echo.kind=='meteor'and'meteorHit'or'frostHit',echo.pos,echo.radius)
+    A.Impact(effect,s,echo.kind,echo.pos,echo.radius,'echo');table.remove(s.areaEchoes,i)
+   end
+  end
   for i=#s.areaCasts,1,-1 do
    local cast=s.areaCasts[i];cast.time+=dt
    if cast.kind~='meteor' then cast.pos=Vector3.new(root.Position.X,.35,root.Position.Z);cast.anchor.Position=cast.pos end
@@ -55,7 +66,14 @@ return function(deps)
     if cast.kind=='meteor' or cast.kind=='frost' then
      hit(cast,s,cast.kind=='meteor' and 65+cast.level*22 or 18+cast.level*8)
      effect:FireAllClients(cast.kind=='meteor' and 'meteorHit' or 'frostHit',cast.pos,cast.radius)
-    elseif cast.kind=='ward' then s.shield=0 end
+     A.Impact(effect,s,cast.kind,cast.pos,cast.radius,'hit')
+     if A.Has(s,cast.kind..'_echo')then
+      table.insert(s.areaEchoes,{kind=cast.kind,pos=cast.pos,radius=cast.radius,level=cast.level,amount=(cast.kind=='meteor'and 65+cast.level*22 or 18+cast.level*8)*.5,delay=cast.kind=='meteor'and .65 or .6})
+     end
+    elseif cast.kind=='ward' then
+     s.shield=0
+     if A.Has(s,'ward_pulse')then hit({kind='ward',pos=cast.pos,radius=8},s,cast.shield*.75);effect:FireAllClients('augmentPulse',cast.pos,8)end
+    end
     cast.anchor:Destroy();table.remove(s.areaCasts,i)
    end
   end
@@ -66,11 +84,11 @@ return function(deps)
     if s[key]<=0 then
      local point=kind=='ward' and Vector3.new(root.Position.X,.35,root.Position.Z) or targetPoint(root.Position)
      if kind=='frost' then
-      point=nil;for _,e in ipairs(enemies)do if e.hp>0 and not e.airborne and flat(e.pos-root.Position).Magnitude<=12+level then point=e.pos;break end end
+      point=nil;for _,e in ipairs(enemies)do if e.hp>0 and not e.airborne and flat(e.pos-root.Position).Magnitude<=(12+level)*(A.Has(s,"frost_wide")and 1.3 or 1)then point=e.pos;break end end
      end
      if point then
       start(s,kind,kind=='meteor' and point or Vector3.new(root.Position.X,.35,root.Position.Z),level)
-      s[key]=(kind=='meteor' and 9 or(kind=='blades' and 8.5 or(kind=='frost' and 6 or 12)))-level*.3
+      s[key]=A.Cooldown(s,(kind=='meteor' and 9 or(kind=='blades' and 8.5 or(kind=='frost' and 6 or 12)))-level*.3)
      end
     end
    end

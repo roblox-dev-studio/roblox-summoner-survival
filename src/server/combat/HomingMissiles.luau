@@ -1,4 +1,5 @@
 -- Single-target pressure. Each projectile hits one enemy; no explosion damage.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
  local shots={};local nextShot=0
  local function target(origin)
@@ -19,12 +20,12 @@ return function(deps)
   local level=s.missile or 0;if level<=0 then return end
   s.missileClock=math.max(0,(s.missileClock or 0)-dt);if s.missileClock>0 then return end
   local enemy=target(root.Position);if not enemy then return end
-  s.missileClock=3.8-level*.2
-  local count=2+math.floor(level/2)
+  s.missileClock=A.Cooldown(s,3.8-level*.2)
+  local count=2+math.floor(level/2)+(A.Has(s,"missile_salvo")and 2 or 0)
   for index=1,count do
    local pos=root.Position+root.CFrame.RightVector*((index-(count+1)/2)*1.6)+Vector3.new(0,1.2,0)
    nextShot+=1
-   local anchor=Instance.new('Part');anchor.Name='HomingMissile_'..nextShot;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,enemy.pos);anchor.Parent=deps.world
+   local anchor=Instance.new('Part');anchor.Name='HomingMissile_'..nextShot;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,enemy.pos);A.Stamp(anchor,s,"missile");anchor.Parent=deps.world
    table.insert(shots,{source=s,target=enemy,level=level,time=0,anchor=anchor})
    deps.effect:FireAllClients('homingMissile',anchor.Name)
   end
@@ -39,8 +40,9 @@ return function(deps)
     else
      local delta=shot.target.pos-shot.anchor.Position;local travel=44*dt
      if delta.Magnitude<=travel+1.3 then
-      deps.damage(shot.target,18+shot.level*7,shot.source)
-      deps.effect:FireAllClients('missileHit',shot.target.pos);remove=true
+      local empowered=A.Damage(shot.source,"missile",1,shot.target)>1
+      deps.damage(shot.target,A.Damage(shot.source,"missile",18+shot.level*7,shot.target),shot.source)
+      deps.effect:FireAllClients('missileHit',shot.target.pos);A.Impact(deps.effect,shot.source,'missile',shot.target.pos,3,'hit',empowered);remove=true
      else
       local move=delta.Unit*travel
       local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={deps.world,shot.source.player.Character};params.RespectCanCollide=true

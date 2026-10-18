@@ -21,7 +21,7 @@ return function(deps)
    local crest=Instance.new('Part');crest.Name='EliteCrown';crest.Shape=Enum.PartType.Ball;crest.Size=Vector3.new(.6,.6,.6);crest.Position=pos+Vector3.new(0,4.8,0);crest.Material=Enum.Material.Neon;crest.Color=Color3.fromRGB(255,215,111);crest.Anchored=true;crest.CanCollide=false;crest.CanTouch=false;crest.CanQuery=false;crest.Parent=m
   end
   m:SetAttribute('HP',hp)
-  table.insert(enemies,{model=m,pos=pos,hp=hp,kind=kind,elite=elite,speed=(9+math.min(4.8,elapsed/36))*speedScale,hitClock=0,slow=0,castClock=rng:NextNumber(1,3),seed=nextEnemy})
+  table.insert(enemies,{model=m,pos=pos,hp=hp,maxHp=hp,kind=kind,elite=elite,speed=(9+math.min(4.8,elapsed/36))*speedScale,hitClock=0,slow=0,castClock=rng:NextNumber(1,3),seed=nextEnemy})
  end
  local function spawn(dt,alive,elapsed)
   if elapsed>=roundLength or(deps.clock and deps.clock.phase~='survival')then return end

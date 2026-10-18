@@ -35,6 +35,26 @@
 
 ## 재현 가능한 fixture
 
+### 증강과 행운
+
+- 카탈로그 25개: 자동9종×2, Q4종×1, 공통3. 장착/단계/빙결 조합 조건, 최대 횟수, 3장 중복 금지, 성장 카드 1장 보장.
+- 새로고침 2회 소진, 오래된 제안 번호·다른 카드·반복 선택 거부. 서버 `offerOdds`와 첫 무작위 칸 확률 표시 일치.
+- 행운 0/20/40/60, 후보 없는 영웅 등급 재분배, 피해/드롭 불변. 보유창 설명·로비 복귀 초기화.
+- 쌍빙창/파편, 추가 번개/빙결 보너스, 운석·서리 여진/취소, 결계 소진·만료/취소, 7결정·동일 프레임 2명 관통, 추가 마탄/정예 보너스, 7창/처형, 쌍월/귀환 피해, Q4종 범위·추가타·처형, 주기 하한.
+- 서버 fixture `tests/studio_augments.luau`, 기존 area/active/crystals/missiles/sky/light 회귀 및 `studio_field_reward`를 실행합니다. 판정 검사는 시각 품질 판정과 구분합니다.
+- 실제 로비 출발 → 경험치 획득 → 카드/재추첨 → 증강 적용 공격 → 보유창 → 로비 복귀 → 초기 상태 재출발. 실제 두 클라이언트와 저사양 부하는 별도 필수 검수입니다.
+
+### 증강 시각
+
+- Studio P에서 13개 마법의 기본/전용 증강 22개를 같은 단계·시점으로 비교. 실제 마우스로 Variant 순환·재생·닫기·다른 마법 선택 시 기본으로 초기화.
+- 운석 궤도가 실제 낙하 본체를 따라가는지, 결계가 이동하는 시전자에 붙는지, 결정 후광이 장기 유지/재충전·취소에 맞게 정리되는지 확인.
+- 정예/저체력/빙결 보너스 미충족 시 보너스 폭발 없음. 실제 여진 때만 후속 고리, 돌아오는 광륜에만 칼날 확대.
+- Client `tests/studio_augment_art.luau`: 기본·단일·두 증강 동시의 44회 시연, 수명/취소/풀 재사용/오류 관찰.
+- 독립 place 로비에서 `tests/studio_augment_network.luau`를 Client→Server 순서로 실행. 15초 안에 Client `PlayerGui.AugmentNetworkCheck.Result`의 실제 Effect 수신·네 가지 표시 ID 확인. 임시 observer는 15초에 연결/카메라를 복구하며 결과 폴더는 Play 종료 시 제거.
+- 실제 전투에서 여러 플레이어·최대 적/탄환·작은 화면의 가독성/성능은 별도 검수. 풀 상한 통과를 프레임 성능 통과로 해석하지 않음.
+
+### 기존 전투 회귀
+
 Server: studio_basic_attack, studio_light_spells, studio_active_spells, studio_lobby, studio_retreat. Client: studio_ward_follow, studio_glacial_art, studio_elemental_art. 기존 studio_area_spells / studio_homing_missiles / studio_boss_combat / studio_enemies도 변경 영역에 따라 실행합니다. fixture 실행은 본인 임시 객체만 만들고 제거해야 합니다.
 
 화염 파동 렌더러는 개선을 위한 비활성 코드로 남아 있으므로 elemental fixture에서만 직접 검사할 수 있습니다. 이 성공은 파동이 게임 선택지에 다시 추가됐다는 뜻이 아닙니다.

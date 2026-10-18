@@ -1,4 +1,5 @@
 -- Narrow falling lances: server-time flight and one hit per enemy per lance.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
  local casts={};local nextId=0
  local offsets={Vector3.zero,Vector3.new(5,0,0),Vector3.new(0,0,5),Vector3.new(-5,0,0),Vector3.new(0,0,-5)}
@@ -19,13 +20,13 @@ return function(deps)
       local delta=tip-lance.last;local length=delta:Dot(delta)
       for _,e in ipairs(deps.enemies)do if e.hp>0 and not lance.hits[e] then
        local t=length>.0001 and math.clamp((e.pos-lance.last):Dot(delta)/length,0,1)or 0
-       if (e.pos-lance.last-delta*t).Magnitude<=3.3 then lance.hits[e]=true;deps.damage(e,25+c.level*8,s)end
+       if (e.pos-lance.last-delta*t).Magnitude<=3.3 then lance.hits[e]=true;local empowered=A.Damage(s,"skyLances",1,e)>1;deps.damage(e,A.Damage(s,"skyLances",25+c.level*8,e),s);if empowered then A.Impact(deps.effect,s,"skyLances",e.pos,3.3,"hit",true)end end
       end end
       if u>=1 then lance.done=true;deps.effect:FireAllClients('skyLanceHit',lance.point,3.3)end
      end
      lance.last=tip
     end
-    if c.time>=2.65 then c.anchor:Destroy();table.remove(casts,i)end
+    if c.time>=c.duration then c.anchor:Destroy();table.remove(casts,i)end
    end
   end
   local level=s.skyLances or 0;if level<=0 then return end
@@ -47,10 +48,12 @@ return function(deps)
   local ray=RaycastParams.new();ray.FilterType=Enum.RaycastFilterType.Exclude;ray.FilterDescendantsInstances={deps.world,s.player.Character};ray.RespectCanCollide=true
   if workspace:Raycast(point+Vector3.new(0,3,0),Vector3.new(0,55,0),ray)then s.skyLancesClock=1;return end
   nextId+=1;local a=Instance.new('Part');a.Name='SkyLanceCast_'..nextId;a.Size=Vector3.one*.1;a.Transparency=1;a.Anchored=true;a.CanCollide=false;a.CanQuery=false;a.CanTouch=false;a.Position=point
-  a:SetAttribute('Level',level);a:SetAttribute('Elapsed',0);a:SetAttribute('Duration',2.65);a:SetAttribute('Radius',8.3);a.Parent=deps.world
-  local c={source=s,anchor=a,time=0,level=level,lances={}}
-  for _,offset in ipairs(offsets)do local p=point+offset;table.insert(c.lances,{point=p,last=p+Vector3.new(0,44,0),hits={}})end
-  table.insert(casts,c);s.skyLancesClock=11-level*.4
+  local count=A.Has(s,'skyLances_rain')and 7 or 5;local duration=2.65+(count-5)*.16
+  a:SetAttribute('Count',count);a:SetAttribute('Level',level);a:SetAttribute('Elapsed',0);a:SetAttribute('Duration',duration);a:SetAttribute('Radius',8.3);A.Stamp(a,s,"skyLances");a.Parent=deps.world
+  local c={source=s,anchor=a,time=0,level=level,lances={},duration=duration}
+  local positions=table.clone(offsets);if count==7 then table.insert(positions,Vector3.new(3.5,0,3.5));table.insert(positions,Vector3.new(-3.5,0,-3.5))end
+  for _,offset in ipairs(positions)do local p=point+offset;table.insert(c.lances,{point=p,last=p+Vector3.new(0,44,0),hits={}})end
+  table.insert(casts,c);s.skyLancesClock=A.Cooldown(s,11-level*.4)
   deps.effect:FireAllClients('areaCast',a.Name,'skyLances')
  end
  return {Step=step,Clear=clear}

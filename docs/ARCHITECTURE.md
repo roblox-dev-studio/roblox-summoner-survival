@@ -24,7 +24,7 @@ ServerScriptService
     └── Modules (src/server)
         ├── combat: Combat, Movement
         ├── world: Waves, Boss
-        ├── flow: Progression, Session
+        ├── flow: Progression, Session, Augments
         └── shared: Actors, PlayerState, EnemyModels
 StarterPlayer / StarterPlayerScripts
 └── SummonerClient (client.luau)
@@ -53,7 +53,8 @@ Workspace
 | Actors | `Block`, `Create` | 절차적 적·골렘 형상 |
 | PlayerState | `RootOf`, `LiveCount`, `Paused` | 상태를 조회하며 변경하지 않음 |
 | Movement | `RequestDash`, `Step`, `FinishDash` | 대시·무적·이동 복구 |
-| Progression | `Sync`, `Drop`, `Choose`, `Collect`, `Need`, `LevelCheck` | XP·카드·강화·경험치 구슬 |
+| Progression | `Sync`, `Drop`, `Choose`, `Reroll`, `Collect`, `Need`, `LevelCheck` | XP·카드·강화·경험치 구슬 |
+| Augments | `Choices`, `Apply`, `Eligible`, `Summary`, `Luck`, `Weights`, `Cooldown`, `ActiveCooldown`, `Damage` | 서버 전용 순수 카탈로그/선택 조건/수치 계산; 상태를 전역으로 보관하지 않음 |
 | Combat | `StepPlayer`, `StepProjectiles`, `ClearProjectiles`, `RequestWave` | 공격·골렘 AI·얼음창·적 피해 |
 | Boss | `Step`, `Resolve`, `Reset` | 보스 생성·추적·예고·공격·승패, 일반 적의 피해 경로 공유 |
 | Waves | `Spawn`, `Step`, `ResetSpawn` | 생성 간격·적 AI·접촉 피해 |
@@ -70,12 +71,13 @@ Workspace
 
 ## 네트워크 계약
 
-`SummonerNet.Action`은 클라이언트 의도입니다. 기존 요청 이름과 데이터 형식은 유지합니다.
+`SummonerNet.Action`은 클라이언트 의도입니다. 증강 도입 시 `choose`에 제안 번호를 추가했으므로 서버/HUD를 함께 배포합니다.
 
 | 요청 | 추가 인자 | 서버 검증/처리 |
 | --- | --- | --- |
 | `ready` | 없음 | 등록된 플레이어에게 상태 전송 |
-| `choose` | 선택지 `id` 문자열 | 현재 서버가 제공한 선택지에 포함되는지 확인 |
+| `choose` | 선택지 `id`, `offerRevision` | 현재 제안 번호·후보 포함·장착/단계/최대 횟수 확인 후 1회 적용 |
+| `reroll` | `offerRevision` | 진행 중 제안 번호와 남은 횟수 확인, 한 판 2회까지 재추첨·제안 번호 증가 |
 | `dash` | 수평 이동용 Vector3 | 상태·쿨다운 검증, X/Z 유효성 확인 후 정규화/정면 대체 |
 | `fireWave` | 수평 조준 방향 Vector3 (기존 인자 생략도 허용) | 벡터 유효성·상태·쿨다운 확인, 서버가 30스터드/반각 35도 범위와 피해 판정 |
 | `restart` | 없음 | 요청자 종료 상태 및 모든 참가자 종료 여부 확인 |
@@ -84,6 +86,13 @@ Workspace
 `Effect`는 `hit`, `golemCharge`, `golemHeavy`, `golemLight`, `dash`, `fire`, `fireWave`,
 `lightning`, `iceCast`, `iceHit` 연출을 전송합니다. 클라이언트 효과는 피해를 결정하지 않습니다.
 새 이벤트나 필드 변경은 생산자·소비자를 같은 PR 또는 명시적 호환 단계로 배포합니다.
+
+증강 `State` 필드는 `offerRevision`, `luck`, `offerOdds`, `augmentWeights`, `augments`, `rerolls`입니다.
+카드는 기존 ID/제목/설명/태그/단계에 `rarity`, `kind`, 선택적 `max`를 더합니다.
+`offerOdds`는 보장된 단계 강화 이후 첫 무작위 칸의 조건부 확률입니다.
+`augmentPulse(position,radius)`와 `augmentFireHit(position,radius)`는 서버 피해 판정 후의 표현 이벤트입니다.
+수량/범위 증강은 기존 시전 앵커의 `Count`, `Radius`, `Duration`, `Width`로 클라이언트와 공유합니다.
+적 레코드에는 처형 판정을 위한 `maxHp`를 저장합니다. 자세한 규칙은 [AUGMENTS.md](AUGMENTS.md)를 따릅니다.
 
 현재 프로토타입에는 `ready` 등 모든 요청을 포괄하는 별도 속도 제한이 없습니다.
 이번 구조 분리로 보안·협동 완성도를 보장하지 않습니다. 공개 출시 전에 별도 검증이 필요합니다.
@@ -379,6 +388,33 @@ State 패킷에 `fieldBoss={name,hp,maxHp,action}?`, `fieldBossTest`, `fieldBoss
 `FieldBoss`에 slamWindup/slam(고정 원형 착탄), thrustWindup/thrust(고정 직선+짧은 전진)를 추가했습니다. 기존 횡베기/기마 돌진과 같은 서버 hit-once/무적/보상/퇴각 경로를 공유합니다. 보스의 attackIndex/lastAttack으로 근접 순서와 원거리 돌진/찌르기 교대를 결정하며 클라이언트는 패턴을 선택하지 않습니다. Effect의 fieldBoss kind에 slam/thrust가 추가됐고 계약의 다른 인자는 같습니다.
 
 `EnemyProfiles.commander`는 originalKnight 프로필입니다. `EnemyVisuals`가 전용 CommanderMount로 라우팅하므로 일반 SkeletonMesh 캐시/CC0 원본은 바꾸지 않습니다. CommanderMount는 서버 FieldAction/FieldProgress에 맞춰 torso/head/arm/hand/leg/weapon 프레임을 계산하고, 공격 후 직전 무기 자세에서 기본 자세로 보간합니다. 두 손은 무기 좌표계에서 계산하며 왕관/창날/도끼날은 로컬 기본 Part/WedgePart로 재현됩니다. CommanderStyle=GildedHalberdKnight, CommanderMotion, EquipmentCount=1은 시연/검사용 로컬 메타데이터입니다. 호환상 SkeletonMeshStatus=Ready 속성 이름은 유지하되 군단장에는 실제 스켈레톤 메시를 만들지 않습니다.
+
+
+## 2026-10-18 증강별 시각 계약
+
+서버 `Augments.Visuals(state, kind)`는 현재 마법에 해당하는 보유 전용 증강 ID만 반환합니다.
+`Stamp`가 투명 전투 앵커의 `VFXAugments`에 CSV를 기록합니다. 권한/피해/추첨 코드는 서버에 남으며
+클라이언트 카탈로그 `AugmentStyles`는 ID/이름/시각 설명만 갖습니다. 순수 회귀가 두 카탈로그의22개 ID 일치를 검사합니다.
+
+추가 서버→클라이언트 Effect 계약:
+
+- `augmentImpact(position, radius, {ids, phase, empowered})`: phase는 hit/echo/return, empowered는 실제 피해 계산 **전** 정예·저체력·빙결 보너스 충족 여부입니다. 조건부 표식을 기본 적중처럼 무조건 띄우지 않습니다.
+- `augmentArc(from, to, ids)`: 서버가 선택한 연쇄 두 위치 사이의 추가 리본. 클라이언트가 새 표적을 선택하지 않습니다.
+- 기존 `augmentPulse(position, 8)`는 금빛 결계 해방으로, `activeStrike`의 iceRush width9는 서리 관문으로 표시합니다.
+
+`Effects`가 기존 렌더러와 `AugmentArt`를 함께 호출합니다. 기본 ID 빈 문자열은 추가 객체를 만들지 않습니다.
+새 형상은 로컬 `AugmentVisuals` 아래 Beam/WedgePart로 만들며 충돌/쿼리/그림자와 카메라 흔들림이 없습니다.
+렌더러당 상한은 동시 작업40, BeamArc 홀더128(각 Beam4개), 파편192입니다. 생성 시 카메라220스터드 밖은 생략합니다.
+이 상한은 새 증강 레이어에만 해당하고, 기존 마법의 객체 수/게임 전체 프레임 예산을 보장하지 않습니다.
+공유 Animator 한 루프가 새 효과를 갱신합니다. 정상 수명/앵커 제거/전환/Clear/Disconnect에서 풀 반환·작업 정리를 수행합니다.
+장기 결정 오라는 임의90초 제한 없이 앵커 수명을 따릅니다. 운석 고리는 AreaArt의 준비시간·대각선 낙하·단계별 크기를 동일하게 사용합니다.
+
+`SkillPreview`의 Variant 버튼은 단계/시점을 유지하고 마법 변경 시 기본으로 돌아갑니다.
+`PreviewScene.Play(spell, level, ids?)`는 전용 증강의 개수/반경/귀환/지연 예시를 실제 Effects로 재생합니다.
+조건부 적중은 시연용 충족 예시이며 실제 피해/상태 판정 검사가 아닙니다. 전환 시 renderer.Clear 후 앵커를 제거하고
+이전 세대의 지연 번개 콜백을 무효화합니다. 최종 종료는 기존 renderer.Disconnect 경로를 사용합니다.
+
+가져온 MIT 보조 모듈3개의 원본·고정 리비전·해시는 `assets/vfx/roblox-mesh-vfx/manifest.json`과 ASSET_CREDITS에 기록합니다.
 
 ### 군단장 외형 정정 · CC0 군마와 양손 대검
 

@@ -20,7 +20,7 @@ return function(deps)
   local model=Instance.new('Model');model.Name=kind..'Charge';model.Parent=fx
   local parts={};for i=1,24 do parts[i]=part(model,'PortalRune',Vector3.one*.1,CFrame.new(),cyan)end
   local orb=part(model,'GatheringCore',Vector3.one*.6,anchor.CFrame,white,Enum.PartType.Ball)
-  local length=anchor:GetAttribute('Range')or 34;local width=kind=='thunder' and 2.4 or 6
+  local length=anchor:GetAttribute('Range')or 34;local width=anchor:GetAttribute('Width')or(kind=='thunder' and 2.4 or 6)
   for _,side in ipairs({-1,1})do
    local a=anchor.CFrame:PointToWorldSpace(Vector3.new(side*width,-2,0));local b=a+anchor.CFrame.LookVector*length
    local p=line(model,a,b,.1,cyan);p.Transparency=.55

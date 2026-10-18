@@ -4,6 +4,8 @@ return function(deps)
  local UIS=game:GetService('UserInputService');local GuiService=game:GetService('GuiService')
  local player,net,input,hud=deps.player,deps.net,deps.input,deps.hud
  local theme=require(script.Parent.Parent.Theme);local make,label,round=theme.Make,theme.Label,theme.Round;local palette=theme.Palette
+ local augmentStyles=require(script.Parent.Parent.combat.AugmentStyles)
+ local variantIndex=0
  local spells={
   {id='lightRing',name='성운 광륜',note='빛나는 초승달 부메랑 · 곡선 왕복 관통'},
   {id='basic',name='기본 공격 · 별빛 마법탄',note='작은 빛의 탄환 · 누르고 연속 발사',common=true},
@@ -37,8 +39,8 @@ return function(deps)
  local controlsBar=make('Frame',overlay,{Name='Controls',Size=UDim2.new(1,-236,0,42),Position=UDim2.new(0,224,1,-54),BackgroundColor3=palette.bg,BackgroundTransparency=.04});round(controlsBar,10)
  local clockLabel=label(overlay,'',UDim2.new(1,-236,0,20),UDim2.new(0,224,1,-79),nil,palette.text);clockLabel.TextSize=12
  local controls={}
- for i,item in ipairs({{'Replay','다시 재생'},{'Loop','반복 켬'},{'Level','단계 1'},{'ResetView','시점 초기화'},{'Close','닫기'}})do
-  local b=make('TextButton',controlsBar,{Name=item[1],Text=item[2],Size=UDim2.new(.2,-10,1,-12),Position=UDim2.new((i-1)*.2,5,0,6),BackgroundColor3=palette.card,TextColor3=palette.text,Font=Enum.Font.GothamBold,TextSize=12});round(b,7);controls[item[1]]=b
+ for i,item in ipairs({{'Replay','다시 재생'},{'Loop','반복 켬'},{'Level','단계 1'},{'Variant','기본 효과'},{'ResetView','시점 초기화'},{'Close','닫기'}})do
+  local b=make('TextButton',controlsBar,{Name=item[1],Text=item[2],Size=UDim2.new(1/6,-10,1,-12),Position=UDim2.new((i-1)/6,5,0,6),BackgroundColor3=palette.card,TextColor3=palette.text,Font=Enum.Font.GothamBold,TextSize=12});round(b,7);controls[item[1]]=b
  end
  local opened,lastLobby,loop,playing=false,false,true,true
  local selected,levelIndex=spells[1],1;local levels={1,3,5}
@@ -50,6 +52,10 @@ return function(deps)
   yaw=0;pitch=(selected.id=='meteor' or selected.id=='skyLances') and .48 or .65;distance=(selected.id=='meteor' or selected.id=='skyLances') and 140 or 84
  end
  local function refresh()
+  local variant=(augmentStyles[selected.id]or {})[variantIndex]
+  controls.Variant.Text=variant and variant.name or '기본 효과'
+  hint.Text=variant and (variant.note..' · 조건부 보너스는 발동 예시 · 연출만 재생')or'연출만 재생 · 드래그 회전 / 휠 확대 · 증강 버튼으로 기본과 비교'
+  gui:SetAttribute('AugmentVariant',variant and variant.id or '')
   title.Text='스킬 미리보기 · '..selected.name..' · '..selected.note
   controls.Loop.Text=loop and '반복 켬'or'반복 끔'
   controls.Level.Text=selected.common and(selected.id=='golem' and '단계 5 · 최대 연출'or'단계 공통')or('단계 '..levels[levelIndex])
@@ -58,10 +64,11 @@ return function(deps)
  end
  local function replay()
   if not scene then return end
-  scene.Play(selected.id,selected.id=='golem' and 5 or levels[levelIndex]);playing=true;clockLabel.Text='재생 중…';gui:SetAttribute('PlaybackTime',0);refresh()
+  local variant=(augmentStyles[selected.id]or {})[variantIndex]
+  scene.Play(selected.id,selected.id=='golem' and 5 or levels[levelIndex],variant and variant.id or '');playing=true;clockLabel.Text='재생 중…';gui:SetAttribute('PlaybackTime',0);refresh()
  end
  local function selectSpell(item)
-  selected=item;fit();replay()
+  selected=item;variantIndex=0;fit();replay()
  end
  for i,item in ipairs(spells)do
   local b=make('TextButton',list,{Name='Spell_'..item.id,Size=UDim2.new(1,-2,0,34),LayoutOrder=i,Text=item.name,BackgroundColor3=palette.card,TextColor3=palette.text,Font=Enum.Font.GothamBold,TextSize=12,AutoButtonColor=true});round(b,7);spellButtons[item.id]=b
@@ -103,6 +110,7 @@ return function(deps)
  controls.Replay.Activated:Connect(replay)
  controls.Loop.Activated:Connect(function()loop=not loop;if loop and not playing then replay()end;refresh()end)
  controls.Level.Activated:Connect(function()if selected.common then return end;levelIndex=levelIndex%#levels+1;replay()end)
+ controls.Variant.Activated:Connect(function()variantIndex=(variantIndex+1)%(#(augmentStyles[selected.id]or {})+1);replay()end)
  controls.ResetView.Activated:Connect(fit)
  surface.InputBegan:Connect(function(key)
   if key.UserInputType==Enum.UserInputType.MouseButton1 or key.UserInputType==Enum.UserInputType.MouseButton2 or key.UserInputType==Enum.UserInputType.Touch then dragging=true;lastPosition=key.Position;if key.UserInputType==Enum.UserInputType.Touch then touch=key end end
