@@ -1,27 +1,33 @@
 -- Mixed packs, flanking skitters, strafing casters and telegraphed chargers.
+local catalog=require(script.Parent.EnemyCatalog)
 return function(deps)
  local applyDamage=require(script.Parent.Parent.shared.PlayerDamage)
  local states,enemies,rng=deps.states,deps.enemies,deps.rng
  local creature,rootOf,roundLength=deps.creature,deps.rootOf,deps.roundLength
  local spawnClock,nextEnemy,time=0,0,0
  local nextPack=18
+ local variants={}
  local shots={}
  local function flat(v)return Vector3.new(v.X,0,v.Z)end
  local function bound(p)local f=flat(p);if f.Magnitude>81 then f=f.Unit*81 end;return Vector3.new(f.X,p.Y,f.Z)end
- local function create(kind,pos,elapsed)
+ local function create(role,pos,elapsed)
   if #enemies>=84 then return end
+  variants[role]=(variants[role]or 0)+1
+  local kind=catalog.Choose(role,elapsed,variants[role])
+  local definition=catalog.Get(kind)
+  if not definition then return end
   nextEnemy+=1
   local m=creature('Shade_'..nextEnemy,Color3.new(),false,kind);m:PivotTo(CFrame.new(pos))
   local elite=elapsed>=65 and nextEnemy%9==0
-  local hpScale=kind=='brute'and 1.5 or(kind=='skitter'and .7 or(kind=='charger'and 1.15 or 1))
-  local speedScale=kind=='brute'and .68 or(kind=='skitter'and 1.18 or(kind=='caster'and .85 or 1))
+  local hpScale=definition.hpScale
+  local speedScale=definition.speedScale
   local hp=math.floor((26+elapsed*.35)*hpScale*(elite and 1.75 or 1))
   if elite then
    m:ScaleTo(1.2);m:SetAttribute('Elite',true)
    local crest=Instance.new('Part');crest.Name='EliteCrown';crest.Shape=Enum.PartType.Ball;crest.Size=Vector3.new(.6,.6,.6);crest.Position=pos+Vector3.new(0,4.8,0);crest.Material=Enum.Material.Neon;crest.Color=Color3.fromRGB(255,215,111);crest.Anchored=true;crest.CanCollide=false;crest.CanTouch=false;crest.CanQuery=false;crest.Parent=m
   end
   m:SetAttribute('HP',hp)
-  table.insert(enemies,{model=m,pos=pos,hp=hp,maxHp=hp,kind=kind,elite=elite,speed=(9+math.min(4.8,elapsed/36))*speedScale,hitClock=0,slow=0,castClock=rng:NextNumber(1,3),seed=nextEnemy})
+  table.insert(enemies,{model=m,pos=pos,hp=hp,maxHp=hp,kind=kind,role=role,family=definition.family,elite=elite,speed=(9+math.min(4.8,elapsed/36))*speedScale,hitClock=0,slow=0,castClock=rng:NextNumber(1,3),seed=nextEnemy})
  end
  local function spawn(dt,alive,elapsed)
   if elapsed>=roundLength or(deps.clock and deps.clock.phase~='survival')then return end
@@ -29,12 +35,7 @@ return function(deps)
   if spawnClock>0 or #enemies>=84 then return end
   local fieldActive=deps.clock and deps.clock.fieldBoss~=nil
   spawnClock=math.max(.28,.8-elapsed*.0035)/math.max(1,alive*.65)/(fieldActive and .6 or 1)
-  local pool={'stalker','stalker','stalker','stalker','stalker','stalker'}
-  if elapsed>=12 then table.insert(pool,'skitter');table.insert(pool,'skitter');table.insert(pool,'skitter')end
-  if elapsed>=28 then table.insert(pool,'brute');table.insert(pool,'brute')end
-  if elapsed>=42 then table.insert(pool,'caster');table.insert(pool,'caster')end
-  if elapsed>=60 and not fieldActive then table.insert(pool,'ember')end
-  if elapsed>=32 then table.insert(pool,'charger');table.insert(pool,'charger')end
+  local pool=catalog.Pool(elapsed,fieldActive)
   local a=rng:NextNumber(0,math.pi*2)
   create(pool[rng:NextInteger(1,#pool)],Vector3.new(math.cos(a)*77,3,math.sin(a)*77),elapsed)
   if elapsed>=nextPack and not fieldActive then
@@ -53,9 +54,13 @@ return function(deps)
  local function shoot(e,direction)
   e.model:SetAttribute('AttackSequence',(e.model:GetAttribute('AttackSequence')or 0)+1)
   if #shots>=20 then return end
-  local p=Instance.new('Part');p.Name='EnemyArcaneBolt';p.Shape=Enum.PartType.Ball;p.Size=Vector3.one*.75;p.Color=Color3.fromRGB(226,126,255);p.Material=Enum.Material.Neon;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Position=e.pos+Vector3.new(0,1.1,0);p.Parent=deps.world
+  local definition=catalog.Get(e.kind)
+  local rgb=definition and definition.cueColor or {226,126,255}
+  local color=Color3.fromRGB(rgb[1],rgb[2],rgb[3])
+  local p=Instance.new('Part');p.Name='EnemyArcaneBolt';p.Shape=Enum.PartType.Ball;p.Size=Vector3.one*.75;p.Color=color;p.Material=Enum.Material.Neon;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Position=e.pos+Vector3.new(0,definition and definition.projectileHeight or 1.1,0)
+  p:SetAttribute('EnemyKind',e.kind);p:SetAttribute('EnemyFamily',definition and definition.family or 'undead');p.Parent=deps.world
   local a=Instance.new('Attachment');a.Position=Vector3.new(0,.2,0);a.Parent=p;local b=Instance.new('Attachment');b.Position=Vector3.new(0,-.2,0);b.Parent=p
-  local trail=Instance.new('Trail');trail.Attachment0=a;trail.Attachment1=b;trail.Lifetime=.23;trail.Color=ColorSequence.new(Color3.fromRGB(239,179,255));trail.Transparency=NumberSequence.new(.15,1);trail.LightEmission=1;trail.Parent=p
+  local trail=Instance.new('Trail');trail.Attachment0=a;trail.Attachment1=b;trail.Lifetime=.23;trail.Color=ColorSequence.new(color:Lerp(Color3.new(1,1,1),.4));trail.Transparency=NumberSequence.new(.15,1);trail.LightEmission=1;trail.Parent=p
   table.insert(shots,{part=p,pos=p.Position,direction=direction,life=3.4})
  end
  local function stepShots(dt)
@@ -79,6 +84,9 @@ return function(deps)
    local e=enemies[i]
    if e.isBoss or e.isFieldBoss then continue end
    if e.hp<=0 then table.remove(enemies,i);continue end
+   -- Legacy fixtures/actors may omit role; resolve identity through the catalog.
+   local definition=catalog.Get(e.kind)
+   local role=e.role or(definition and definition.role)or e.kind
    local target,dist=nil,math.huge
    for _,s in pairs(states)do local r=rootOf(s);if r then local d=flat(r.Position-e.pos).Magnitude;if d<dist then target,dist=s,d end end end
    if not target then continue end
@@ -88,7 +96,7 @@ return function(deps)
    local moving=e.frozen<=0
    local move=diff.Magnitude>.01 and diff.Unit or Vector3.zero
    local speed=e.speed*(e.slow>0 and .45 or 1)
-   if e.kind=='charger'then
+   if role=='charger'then
     e.castClock=math.max(0,(e.castClock or 0)-(moving and dt or 0))
     if e.chargeTime then
      if moving then e.chargeTime-=dt end
@@ -100,13 +108,14 @@ return function(deps)
      moving=false
      local marker=e.model:FindFirstChild('ChargeWarning')
      if not marker then
-      marker=Instance.new('Part');marker.Name='ChargeWarning';marker.Size=Vector3.new(4,.06,23);marker.Color=Color3.fromRGB(255,151,75);marker.Material=Enum.Material.Neon;marker.Transparency=.7;marker.Anchored=true;marker.CanCollide=false;marker.CanTouch=false;marker.CanQuery=false;marker.Parent=e.model
+      local rgb=definition and definition.cueColor or {255,151,75}
+      marker=Instance.new('Part');marker.Name='ChargeWarning';marker.Size=Vector3.new(4,.06,23);marker.Color=Color3.fromRGB(rgb[1],rgb[2],rgb[3]);marker.Material=Enum.Material.Neon;marker.Transparency=.7;marker.Anchored=true;marker.CanCollide=false;marker.CanTouch=false;marker.CanQuery=false;marker.Parent=e.model
      end
      local start=Vector3.new(e.pos.X,.18,e.pos.Z);marker.CFrame=CFrame.lookAt(start+e.chargeDirection*11.5,start+e.chargeDirection*23)
-     if (e.chargeWindup or 0)>=.85 then marker:Destroy();e.chargeTime=.65;e.chargeWindup=0 end
+     if (e.chargeWindup or 0)>=.85 then marker:Destroy();e.chargeTime=.65;e.chargeWindup=0;e.model:SetAttribute('AttackSequence',(e.model:GetAttribute('AttackSequence')or 0)+1)end
     else e.chargeDirection=nil end
-   elseif e.kind=='caster'then
-    e.castClock-=moving and dt or 0
+   elseif role=='caster'then
+    e.castClock=(e.castClock or 0)-(moving and dt or 0)
     if moving and dist<34 and e.castClock<=0 then
      moving=false;e.windup=(e.windup or 0)+dt
      if not e.castDirection then e.castDirection=move end
@@ -115,7 +124,7 @@ return function(deps)
     elseif dist<18 then
      if moving then move=Vector3.new(-move.Z,0,move.X)*(e.seed%2==0 and 1 or -1);speed*=.65 end
     end
-   elseif e.kind=='ember'and(e.detonating or dist<8)then
+   elseif role=='ember'and(e.detonating or dist<8)then
     if not e.detonating then
      e.detonating=true;e.blastPoint=e.pos;e.fuse=0
      local marker=Instance.new('Part');marker.Name='EnemyBlastWarning';marker.Shape=Enum.PartType.Cylinder;marker.Size=Vector3.new(.08,12,12);marker.CFrame=CFrame.new(e.pos.X,.17,e.pos.Z)*CFrame.Angles(0,0,math.pi/2);marker.Material=Enum.Material.Neon;marker.Color=Color3.fromRGB(255,74,45);marker.Transparency=.78;marker.Anchored=true;marker.CanCollide=false;marker.CanTouch=false;marker.CanQuery=false;marker.Parent=e.model
@@ -129,23 +138,24 @@ return function(deps)
      if deps.drop then deps.drop(e.pos)end;e.hp=0;e.model:Destroy();continue
     end
    end
-   if e.kind=='skitter'and dist>7 and dist<35 then
+   if role=='skitter'and dist>7 and dist<35 then
     local tangent=Vector3.new(-move.Z,0,move.X)*(e.seed%2==0 and 1 or -1)
     move=(move+tangent*.65).Unit
    end
    if moving and dist>2.5 then e.pos=bound(e.pos+move*math.min(dist-2.5,speed*dt))end
-   if e.model.Parent then e.model:SetAttribute('Preparing',(e.windup or 0)>0);e.model:SetAttribute('Detonating',e.detonating==true)end
+   if e.model.Parent then e.model:SetAttribute('Preparing',(e.windup or 0)>0 or(e.chargeWindup or 0)>0);e.model:SetAttribute('Detonating',e.detonating==true)end
    if e.model.Parent and diff.Magnitude>.01 then
-    local bob=e.kind=='caster'and math.sin(time*2+e.seed)*.25 or math.sin(time*(e.kind=='skitter'and 9 or 4)+e.seed)*.08
+    -- New families animate only in the client; their damage anchor stays grounded.
+    local bob=definition and(definition.family=='slime'or definition.family=='crystal')and 0 or(e.kind=='caster'and math.sin(time*2+e.seed)*.25 or math.sin(time*(e.kind=='skitter'and 9 or 4)+e.seed)*.08)
     e.model:PivotTo(CFrame.lookAt(e.pos+Vector3.new(0,bob,0),e.pos+Vector3.new(0,bob,0)+move))
    end
-   if e.kind~='caster'and e.kind~='ember'and dist<4 and e.hitClock<=0 and e.frozen<=0 then
-    if harm(target,e.kind=='brute'and 11 or(e.kind=='charger'and 12 or(e.kind=='skitter'and 6 or 8)))then e.hitClock=.95;e.model:SetAttribute('AttackSequence',(e.model:GetAttribute('AttackSequence')or 0)+1)end
+   if role~='caster'and role~='ember'and dist<4 and e.hitClock<=0 and e.frozen<=0 then
+    if harm(target,definition and definition.contactDamage or 8)then e.hitClock=.95;e.model:SetAttribute('AttackSequence',(e.model:GetAttribute('AttackSequence')or 0)+1)end
    end
   end
  end
  local function resetSpawn()
-  spawnClock=0;time=0;nextPack=18
+  spawnClock=0;time=0;nextPack=18;table.clear(variants)
   for _,s in ipairs(shots)do s.part:Destroy()end;table.clear(shots)
  end
  return {Spawn=spawn,Step=step,ResetSpawn=resetSpawn}

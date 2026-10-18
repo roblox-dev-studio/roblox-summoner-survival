@@ -626,3 +626,14 @@ Branch codex/light-skills-four-loadout, baseline8316189. Fetched team/main and c
 - 로컬 증거 `artifacts/augment-vfx-review/`: ward-base.png, ward-augmented.png, blades-volley.png, meteor-wide.png, ice-corridor.png, verification.json. Git 제외 파일입니다. 기존 CorePackages FoundationProvider 및 asset203785492 타입 경고는 기존 환경 문제로 남습니다.
 - 저장 한계: 마지막 CUA 저장 호출에서 Mac 잠금 응답을 받았습니다. Studio의 최신 Edit 변경16개 소스는 작업 트리와 정확히 일치함을 MCP로 확인했습니다. 이전 Studio 저장본의 월드 객체를 보존하고149개 전체 소스를 갱신한 별도 `artifacts/augment-vfx-review/AugmentVFXReview.rbxlx`를 생성·파일 내용 일치 확인했습니다. **새 파일 재열기/Studio 직접 저장은 이번 마지막 단계에서 하지 못했습니다.** 원래 열려 있는 AugmentReview.rbxlx에는 저장되지 않은 최신 수정이 남아 있을 수 있습니다. Play는 종료했습니다.
 - 남은 검수: 실제2인, 모바일/패드·작은 화면, 최대 적/복합 마법의 프레임·가독성, 전체22개 연속 전투의 미술/청취·밸런스. 풀 상한은 새 레이어 제한이며 성능 측정 결과가 아닙니다. 새 코드로 몹 외형/전체 생존→보스 승리를 다시 인수하지 않았습니다.
+
+## 2026-10-18 · 슬라임·결정체6종과 증강6개 보강
+
+- 기준 `de46a3f` 후속. 진입점2개+src 정렬 경로/내용 NUL 구분 SHA-256 `ef899ac4aef489768fba81c15744277d33a3cfe612da9a3f055622e090eaa967`. 일반 적 기존6+신규6=12종, 전용 증강22개 중6개 표현 보강입니다. 이후 요청된 로비/아이콘 변경 전 인수 묶음입니다.
+- 정적: Python8개, 성장/장착/행운·증강/22시각 ID·12적 카탈로그 순수 회귀, Luau153개 문법/전역 검사 통과. 인수한 소스에서 설치기를 재생성했습니다.
+- 엔진: 독립 Studio `434a088f-5ad4-4b16-86ab-0273ee1fd09f`의 AugmentReview.rbxlx Edit에14개 신규/변경 소스 반영 후 Play 재시작. 마지막 뷰어2개 소스도 반영 후 재시작/뷰어 fixture 재검사. Mac 잠금 때문에 새 Baseplate UI는 열지 못하고 이전 독립 검증 place를 사용했습니다.
+- Server `studio_enemy_families` 통과:12종/4종족·84상한,역할별 체력·접촉 피해,새 원거리형2종의 예고/발사/6피해/지상 앵커,수정 돌진 방향 고정·빙결,대시/카드 선택 보호,필드보스 무리/자폭 억제·120초/드래곤 생성 차단. 기존 `studio_enemies`, `studio_wave_density`, 수정한 `studio_sky_lances` 통과. 새 원거리형에 전진 예측을 잘못 적용하던 비교를 role 기준으로 수정했습니다.
+- Client `studio_enemy_family_visuals` 통과:6종×일반/정예12개,모든 포즈,1.2배 크기·바닥 접점·동결·컬링 위치 이동·서버 앵커 불변·정리. 정예 최대 부품31개. `studio_enemy_preview`12종의 모델/동작 시연과 기존 `studio_enemy_roster`6종 장비·관절 회귀 통과. 직접 포즈 시간을 전진한 엔진 fixture이며 화면 검토 결과는 아닙니다.
+- 화면 제약: Mac 잠금 상태에서2초 관측 Heartbeat119/PreRender0. `studio_enemy_live_roster`는 RenderStepped0/Heartbeat120을 감지해 ENVIRONMENT_UNAVAILABLE로 중단했습니다.24개 실전 표시기의 연속 모션/동결 전환은 아직 통과 처리하지 않았습니다. 화면 캡처도 응답하지 않아 중단했습니다.
+- `studio_augment_art`는 처음 실제 PreRender가 없어 운석 정상수명 반환 assertion에서 실패했습니다. 이후 기존 Animator._step 테스트 훅을 임시 Heartbeat 연결로2113회 전진해,실제 엔진 객체에서22전용/44시연·6충격 수명·40작업/192파편/24입자홀더 포화·재사용·일시정지·컨테이너 교체·정리·오류0을 확인했습니다. 임시 연결은 제거했습니다. **수동 애니메이션 시계 검증이며 자연 프레임/시각 품질 통과가 아닙니다.**
+- 남은 인수: 잠금 해제 후 N의 종족 필터/12종 실제 외형,새6종 혼합 전투와24모델 실전 표시기, P의6개 효과 전후 비교,일반 생존→보스/로비 재시작,실제2인·모바일·부하·청취·밸런스. 소스/엔진 수치만으로 미술 완성·프레임 성능·재미를 승인하지 않습니다.

@@ -1,0 +1,20 @@
+{
+  "name": "Slime and Crystal enemy families",
+  "authorship": "Project original procedural geometry and animation",
+  "externalFiles": [],
+  "sourceFiles": {
+    "src/client/world/SlimeMesh.luau": "146c62bc215fa8a5ff72c50246b84ebc9f159134671ef5eafd8c0e519f66bdd4",
+    "src/client/world/CrystalMesh.luau": "6ea9a2ae0f0078f2ded05a994adcbb7fcb737ef572c188d5cbf160413da805ca"
+  },
+  "profiles": [
+    "slime_blob",
+    "slime_spitter",
+    "slime_bulwark",
+    "crystal_scout",
+    "crystal_lancer",
+    "crystal_mage"
+  ],
+  "reproduction": "python3 tools/build_installer.py; install in an isolated Studio Baseplate; Play then N",
+  "geometry": "Native Part/WedgePart, no uploaded mesh, texture or runtime EditableMesh requirement",
+  "verification": "Engine fixtures recorded in docs/PLAYTEST_NOTES.md; visual review pending"
+}

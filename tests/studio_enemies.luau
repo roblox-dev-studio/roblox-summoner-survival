@@ -12,7 +12,7 @@ local ok,result=xpcall(function()
  local kinds={'stalker','skitter','brute','caster','ember','charger'}
  local selected={}
  -- A fresh pack may add six actors; inspect the first newly spawned actor.
- for i,value in ipairs({1,7,10,12,14,15})do index=value;local before=#enemies;waves.Spawn(2,1,90);local e=enemies[before+1];selected[i]=e;assert(e.kind==kinds[i]);assert(e.model:GetAttribute('EnemyKind')==kinds[i])end
+ for i,value in ipairs({1,7,10,12,14,15})do index=value;local before=#enemies;waves.Spawn(2,1,90);local e=enemies[before+1];selected[i]=e;assert(e.role==kinds[i]);assert(e.model:GetAttribute('EnemyKind')==e.kind and e.model:GetAttribute('EnemyRole')==kinds[i])end
  for _,e in ipairs(enemies)do if not table.find(selected,e)then e.hp=0;e.model:Destroy()end end
  table.clear(enemies);for _,e in ipairs(selected)do table.insert(enemies,e)end
  assert(enemies[2].speed>enemies[1].speed and enemies[3].speed<enemies[1].speed and enemies[3].hp>enemies[1].hp,'Role stats')

@@ -9,7 +9,7 @@ local ok,result=xpcall(function()
  for i=1,1200 do waves.Spawn(.05,1,90);if i%100==0 then task.wait()end end
  assert(#enemies==84,'Hard cap bounds the denser wave')
  local elites,chargers=0,0
- for _,e in ipairs(enemies)do if e.elite then elites+=1;assert(e.model:FindFirstChild('EliteCrown'),'Elite is visibly marked')end;if e.kind=='charger'then chargers+=1 end end
+ for _,e in ipairs(enemies)do if e.elite then elites+=1;assert(e.model:FindFirstChild('EliteCrown'),'Elite is visibly marked')end;if e.role=='charger'then chargers+=1 end end
  assert(elites>0 and chargers>0,'Late mix contains elites and chargers')
  return {opening=firstTen,cap=#enemies,elites=elites,chargers=chargers,pack=true}
 end,debug.traceback)

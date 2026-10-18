@@ -34,7 +34,7 @@ return function()
     -- Far actors keep the shared mesh, but skip bone evaluation until near the camera.
     if not camera or(camera.CFrame.Position-target.Position).Magnitude<110 then
      local preparing=model:GetAttribute('Preparing')
-     if not preparing then rig.prepareTime=0 elseif not frozen then rig.prepareTime+=delta end
+     if not frozen then if preparing then rig.prepareTime+=delta else rig.prepareTime=0 end end
      rig.charging=preparing or model:GetAttribute('Detonating')
      local mode=preparing and'prepare'or(rig.attackTime<mesh.duration(rig,'attack')and'attack'or(rig.motion.speed>.35 and'walk'or'idle'))
      if frozen then mode=rig.mode or'idle'end;rig.mode=mode
@@ -42,7 +42,9 @@ return function()
      if model:GetAttribute('EnemyKind')=='commander'then
       mesh.pose(rig,visualFrame,rig.motion.gait,model:GetAttribute('FieldAction')or'idle')
      else
-     mesh.pose(rig,visualFrame,mode=='prepare'and rig.prepareTime or(mode=='attack'and rig.attackTime or(mode=='walk'and rig.motion.gait or rig.motion.time)),mode)
+     local clock=mode=='prepare'and rig.prepareTime or(mode=='attack'and rig.attackTime or(mode=='walk'and rig.motion.gait or rig.motion.time))
+     if frozen then clock=rig.poseTime or clock else rig.poseTime=clock end
+     mesh.pose(rig,visualFrame,clock,mode)
      end
     else mesh.place(rig,rig.frame)end
    end
