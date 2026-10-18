@@ -5,7 +5,8 @@ return function(deps)
  local rootOf,effect,factory=deps.rootOf,deps.effect,deps.modelFactory
  local boss,rig,action=nil,nil,nil
  local t,cooldown,pattern=0,1,0
- local order={'breath','airBreath','dive','eruption','tail','flameCross','airCross','airRing'}
+ local tailReadyAt=0
+ local order={'breath','airBreath','dive','eruption','flameCross','airCross','airRing'}
  local markers=Instance.new('Folder');markers.Name='BossTelegraphs';markers.Parent=world
  local red=Color3.fromRGB(255,91,61)
  local function flat(v)return Vector3.new(v.X,0,v.Z)end
@@ -53,11 +54,11 @@ return function(deps)
   if boss then return end
   for _,e in ipairs(enemies)do if e.hp>0 and not e.isBoss then deps.drop(e.pos);e.hp=0;e.model:Destroy()end end
   if deps.clearEnemyShots then deps.clearEnemyShots()end
-  local count=0;for _,s in pairs(states)do if rootOf(s)then count+=1 end end
+  local count,testMode=0,false;for _,s in pairs(states)do if rootOf(s)then count+=1;if s.bossTest then testMode=true end end end
   rig=factory.create(world,CFrame.new(0,0,-34));rig.model.Name='EmberDragon'
-  local hp=2880*(1+.7*math.max(0,count-1))
+  local hp=2880*(testMode and 2 or 1)*(1+.7*math.max(0,count-1))
   boss={name='흑염룡 · 아그니스',model=rig.model,pos=Vector3.new(0,3,-34),hp=hp,maxHp=hp,isBoss=true,slow=0,frozen=0,speed=16,heading=Vector3.new(0,0,1),phase=1,altitude=0}
-  boss.model:SetAttribute('HP',hp);boss.model:SetAttribute('MaxHP',hp)
+  boss.model:SetAttribute('HP',hp);boss.model:SetAttribute('MaxHP',hp);boss.model:SetAttribute('BossTest',testMode)
   table.insert(enemies,boss);clock.boss=boss;clock.phase='boss';clock.bossElapsed=0;t,cooldown,pattern=0,1,0
   effect:FireAllClients('dragonArrival',boss.pos,16)
  end
@@ -77,9 +78,15 @@ return function(deps)
   end
   for _,angle in ipairs({-a.angle,a.angle})do local d=CFrame.Angles(0,math.rad(angle),0):VectorToWorldSpace(a.direction);part('BreathEdge',Vector3.new(.16,.08,a.range),CFrame.lookAt(center+d*a.range/2,center+d*(a.range/2+1)),.1)end
  end
+ local function rearTarget(target)
+  local offset=flat(target-boss.pos);local distance=offset.Magnitude
+  return t>=tailReadyAt and distance>1 and distance<=30 and boss.heading:Dot(offset.Unit)<-.35
+ end
  local function begin(target)
-  clear();pattern=pattern%#order+1
-  local kind=order[pattern];boss.heading=directionTo(boss.pos,target)
+  clear()
+  local kind
+  if rearTarget(target)then kind='tail';tailReadyAt=t+8
+  else pattern=pattern%#order+1;kind=order[pattern];boss.heading=directionTo(boss.pos,target)end
   action={kind=kind,time=0,hit={},origin=flat(boss.pos),direction=boss.heading,phase=boss.phase}
   local a=action;local right=a.direction:Cross(Vector3.yAxis)
   if kind=='eruption'then
@@ -105,8 +112,11 @@ return function(deps)
    end
   elseif kind=='tail'then
    a.windup=1;a.spinDuration=1.35;a.total=2.55;a.radius=boss.phase==2 and 24 or 22
-   local desired=flat(bounded(target-a.direction*6));local delta=desired-a.origin
-   a.finish=a.origin+(delta.Magnitude>30 and delta.Unit*30 or delta);disc(a.finish,a.radius,'TailWarning')
+   a.finish=a.origin
+   local turnDirection=directionTo(boss.pos,target)
+   a.turnAngle=math.atan2(a.direction:Cross(turnDirection).Y,a.direction:Dot(turnDirection))
+   a.coilAngle=-(a.turnAngle>=0 and 1 or -1)*math.rad(18)
+   disc(a.finish,a.radius,'TailWarning')
   else
    a.windup=.9;a.travelDuration=.55;a.total=1.8;a.halfWidth=11;a.radius=16;a.finish=flat(bounded(boss.pos+a.direction*46))
    local length=flat(a.finish-a.origin).Magnitude
@@ -176,16 +186,18 @@ return function(deps)
     local move=math.clamp(a.time/a.windup,0,1);boss.pos=a.origin:Lerp(a.finish,move*move*(3-2*move))
     local coil=math.clamp((a.time-.5)/(a.windup-.5),0,1)
     if a.time<a.windup then
-     pose=a.time<.5 and 'walk'or'tailWindup';progress=coil
-     boss.heading=CFrame.Angles(0,math.rad(18)*coil*coil*(3-2*coil),0):VectorToWorldSpace(a.direction)
+     pose='tailWindup';progress=coil
+     boss.heading=CFrame.Angles(0,a.coilAngle*coil*coil*(3-2*coil),0):VectorToWorldSpace(a.direction)
     end
     if a.time>=a.windup then
      local spin=math.clamp((a.time-a.windup)/a.spinDuration,0,1)
      local eased=spin*spin*spin*(spin*(spin*6-15)+10)
      progress=spin
-     boss.heading=CFrame.Angles(0,math.rad(18)-(math.pi*2+math.rad(18))*eased,0):VectorToWorldSpace(a.direction)
+     boss.heading=CFrame.Angles(0,a.coilAngle+(a.turnAngle-a.coilAngle)*eased,0):VectorToWorldSpace(a.direction)
      if not a.started then a.started=true;clear();effect:FireAllClients('dragonTailSpin',boss.model,a.radius,a.spinDuration)end
-     if eased>=.28 and not a.impacted then a.impacted=true;hit(function(p)return flat(p-a.finish).Magnitude<=a.radius end,20,a.hit)end
+     if spin>=.12 and spin<=.85 then
+      hit(function(p)local offset=flat(p-a.finish);return offset.Magnitude<=a.radius and(offset.Magnitude<1 or offset.Unit:Dot(-boss.heading)>=math.cos(math.rad(70)))end,20,a.hit)
+     end
     end
    else
     if a.time<a.windup then boss.altitude=12*math.sin(a.time/a.windup*math.pi/2);pose='fly'
@@ -202,7 +214,7 @@ return function(deps)
    cooldown-=dt
    -- Long-range attacks engage immediately; no chase-until-38-studs gate.
    if cooldown<=0 then begin(target)
-   elseif best>15 and t>1 then
+   elseif best>15 and t>1 and not rearTarget(target)then
     pose='walk';local desired=directionTo(boss.pos,target);local alpha=1-math.exp(-dt*8)
     boss.heading=CFrame.lookAt(Vector3.zero,boss.heading):Lerp(CFrame.lookAt(Vector3.zero,desired),alpha).LookVector
     boss.pos=bounded(boss.pos+boss.heading*math.min(best-15,boss.speed*(boss.slow>0 and .8 or 1)*dt))
@@ -222,7 +234,7 @@ return function(deps)
  end
  local function reset()
   if boss and boss.model.Parent then boss.model:Destroy()end
-  boss,rig,action=nil,nil,nil;clock.boss=nil;clock.bossElapsed=0;clock.phase='survival';t,cooldown,pattern=0,1,0
+  boss,rig,action=nil,nil,nil;clock.boss=nil;clock.bossElapsed=0;clock.phase='survival';t,cooldown,pattern=0,1,0;tailReadyAt=0
   if not markers.Parent then markers=Instance.new('Folder');markers.Name='BossTelegraphs';markers.Parent=world else clear()end
  end
  return {Step=step,Resolve=resolve,Reset=reset}

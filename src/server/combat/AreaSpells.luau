@@ -39,7 +39,7 @@ return function(deps)
     deps.damage(e,amount,s)
     if cast.kind=='frost' and e.hp>0 then
      e.slow=math.max(e.slow or 0,2.5)
-     if not e.isBoss then e.frozen=math.max(e.frozen or 0,.8+cast.level*.2);e.model:SetAttribute('Frozen',true)end
+     if not e.isBoss and not e.isFieldBoss then e.frozen=math.max(e.frozen or 0,.8+cast.level*.2);e.model:SetAttribute('Frozen',true)end
     end
    end
   end

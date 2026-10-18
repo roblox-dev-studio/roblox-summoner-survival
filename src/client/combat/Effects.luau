@@ -344,9 +344,11 @@ return function(deps)
 			task.delay(duration+.2,function()if model.Parent and not model:GetAttribute("Frozen") then clear() end end)
 		end
 	end
+	local fieldArt=require(script.Parent.Parent.world.FieldBossArt)(fx)
 	local function play(kind,a,b,c)
 		if not fx.Parent then return end
-		if kind=="hit" then
+		if kind=="fieldBoss" then fieldArt(a,b,c)
+        elseif kind=="hit" then
 			local p=visual(Vector3.new(.05,.05,.05),CFrame.new(a+Vector3.new(0,3,0)),palette.text); p.Transparency=1
 			local billboard=make("BillboardGui",p,{Size=UDim2.fromOffset(70,32),AlwaysOnTop=true,Adornee=p})
 			local number=label(billboard,tostring(b),UDim2.fromScale(1,1),nil,Enum.Font.GothamBold,palette.gold); number.TextSize=18

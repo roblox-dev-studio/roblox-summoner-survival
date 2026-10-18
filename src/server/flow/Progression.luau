@@ -40,8 +40,8 @@ return function(deps)
 	local function sync(s)
 		local _,h=rootOf(s)
         local remaining=clock.phase=="boss" and math.floor(clock.bossElapsed) or clock.roundLength-math.floor(clock.elapsed)
-        local b=clock.boss
-		update:FireClient(s.player,{time=math.max(0,remaining),phase=clock.phase,lobby=s.lobby==true,queued=s.queued==true,loadout=s.loadout,spellOptions=s.lobby and spellOptions or nil,activeOptions=s.lobby and deps.activeOptions or nil,activeSkill=s.activeSkill or "fire",activeName=s.activeName or "화염탄",lobbyMessage=s.lobbyMessage,shield=s.shield or 0,boss=b and {name=b.name,hp=math.max(0,b.hp),maxHp=b.maxHp,stage=b.phase,airborne=b.airborne} or nil,level=s.level,xp=s.xp,need=need(s),hp=h and math.ceil(h.Health) or 0,maxHp=h and h.MaxHealth or 100,
+        local b=clock.boss;local f=clock.fieldBoss
+		update:FireClient(s.player,{time=math.max(0,remaining),phase=clock.phase,lobby=s.lobby==true,queued=s.queued==true,bossTestQueued=s.bossTestQueued==true,bossTest=s.bossTest==true,fieldBossTestQueued=s.fieldBossTestQueued==true,fieldBossTest=s.fieldBossTest==true,fieldBoss=f and {name=f.name,hp=math.max(0,f.hp),maxHp=f.maxHp,action=f.action}or nil,loadout=s.loadout,spellOptions=s.lobby and spellOptions or nil,activeOptions=s.lobby and deps.activeOptions or nil,activeSkill=s.activeSkill or "fire",activeName=s.activeName or "화염탄",lobbyMessage=s.lobbyMessage,shield=s.shield or 0,boss=b and {name=b.name,hp=math.max(0,b.hp),maxHp=b.maxHp,stage=b.phase,airborne=b.airborne} or nil,level=s.level,xp=s.xp,need=need(s),hp=h and math.ceil(h.Health) or 0,maxHp=h and h.MaxHealth or 100,
 			kills=s.kills,fire=s.fire,lightning=s.lightning,ice=s.ice,meteor=s.meteor or 0,blades=s.blades or 0,frost=s.frost or 0,ward=s.ward or 0,missile=s.missile or 0,skyLances=s.skyLances or 0,lightRing=s.lightRing or 0,golem=s.golem,offers=s.offers,over=s.over,result=s.result,cooldown=math.max(0,math.ceil(s.cooldown)),dashCooldown=math.ceil((s.dashCooldown or 0)*10)/10,golemCooldown=math.max(0,math.ceil(s.petHeavyCooldown or 0)),paused=paused()})
 	end
 	local function levelCheck(s)
@@ -109,6 +109,13 @@ return function(deps)
     end
 
 	return {
+        FieldBossReward = function(s)
+            if s.fieldBossRewarded or s.bossTest or s.over or s.lobby then return end
+            local _,h=rootOf(s);if not h then return end
+            s.fieldBossRewarded=true;h.Health=math.min(h.MaxHealth,h.Health+h.MaxHealth*.2)
+            -- Preserve any existing card and XP; the extra level waits behind that choice.
+            s.xp+=need(s);levelCheck(s);sync(s)
+        end,
 		Sync = sync,
 		Drop = drop,
 		Choose = choose,

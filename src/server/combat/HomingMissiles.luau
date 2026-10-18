@@ -6,7 +6,7 @@ return function(deps)
   for _,e in ipairs(deps.enemies)do
    local distance=(e.pos-origin).Magnitude
    if e.hp>0 and distance<=58 then
-    local value=(e.isBoss and 1000000 or 0)+math.min(e.hp,100000)*4-distance
+    local value=((e.isBoss or e.isFieldBoss) and 1000000 or 0)+math.min(e.hp,100000)*4-distance
     if value>score then best,score=e,value end
    end
   end

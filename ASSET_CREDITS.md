@@ -86,3 +86,25 @@ User-provided Fireball.webp and saved PNGEgg png-dhxxq.html (canonical https://w
 ### Long tapered fire tail · 2026-10-18
 
 png-clipart-flame-fire-flame.png: user supplied visual reference for a long teardrop flame silhouette; creator and license unestablished. Not imported/uploaded/redistributed. Hash recorded in fire-lightning-reference manifest. No new texture asset added.
+
+## 잿빛 해골 병사 · 2026-10-18
+
+[Kay Lousberg / KayKit Character Pack Skeletons 1.0](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0/tree/15b62b9bad122f72926c10fb14d622c73819fa54), [원본 CC0 라이선스](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0/blob/15b62b9bad122f72926c10fb14d622c73819fa54/LICENSE.txt). Skeleton_Warrior.glb와 skeleton_texture.png를 사용했습니다. 개인/교육/상업 이용 허용, 출처 표기는 의무가 아니지만 원작자를 기록합니다. 유료 EXTRA 및 최신1.1 파일은 사용하지 않았습니다.
+
+원본 42노드 리그/가중치, Idle·Walking_A·Unarmed_Melee_Attack_Punch_A를 보존해 네이티브 Bone 애니메이션으로 변환했습니다. 원본 텍스처의 팔레트는 정점색으로 베이크했습니다. 캐릭터·모션 데이터만 처리했으며 외부 실행 스크립트는 가져오지 않았습니다. 원본/라이선스/SHA-256/고정 커밋/재현 방법은 assets/enemies/kaykit-skeletons와 tools/convert_skeleton.py에 있습니다.
+
+### 해골 몹 확장과 무기 · 2026-10-18
+
+같은 CC0 [KayKit Skeletons1.0 고정 리비전](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0/tree/15b62b9bad122f72926c10fb14d622c73819fa54)의 Skeleton_Mage/Rogue/Minion.glb와 Skeleton_Axe/Blade/Shield_Large_A/Shield_Small_A/Staff.gltf 및 대응 bin/원본 팔레트 PNG를 추가했습니다. 캐릭터용/무기용 팔레트 SHA-256이 같음을 확인했습니다. 원본 파일 해시는 기존 manifest.files에 모두 기록했습니다. 유료 EXTRA·외부 스크립트는 사용하지 않았습니다.
+
+기존 skitter/caster/ember 역할에 각각 Rogue/Mage/Minion 외형을 연결하고 brute는 Warrior를 크게 표시합니다. 무기/방패/지팡이는 원본 hand-slot Bone에 붙여 모션을 따라갑니다. 직립 모델은 원본 걷기/달리기/쌍검/시전 클립을 사용합니다. 잿불 뿔사냥개, 폭탄·띠·도화선과 원래 전투 이펙트는 프로젝트에서 직접 구성한 형상입니다.
+
+### 병사 걷기 모션 교체
+
+처음 선택한 Walking_D_Skeletons는 머리/투구가 한쪽으로 기우는 연출을 포함해, 같은 CC0 원본의 Walking_A로 교체했습니다. 원본 GLB/라이선스/해시는 그대로이며 tools/convert_skeleton.py와 manifest.characters.Warrior.clips.Walk에 현재 선택을 기록합니다. 앞선 spine 평균 기울기 보정은 제거했습니다.
+
+## 망령 기마 군단장 · 2026-10-18
+
+- 기수는 위에 기록한 KayKit Skeletons 1.0 CC0 Warrior 원본과 장비를 재사용합니다. 추가 동작은 같은 GLB의 `1H_Melee_Attack_Slice_Horizontal`, `Blocking`, `Block_Attack`, `Sit_Chair_Idle`입니다. 새 네트워크 소재나 제3자 스크립트는 추가하지 않았습니다.
+- 군마의 몸·목·두개골·관절 다리·고삐·갈기·꼬리, 왕관·남색 망토와 영혼 궤적은 이 프로젝트에서 작성한 절차 모델입니다. 재현 소스: `src/client/world/CommanderMount.luau`, `FieldBossArt.luau`. 실제 피해/예고는 서버 `FieldBoss.luau`에 있습니다.
+- 변환: 기존 `tools/convert_skeleton.py --character Warrior`를 NumPy/Pillow 환경에서 실행합니다. 원본 SHA와 선택 클립은 `assets/enemies/kaykit-skeletons/manifest.json`, 전체 설치는 `python3 tools/build_installer.py`로 재현합니다.

@@ -12,6 +12,7 @@ local states, enemies, gems = {}, {}, {}
 local rng = Random.new()
 local clock = {elapsed = 0, roundLength = script:GetAttribute("BossSpawnAt") or 120, bossElapsed = 0, phase = "survival"}
 local actors = require(modules.shared.Actors)({world = world})
+if RunService:IsStudio()then require(modules.world.EnemyGallery)({create=require(modules.shared.EnemyModels)({block=actors.Block}),parent=RS})end
 local players = require(modules.shared.PlayerState)({states = states})
 local movement = require(modules.combat.Movement)({
     world = world, rootOf = players.RootOf, paused = players.Paused, effect = net.Effect,
@@ -30,18 +31,20 @@ local waves = require(modules.world.Waves)({
     rootOf = players.RootOf, roundLength = clock.roundLength, clock = clock, world = world, effect = net.Effect, drop = progression.Drop,
 })
 local lobbySpawn=require(modules.world.LobbyWorld)()
-local boss
+local boss,fieldBoss
 local session = require(modules.flow.Session)({
     world = world, states = states, enemies = enemies, gems = gems, rng = rng,
     creature = actors.Create, finishDash = movement.FinishDash,
     clearIceShots = combat.ClearProjectiles, sync = progression.Sync,
-    clock = clock, lobbySpawn=lobbySpawn, resetSpawn = waves.ResetSpawn, resetBoss = function() if boss then boss.Reset() end end,
+    allowBossTest=RunService:IsStudio(),
+    clock = clock, lobbySpawn=lobbySpawn, resetSpawn = waves.ResetSpawn, resetBoss = function() if boss then boss.Reset() end;if fieldBoss then fieldBoss.Reset()end end,
 })
 boss = require(modules.world.Boss)({
     world = world, enemies = enemies, states = states, clock = clock,
     rootOf = players.RootOf, effect = net.Effect, drop = progression.Drop,
     modelFactory = require(RS:WaitForChild("EmberDragonModel")), endPlayer = session.EndPlayer, clearEnemyShots = waves.ResetSpawn,
 })
+fieldBoss=require(modules.world.FieldBoss)({world=world,enemies=enemies,states=states,clock=clock,rootOf=players.RootOf,creature=actors.Create,effect=net.Effect,reward=progression.FieldBossReward})
 net.Action.OnServerEvent:Connect(function(player,kind,id,activeId)
     local s = states[player]
     if not s then return end
@@ -65,6 +68,8 @@ net.Action.OnServerEvent:Connect(function(player,kind,id,activeId)
         return
     end
     if s.previewDragon or s.previewSkills then return end
+    if kind == "startFieldBossTest" then if RunService:IsStudio()then session.StartFieldBossTest(s,id,activeId)end;return end
+    if kind == "startBossTest" then if RunService:IsStudio()then session.StartBossTest(s,id,activeId)end;return end
     if kind == "startRound" then session.StartRound(s,id,activeId); return end
     if kind == "cancelReady" then session.CancelReady(s); return end
     if s.lobby then return end
@@ -92,6 +97,7 @@ RunService.Heartbeat:Connect(function(dt)
     local alive = players.LiveCount()
     if alive > 0 and not players.Paused() then
         clock.elapsed += dt
+        fieldBoss.Step(dt)
         boss.Step(dt)
         -- Keep the prototype's simulation order; changing it can change hits and XP timing.
         waves.Spawn(dt,alive,clock.elapsed)
@@ -108,6 +114,7 @@ RunService.Heartbeat:Connect(function(dt)
             end
         end
         progression.Collect(dt)
+        fieldBoss.Resolve()
         boss.Resolve()
     end
     sendClock += dt

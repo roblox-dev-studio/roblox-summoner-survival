@@ -61,9 +61,19 @@ return function(deps)
    count+=1
   end
   if count==0 then return end
+  local bossTest,fieldTest
+  for _,state in pairs(states)do
+   if bossTest==nil then bossTest=state.bossTestQueued==true elseif bossTest~=(state.bossTestQueued==true)then return end
+  end
+  for _,state in pairs(states)do
+   if fieldTest==nil then fieldTest=state.fieldBossTestQueued==true elseif fieldTest~=(state.fieldBossTestQueued==true)then return end
+  end
+  if bossTest then clock.elapsed=clock.roundLength elseif fieldTest then clock.elapsed=60 end
   for p,state in pairs(states)do
+   state.bossTest=bossTest;state.bossTestQueued=nil;state.fieldBossTest=fieldTest;state.fieldBossTestQueued=nil
    state.lobby=false;state.queued=false;state.lobbyMessage=nil
-   for _,id in ipairs(state.loadout)do state[id]=1 end
+   for _,id in ipairs(state.loadout)do state[id]=bossTest and 5 or(fieldTest and 3 or 1) end
+   if bossTest then state.golem=5;state.level=21 elseif fieldTest then state.golem=3;state.level=11 end
    saved[p]=table.clone(state.loadout);savedActive[p]=state.activeSkill
    local c=p.Character;local r=c.HumanoidRootPart;local h=c:FindFirstChildOfClass('Humanoid')
    r.CFrame=CFrame.new(rng:NextNumber(-4,4),4,rng:NextNumber(-4,4));r.AssemblyLinearVelocity=Vector3.zero
@@ -71,8 +81,9 @@ return function(deps)
    sync(state)
   end
  end
- local function startRound(s,ids,activeId)
+ local function startRound(s,ids,activeId,bossTest,fieldTest)
   if not s.lobby or not s.loaded or starting then return end
+  if (bossTest or fieldTest) and deps.allowBossTest~=true then return end
   local now=os.clock();if now-(s.lastLobbyRequest or -10)<.5 then return end;s.lastLobbyRequest=now
   activeId=activeId or s.activeSkill or 'fire'
   if not loadouts.ValidateActive(activeId) then s.lobbyMessage='사용할 Q 스킬을 선택해 주세요.';sync(s);return end
@@ -81,10 +92,15 @@ return function(deps)
   for _,other in pairs(states)do
    if not other.lobby then s.lobbyMessage='진행 중인 전투가 끝난 뒤 함께 출발할 수 있어요.';sync(s);return end
   end
+  for _,other in pairs(states)do
+   if other~=s and other.queued and((other.bossTestQueued==true)~=(bossTest==true)or(other.fieldBossTestQueued==true)~=(fieldTest==true))then s.lobbyMessage='전원이 일반 전투 또는 보스전 테스트 중 같은 모드를 선택해 주세요.';sync(s);return end
+  end
+  s.fieldBossTestQueued=fieldTest==true
+  s.bossTestQueued=bossTest==true
   s.activeSkill=activeId;s.activeName=loadouts.ActiveNames[activeId];s.loadout=valid;s.queued=true;s.lobbyMessage=nil;sync(s);tryStart()
  end
  local function cancelReady(s)
-  if s.lobby and s.queued then s.queued=false;sync(s)end
+  if s.lobby and s.queued then s.queued=false;s.bossTestQueued=nil;s.fieldBossTestQueued=nil;sync(s)end
  end
  local function returnToLobby(s)
   if states[s.player]~=s or s.lobby or s.returning or starting then return end
@@ -114,7 +130,9 @@ return function(deps)
 		RemovePlayer = removePlayer,
 		EndPlayer = endPlayer,
 		Restart = restart,
-		StartRound = startRound,
+		StartRound = function(s,ids,activeId)return startRound(s,ids,activeId,false)end,
+        StartFieldBossTest = function(s,ids,activeId)return startRound(s,ids,activeId,false,true)end,
+        StartBossTest = function(s,ids,activeId)return startRound(s,ids,activeId,true)end,
 		CancelReady = cancelReady,
         ReturnToLobby = returnToLobby,
 	}

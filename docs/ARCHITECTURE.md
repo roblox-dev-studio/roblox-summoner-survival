@@ -301,3 +301,73 @@ Effect 계약 추가: lightCast(anchorName,kind), lightHit(position,kind), basic
 인자 없는 returnToLobby Action만 허용합니다. Session은 현재 상태 동일성/로비/복귀 중/재시작 중을 검사하고 대시·발사체·선택·미리보기를 정리합니다. 조합/Q 선택은 같은 접속 중 보존합니다. 동료가 싸우고 있으면 본인만 로비로 재생성하고, 마지막 전투 참가자라면 적·구슬·보스·시간을 전체 초기화합니다. 영구 보상은 지급하지 않습니다. HUD 오른쪽 위 버튼은 카드 선택 중에도 접근 가능하며 패배 화면도 같은 복귀 경로를 사용합니다.
 
 자동 검사, 기존 연결 Studio 엔진 fixture, 단일 클라이언트 UI 조작은 확인했습니다. 새 Baseplate 전체 설치, 실제 두 클라이언트/모바일/패드/최대 부하 성능과 최종 미적 평가는 미검증입니다. 구체적인 검증 기록은 PLAYTEST_NOTES.md를 참고하세요.
+
+
+## 2026-10-18 후방 꼬리 반격·강화 보스전 테스트
+
+Boss의 순환 패턴에서 tail을 제외했습니다. 공격 선택 시 거리1~30/현재 heading과 대상방향 내적<−.35/8초 재사용 간격을 만족하면 순환 인덱스를 소비하지 않고 후방 꼬리 반격을 시작합니다. 준비 중 대상 쪽으로 선회하거나 미끄러지지 않습니다. 1초 준비/1.35초 휘두르기, 기존 완만한 가감속을 유지하되360도 대신 초기 방향에서 잠근 후방 대상 방향까지 선회합니다. 피해는 휘두르기 진행 .12~.85 구간의 현재 후방70도 부채꼴/기존22~24반경에서 적별1회20입니다. 범위 예고/효과는 기존 것을 사용합니다. 꼬리 준비가 가능한 후방 대상은 일반 회복 중 선회로 기회를 지우지 않도록 유지합니다.
+
+Studio 전용 startBossTest(ids,activeId) Action을 추가했습니다. Session.StartBossTest는 allowBossTest 명시값, 기존 로비/로드/속도 제한/네 마법/Q 검증과 준비 모드 일치를 검사합니다. 전체 준비가 끝나면 선택 마법/골렘5단계와 표시 레벨21, clock.elapsed=roundLength를 적용합니다. 다음 공용 시뮬레이션 틱의 Boss.Step이 먼저 보스를 소환하므로 일반 몹 생성 없이 시작합니다. 체력150/Q 고정 수치는 유지합니다. State의 bossTestQueued/bossTest는 클라이언트 표시용이며 권한을 주지 않습니다. 테스트 요청은 서버 RunService:IsStudio와 Session.allowBossTest 양쪽에서 제한합니다.
+
+일반 StartRound는 항상 bossTest=false로 호출합니다. 서로 다른 준비 모드는 출발하지 않으며 취소 시 준비 모드를 지웁니다. 테스트 강화는 saved에 저장하지 않으므로 로비 복귀/일반 출발 시1단계로 초기화됩니다. Lobby의 패널/상태문구 위치를 조정해 기존 스킬 미리보기 버튼과 겹치지 않게 했습니다.
+
+
+## 2026-10-18 몹 카탈로그·테스트 보스 체력
+
+Boss.spawn은 활성 참가자 중 bossTest인 상태가 있으면 기존 협동 배율 적용 전 체력을2배로 합니다. 솔로 일반2,880/테스트5,760이며 일반전·피해·패턴은 동일합니다. BossTest 모델 속성을 기록하고 세션 초기화 시 기존처럼 테스트 플래그가 제거됩니다.
+
+Studio 서버의 EnemyGallery는 EnemyModels/Actors.Block을 그대로 사용해6종의 시각 모델과 이름/역할/설명/순서 속성만 ReplicatedStorage.EnemyPreviewModels에 만듭니다. 서버 AI나 권한 모듈 소스를 복제하지 않습니다. 게시 환경에서는 카탈로그 생성과 EnemyPreview UI 모두 건너뜁니다.
+
+EnemyPreview는 별도 Camera/ViewportFrame/WorldModel과 EnemyPreviewScene을 사용합니다. 실전 모델을 복제하고 정예는 실제와 같은1.2배/왕관을 표시합니다. 대기/이동/공격 시연은 로컬의 설명용 경로·네온 표시이며 실전 AI/피해 판정이 아닙니다. 마도사 .8초 준비 후 마법탄, 돌진 .85초 경로 예고 뒤 .65초 이동, 폭발체1.2초 예고 뒤 범위를 표시합니다. 입력/일시정지/카메라/모델 정리는 UI 내부에 격리됩니다.
+
+새 입력이나 서버 데이터 변경은 추가하지 않고 기존 Studio 전용 previewSkills(boolean)으로 전투를 멈춥니다. client 진입점과 SkillPreview.beforeOpen 콜백으로 몹/스킬/드래곤 뷰어의 동시 열림을 막습니다. 로비 버튼 위치304,642는 보스 테스트/스킬 미리보기/전투 시작과 겹치지 않습니다. N/드래그/휠·패드 입력을 연결하고 창 닫기/변경 시 로컬 모델과 연결을 정리합니다.
+
+## 2026-10-18 KayKit 해골 병사
+
+SkeletonMesh는 고정된 CC0 GLB에서 생성한 skeleton 데이터(정점6,117/삼각형5,934/노드42)를 읽습니다. 한 EditableMesh에 네이티브 bone/가중치/법선/정점색을 넣고 MeshPart 템플릿을 공유합니다. 개체마다 Bone 인스턴스만 복제해 원본 클립을 보간합니다. CPU 정점 스키닝이나 개체별 EditableMesh 생성은 하지 않습니다. 24Hz 표시,110스터드 밖 bone 갱신 생략, 실제 이동 거리 기반 보행을 사용합니다. 전체84마리/모바일 성능 검증은 별도로 필요합니다.
+
+EnemyPresentation은 실전 stalker 모델을 감시하고 서버 root/동결/AttackSequence를 읽습니다. Waves는 기존 접촉 피해 성공 시 시퀀스만 증가시킵니다. 서버 판정/공격 간격/경험치는 바꾸지 않았습니다. 성공한 로컬 메시만 기존 fallback BasePart를 LocalTransparencyModifier로 가리고 정리 시 복원합니다. API 실패는 fallback을 유지합니다. EnemyPreviewScene도 동일한 생성기/클립을 사용하고 시연 공격에 원본 주먹 동작을 연결합니다. 캐시 생성 경합·시연 도중 닫기/전환을 처리합니다.
+
+추가 파일: tools/convert_skeleton.py, assets/enemies/kaykit-skeletons, client world SkeletonMesh/EnemyPresentation/skeleton 데이터. client 진입점이 표시기를 구성하며 서버 코드를 복제하지 않습니다. 생성 모듈은 Studio Source20만자 제한 아래로 나눕니다.
+
+## 2026-10-18 해골 무기·전체 몹 외형
+
+EnemyVisuals가6종의 표시기 인터페이스(create/pose/place/duration/destroy)를 통일합니다. EnemyProfiles는 클라이언트 전용 외형/스케일/보폭/장비 선택입니다. SkeletonMesh는4개 원본 캐릭터 데이터 캐시를 공유합니다. 기존ID를 유지해 stalker→Warrior,skitter→Rogue(.82),brute→Warrior(1.3),caster→Mage,ember→Minion(.92)으로 표시합니다. HoundMesh는 charger의 원래 제작 사족/턱/꼬리를 움직입니다. 서버 판정 앵커는 그대로입니다.
+
+EnemyGear는5개 공개 무기 메시를 공유하고 native Bone.TransformedWorldCFrame에 부착합니다. 정예 stalker에만 검/소형 방패를 추가하고 원본 armed 내려치기를 선택합니다. 도적은쌍검,brute는도끼/대형 방패,caster는지팡이,ember는직접 제작한 폭탄/도화선입니다. 장비 생성은 fallback을 숨긴 다음 진행하며 해제 시 로컬 장비/뼈/형상을 제거합니다. 실패한 메시의 fallback은 유지합니다.
+
+초기 전체 종류 캐시 시험에서 동적 EditableMesh 메모리 제한을 재현했습니다. 중복 법선/팔레트/UV를 공유하고 RemoveUnused 후 fixed-size EditableMesh로 복사하여 동적 원본을 제거했습니다.6종×일반/정예 및 드래곤 뷰어 공존을 재확인했습니다. 원본 메시마다1개만 유지하고, 개체별 장비/뼈만 복제합니다.
+
+EnemyPresentation은 지원하는6종만 감시하고 위치를 부드럽게 따라갑니다. 실제 이동 기반 보행,AttackSequence/Preparing/Detonating/동결 표시를 읽습니다. 서버 Waves는 실제 시전 준비/발사/자폭 준비에 표시 속성만 추가했습니다. 기존 피해/사거리/대기/난이도는 바꾸지 않았습니다. 정예/스케일이 뒤늦게 복제되면 로컬 인스턴스만 다시 만들고 공유 자산 캐시를 재사용합니다.
+
+검증 도구의 별도 Luau 실행 컨텍스트에서 require한 캐시는 실제 LocalScript 캐시와 중복될 수 있습니다. 원시 렌더러 fixture는 참조 수가0인 자산을 releaseUnused로 해제합니다(실제 사용 중 자산은 유지). destroy는 중복 호출에도 참조 수를 한 번만 줄입니다. 실전 통합 검사는 studio_enemy_live_roster처럼 실제 watcher에 시각 모델을 전달하며 또 다른 메시 캐시를 만들지 않습니다. 메모리 한계를 약하게 만들거나 종류를 빼서 통과시키지 않습니다.
+
+## 2026-10-18 개체별 보행·부드러운 시각 흔들림
+
+EnemyMotion은 모델 이름/종류를 해시한 안정된 시드로 개체별 보행 시작 위상·idle 시각·템포.94~1.06·좌우 이동.035~.09스터드·roll.6~1.6도/yaw.6~1.8도를 정합니다. 매 프레임 난수를 새로 뽑지 않고 보행 위상과 완만한 noise로 변화합니다. 같은 개체의 정예/스케일 재생성에도 초기 파라미터가 유지됩니다.
+
+EnemyPresentation은 수평 이동량을 쓰고 속도를 지수 평활하여20Hz 서버 위치와24Hz 표시 사이의 빈 프레임에 idle로 깜빡이지 않게 했습니다. 보행/idle에만 개체별 시각을 적용하고 공격/시전 시각은 기존 서버 이벤트 기준입니다. 실제 모델 root는 건드리지 않고 렌더러에 작은 시각 원점만 전달합니다. 정지 시 흔들림을 완화하고 빙결 시 위상/템포/흔들림을 멈춥니다. EnemyPreviewScene도 동일 모듈을 사용합니다. 서버 이동/충돌/피해/사거리/AI 변화는 없습니다.
+
+중간 필드보스는 FIELD_BOSS_DESIGN.md의 제안 단계이며 별도 서버 모듈/보상/패턴은 아직 추가하지 않았습니다.
+
+## 2026-10-18 해골 보행의 고정 측면 기울기 보정
+
+원본 Warrior Walking_D_Skeletons는 hips→head 선의 좌우 각도가34개 프레임 전부 약−4.09605도로 고정되어 있었습니다(Idle은0도). EnemyMotion의 양방향 흔들림과는 별개입니다. SkeletonMesh가 공유 클립을 읽을 때 평균 기울기를 측정해 spine의 부모 좌표계에 역방향 회전을 한 번 베이크합니다. hips/다리/발의 원본 트랙과 idle/attack,개체별 위상/템포/양방향 흔들림은 유지합니다. 같은 Warrior 걷기를 쓰는 일반·정예 병사와 집행자에 적용되고 다른 캐릭터 데이터는 바꾸지 않습니다.
+
+studio_skeleton_posture는 모든 보행 표본에서 torso 수직 정렬/발 트랙 보존/보행/idle을 확인합니다. 원본 에셋/생성 데이터는 그대로 보관하고 런타임에서 읽은 클립에만 보정합니다.
+
+## 2026-10-18 후속 정정: 머리까지 수직인 걷기로 교체
+
+앞선 hips→head 위치선 검사만으로는 가시적인 머리/투구 회전을 잡지 못했습니다. 원본 Walking_D_Skeletons의 head.UpVector 측면 회전이약11.6~16.6도(평균14.15도)임을 추가로 확인했습니다. spine 위치선 보정은 이 회전의 해결책이 아니어서 제거했습니다. 변환기의 Warrior walk 선택을 같은 원본의 Walking_A로 바꾸고 데이터를 재생성했습니다. 이 클립은 머리/상체 회전이 수직이며 몸통 위치선은 보행에 따라 양쪽 약2.24도로 오갑니다.
+
+EnemyMotion의 추가 roll도 제거했습니다. 개체별 위상/템포/수평 이동/yaw는 유지하므로 발걸음이 동일해지지 않으면서 머리/투구를 기울이지 않습니다. 공격/idle/다른 캐릭터 클립/서버 판정은 바꾸지 않았습니다. 자세 fixture는 위치선 평균과 머리 회전을 구별해 전 주기를 확인합니다.
+
+### 2026-10-18 기마 필드보스
+
+`world/FieldBoss`는 `isFieldBoss` 분류로 등장/방향 고정 예고/부채꼴·이동 경로 피해/처치/퇴각을 소유합니다. 마지막 드래곤의 `isBoss`/전체 승리 경로와 구분합니다. 시뮬레이션은 FieldBoss.Step → Boss.Step → 기존 웨이브·전투·XP → FieldBoss.Resolve → Boss.Resolve 순서입니다. `clock.fieldBoss`는 웨이브 압박 조정과 HUD 직렬화에만 공유합니다.
+
+`Progression.FieldBossReward`가 생존 참가자당1회 회복과 추가 레벨 XP를 지급합니다. 열려 있는 offers는 유지합니다. 적 사망 경로는 필드보스 모델/보상을 소유 모듈에 남기며 일반 XP 구슬을 생성하지 않습니다. 냉기/넉백 예외와 보스 우선 목표에도 필드보스를 포함합니다.
+
+클라이언트 `CommanderMount`는 기존 고정 스켈레톤 메시를 공유하고 별도 군마 관절/장비를 그립니다. `EnemyPresentation`은 `FieldAction`/`FieldProgress` 복제 속성으로 상체 공격 동작을 선택합니다. `FieldBossArt`는 `Effect('fieldBoss',kind,pos,dir)`의 짧은 시각 효과만 처리합니다. 피해는 없습니다.
+
+State 패킷에 `fieldBoss={name,hp,maxHp,action}?`, `fieldBossTest`, `fieldBossTestQueued`를 추가합니다. `Action('startFieldBossTest',fourIds,qId)`는 Studio 여부, 로비/로드 상태, 빈도 제한, 정확히4개인 장착 목록/Q, 전원 동일 모드를 서버에서 확인합니다. 세션 복귀·재시작·마지막 접속 해제는 기존 resetBoss 콜백에 필드보스 초기화를 함께 연결합니다.

@@ -4,7 +4,7 @@ local folder=Instance.new('Folder');folder.Name='DragonCombatCheck';folder.Paren
 local ok,result=xpcall(function()
  local root=Instance.new('Part');root.Anchored=true;root.Position=Vector3.new(70,3,0);root.Parent=folder
  local h=Instance.new('Humanoid');h.RequiresNeck=false;h.MaxHealth=5000;h.Health=5000;h.Parent=folder
- local s={player={Character=folder},over=false,cooldown=0,kills=0,fire=1,invulnerable=0}
+ local s={player={Character=folder},over=false,activeSkill="iceRush",cooldown=0,kills=0,fire=0,ice=1,invulnerable=0}
  local states={s};local enemies={};local events={};local counts={};local ended=0
  local clock={elapsed=0,roundLength=0,bossLimit=90,bossElapsed=0,phase='survival'}
  local function rootOf()if not s.over then return root,h end end
@@ -51,20 +51,14 @@ local ok,result=xpcall(function()
  root.Position=Vector3.new(marker.Position.X,3,marker.Position.Z+13.8);hp=h.Health
  advance(.9);assert(h.Health==hp,'Eruption windup');advance(.2);assert(h.Health==hp-22,'Expanded eruption rim hits')
  advance(.15);assert(h.Health==hp-22,'Overlapping eruptions hit once')
- waitFor('tail');warning=folder.BossTelegraphs:FindFirstChild('TailWarning');assert(warning and warning.Size.Y==48,'Spin telegraph covers 24-stud radius')
- local heading=boss.heading;root.Position=warning.Position+Vector3.new(0,3,20);hp=h.Health
- advance(1);assert(h.Health==hp,'Coil and slow start do not hit')
- local first=boss.heading;advance(.2);local second=boss.heading
- local early=math.acos(math.clamp(first:Dot(second),-1,1))
- assert(early<math.rad(20)and h.Health==hp,'Spin starts slowly')
- advance(.2);local third=boss.heading
- local accelerating=math.acos(math.clamp(second:Dot(third),-1,1))
- assert(accelerating>early*2 and h.Health==hp,'Spin accelerates before its hit')
- advance(.2)
- assert(h.Health==hp-20 and events.dragonTailSpin[3]==1.35 and boss.heading:Dot(heading)<.5,'Heavy sweep hits during fast middle')
- advance(.5);first=boss.heading;advance(.2)
- local late=math.acos(math.clamp(first:Dot(boss.heading),-1,1))
- assert(late<accelerating and h.Health==hp-20,'Spin decelerates and hits once')
+ root.Position=boss.pos-boss.heading*20
+ waitFor('tail');warning=folder.BossTelegraphs:FindFirstChild('TailWarning');assert(warning and warning.Size.Y==48,'Rear sweep keeps 24-stud warning radius')
+ local target=root.Position;local heading=boss.heading;hp=h.Health
+ advance(1);assert(h.Health==hp,'Tail windup is safe')
+ local first=boss.heading;advance(.1);local second=boss.heading
+ local early=math.acos(math.clamp(first:Dot(second),-1,1));assert(early<math.rad(10),'Tail starts slowly')
+ advance(.2);assert(h.Health==hp-20 and events.dragonTailSpin[3]==1.35,'Rear target is swept once')
+ advance(1.3);assert(h.Health==hp-20 and boss.heading:Dot((target-boss.pos).Unit)>.99,'Tail turns toward the rear target rather than spinning a full circle')
  waitFor('flameCross');local lane=folder.BossTelegraphs:FindFirstChild('FireLineWarning'):FindFirstChild('FireLane');assert(lane.Size.X==18 and lane.Size.Z==72,'Large crossed ground lanes')
  root.Position=lane.Position+Vector3.new(0,3,0);hp=h.Health;local fired=counts.dragonFireLine or 0
  advance(.85);assert(h.Health==hp,'Cross warning');advance(.2);assert(h.Health==hp-22,'First lane hits')
@@ -84,8 +78,11 @@ local ok,result=xpcall(function()
  -- Guard existing combat and round contracts after the new eight-pattern cycle.
  root.Position=Vector3.new(boss.pos.X+15,3,boss.pos.Z);s.cooldown=0
  assert(not combat.RequestWave(s,Vector3.new(0/0,0,0))and s.cooldown==0,'Invalid Q rejected')
- before=boss.hp;combat.RequestWave(s,Vector3.new(-1,0,0));assert(boss.hp==before-50,'Ground Q still hits')
- s.fire=500;s.cooldown=0;combat.RequestWave(s,Vector3.new(-1,0,0));clock.bossElapsed=90;controller.Resolve()
+ combat.ClearProjectiles(s);s.activeSkill='fire'
+ local active=require(modules.combat.ActiveSpells)({world=folder,enemies=enemies,effect=effect,damage=function(e,n)e.hp-=n end})
+ before=boss.hp;combat.RequestWave(s,Vector3.new(-1,0,0));assert(boss.hp==before,'Fire Q must travel first')
+ for _=1,5 do active.Step(s,.1)end;assert(boss.hp==before-75,'Ground fire Q still reaches the dragon')
+ boss.hp=0;clock.bossElapsed=90;controller.Resolve()
  assert(clock.phase=='victory'and ended==1,'Boss defeat still wins after long combat')
  controller.Reset();table.clear(enemies);s.over=false;controller.Step(0);clock.bossElapsed=900;controller.Resolve()
  assert(clock.phase=='boss'and ended==1,'No timeout after 900 seconds')

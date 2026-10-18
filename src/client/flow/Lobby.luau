@@ -1,4 +1,4 @@
--- Before a run: choose three spells, ready up, then enter the arena together.
+-- Before a run: choose four spells, ready up, then enter the arena together.
 return function(deps)
  local player,net,hud,input=deps.player,deps.net,deps.hud,deps.input
  local theme=require(script.Parent.Parent.Theme)
@@ -6,9 +6,9 @@ return function(deps)
  local palette=theme.Palette
  local gui=make('ScreenGui',player:WaitForChild('PlayerGui'),{Name='SummonerLobbyUI',ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=30,Enabled=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
  local veil=make('Frame',gui,{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(8,14,27),BackgroundTransparency=.2})
- local panel=make('Frame',veil,{Name='Panel',Size=UDim2.fromOffset(960,744),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,BackgroundTransparency=.04});round(panel,20);stroke(panel)
+ local panel=make('Frame',veil,{Name='Panel',Size=UDim2.fromOffset(960,768),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,BackgroundTransparency=.04});round(panel,20);stroke(panel)
  local scale=make('UIScale',panel,{Scale=1})
- local function resize()local v=workspace.CurrentCamera.ViewportSize;scale.Scale=math.min(1,(v.X-24)/960,(v.Y-24)/744)end
+ local function resize()local v=workspace.CurrentCamera.ViewportSize;scale.Scale=math.min(1,(v.X-24)/960,(v.Y-24)/768)end
  workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'):Connect(resize);resize()
  local heading=label(panel,'ARCANE HAVEN  /  마법사의 안식처',UDim2.fromOffset(900,38),UDim2.fromOffset(28,18),Enum.Font.GothamBold,palette.mint);heading.TextSize=25;heading.TextXAlignment=Enum.TextXAlignment.Left
  local hint=label(panel,'Q 사용 스킬 1개와 자동 마법 4개를 골라 출발하세요.',UDim2.fromOffset(900,24),UDim2.fromOffset(28,62),nil,palette.muted);hint.TextXAlignment=Enum.TextXAlignment.Left;hint.TextSize=15
@@ -16,8 +16,13 @@ return function(deps)
  local grid=make('ScrollingFrame',panel,{Name='Spells',Size=UDim2.fromOffset(904,390),Position=UDim2.fromOffset(28,232),CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,BackgroundTransparency=1,BorderSizePixel=0})
  make('UIGridLayout',grid,{CellSize=UDim2.new(.5,-8,0,88),CellPadding=UDim2.fromOffset(12,10),SortOrder=Enum.SortOrder.LayoutOrder})
  local start=make('TextButton',panel,{Name='Start',Size=UDim2.fromOffset(270,48),Position=UDim2.fromOffset(662,642),BackgroundColor3=palette.mint,TextColor3=palette.bg,Font=Enum.Font.GothamBold,TextSize=19,Text='전투 시작',AutoButtonColor=true});round(start,12)
- local status=label(panel,'',UDim2.fromOffset(430,50),UDim2.fromOffset(28,638),nil,palette.muted);status.TextSize=14;status.TextXAlignment=Enum.TextXAlignment.Left
- local footer=label(panel,'Q / 패드 R2 선택한 스킬 · E / 패드 B 대시 · 골렘은 기본 동행  |  선택한 마법은 1단계로 시작하고 레벨업으로 강화됩니다.',UDim2.fromOffset(904,26),UDim2.fromOffset(28,704),nil,palette.muted);footer.TextSize=12
+ local bossTest,fieldTest
+ if game:GetService('RunService'):IsStudio()then
+  bossTest=make('TextButton',panel,{Name='BossTest',Size=UDim2.fromOffset(130,48),Position=UDim2.fromOffset(28,642),BackgroundColor3=Color3.fromRGB(159,92,59),TextColor3=palette.text,Font=Enum.Font.GothamBold,TextSize=16,Text='드래곤 테스트\n스킬 5단계',AutoButtonColor=true});round(bossTest,12)
+  fieldTest=make('TextButton',panel,{Name='FieldBossTest',Size=UDim2.fromOffset(130,48),Position=UDim2.fromOffset(164,642),BackgroundColor3=Color3.fromRGB(89,103,141),TextColor3=palette.text,Font=Enum.Font.GothamBold,TextSize=14,Text='필드보스 테스트\n스킬 3단계',AutoButtonColor=true});round(fieldTest,12)
+ end
+ local status=label(panel,'',UDim2.fromOffset(904,24),UDim2.fromOffset(28,694),nil,palette.muted);status.TextSize=14;status.TextXAlignment=Enum.TextXAlignment.Left
+ local footer=label(panel,'Q / 패드 R2 선택한 스킬 · E / 패드 B 대시 · 골렘은 기본 동행  |  선택한 마법은 1단계로 시작하고 레벨업으로 강화됩니다.',UDim2.fromOffset(904,26),UDim2.fromOffset(28,730),nil,palette.muted);footer.TextSize=12
  local activeLabel=label(panel,'Q 사용 스킬',UDim2.fromOffset(900,20),UDim2.fromOffset(28,90),Enum.Font.GothamBold,palette.gold);activeLabel.TextSize=13;activeLabel.TextXAlignment=Enum.TextXAlignment.Left
  local selected,options,buttons={},{},{}
  local activeSkill='fire';local activeButtons={}
@@ -58,6 +63,18 @@ return function(deps)
    end)
   end
  end
+ if bossTest then bossTest.Activated:Connect(function()
+  if pending or queued then return end
+  if #selected~=4 then status.Text='서로 다른 마법을 4개 골라 주세요.';return end
+  pending=true;bossTest.Text='보스전 준비 중…';net.Action:FireServer('startBossTest',table.clone(selected),activeSkill)
+  task.delay(2,function()pending=false;bossTest.Text='드래곤 테스트\n스킬 5단계';refresh()end)
+ end)end
+ if fieldTest then fieldTest.Activated:Connect(function()
+  if pending or queued then return end
+  if #selected~=4 then status.Text='서로 다른 마법을 4개 골라 주세요.';return end
+  pending=true;net.Action:FireServer('startFieldBossTest',table.clone(selected),activeSkill)
+  task.delay(2,function()pending=false;refresh()end)
+ end)end
  start.Activated:Connect(function()
   if pending then return end
   if queued then net.Action:FireServer('cancelReady');return end
@@ -81,6 +98,8 @@ return function(deps)
   if #options==0 and s.spellOptions then options=s.spellOptions;build()end
   if not next(activeButtons) and s.activeOptions then buildActive(s.activeOptions)end
   queued=s.queued==true;pending=false
+  if bossTest then bossTest.Text=s.bossTestQueued and '보스전 준비 완료 · 취소는 오른쪽' or '드래곤 테스트\n스킬 5단계'end
+  if fieldTest then fieldTest.Text=s.fieldBossTestQueued and '필드보스 준비 완료' or '필드보스 테스트\n스킬 3단계'end
   status.Text=s.lobbyMessage or(queued and '준비 완료 · 다른 플레이어가 준비하면 함께 출발합니다.' or '혼자라면 바로 출발 · 친구와 함께라면 전원 준비 후 출발')
   refresh()
  end)

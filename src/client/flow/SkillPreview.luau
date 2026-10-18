@@ -69,6 +69,7 @@ return function(deps)
  end
  setOpen=function(value)
   if opened==value then return end
+  if value and deps.beforeOpen then deps.beforeOpen()end
   if value and deps.dragon then deps.dragon.Close()end
   opened=value;overlay.Visible=value;button.Visible=not value;gui:SetAttribute('Open',value)
   input.SetSuspended(value or lastLobby);net.Action:FireServer('previewSkills',value)
