@@ -5,7 +5,7 @@ return function(deps)
  local function make(name,kind,world)
   local m=Instance.new('Model');m.Name=name
   local definition=catalog.Get(kind)
-  m:SetAttribute('VisualAsset',definition and definition.visualAsset or(kind=='commander'and 'OriginalGildedHalberdCommander'or nil))
+  m:SetAttribute('VisualAsset',definition and definition.visualAsset or(kind=='commander'and 'CloakedCommander_QuaterniusHorse'or nil))
   if definition then
    m:SetAttribute('EnemyRole',definition.role);m:SetAttribute('EnemyFamily',definition.family);m:SetAttribute('EnemyVariant',definition.variant)
    m:SetAttribute('FamilyName',definition.familyName);m:SetAttribute('DisplayName',definition.displayName)

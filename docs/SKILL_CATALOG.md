@@ -51,10 +51,10 @@ PNG가 있어도 Roblox에 업로드하기 전 `robloxAssetId`는 `null`입니�
 
 | ID · 이름 | 코드의 설명 | 단계 강화 설명 | 아이콘 · 상태 |
 | --- | --- | --- | --- |
-| `fire` · 화염탄 | 정면 불꽃 탄환 · 적중 범위 피해 · 7초 | — | [fire](../assets/ui/skill-icons/fire.png) · local_ready_unpublished |
-| `thunder` · 뇌창 | 정면으로 날아가는 번개 창 · 관통 · 7초 | — | [thunder](../assets/ui/skill-icons/thunder.png) · local_ready_unpublished |
-| `aetherLance` · 성운창 | 아지랑이 빛의 창 · 관통 · 7초 | — | [aetherLance](../assets/ui/skill-icons/aetherLance.png) · local_ready_unpublished |
-| `iceRush` · 빙하 쇄도 | 정면 얼음 기둥 · 빙결 · 7초 | — | [iceRush](../assets/ui/skill-icons/iceRush.png) · local_ready_unpublished |
+| `fire` · 화염탄 | 정면 불꽃 탄환 · 적중 범위 피해 · 4초 | — | [fire](../assets/ui/skill-icons/fire.png) · local_ready_unpublished |
+| `thunder` · 뇌창 | 정면으로 날아가는 번개 창 · 관통 · 4초 | — | [thunder](../assets/ui/skill-icons/thunder.png) · local_ready_unpublished |
+| `aetherLance` · 성운창 | 아지랑이 빛의 창 · 관통 · 4초 | — | [aetherLance](../assets/ui/skill-icons/aetherLance.png) · local_ready_unpublished |
+| `iceRush` · 빙하 쇄도 | 정면 얼음 기둥 · 빙결 · 4초 | — | [iceRush](../assets/ui/skill-icons/iceRush.png) · local_ready_unpublished |
 
 ## 기본 공격
 
@@ -101,7 +101,7 @@ PNG가 있어도 Roblox에 업로드하기 전 `robloxAssetId`는 `null`입니�
 | `aether_execute` · 성운 처형 | 선택 Q: aetherLance | 희귀 · 1 | 체력 50% 이하 적에게 Q 성운창 피해 +50%. | `aetherLance` 부모 + 배지 |
 | `iceRush_wide` · 빙하 대로 | 선택 Q: iceRush | 희귀 · 1 | Q 빙하 쇄도 폭 +50%. 기둥 연출과 판정 함께 확대. | `iceRush` 부모 + 배지 |
 | `quick_cast` · 신속 시전 | 공통 | 일반 · 3 | 자동 마법 재사용 주기 -8%p. 최대 3회, Q·골렘·비행 시간 제외. | `quick_cast` 공통 전용 |
-| `active_focus` · 집중된 주문 | 공통 | 일반 · 2 | Q 재사용 주기 -15%p. 최대 2회, 7초 → 최저 4.9초. | `active_focus` 공통 전용 |
+| `active_focus` · 집중된 주문 | 공통 | 일반 · 2 | Q 재사용 주기 -15%p. 최대 2회, 4초 → 최저 2.8초. | `active_focus` 공통 전용 |
 | `lucky_charm` · 행운의 부적 | 공통 | 일반 · 3 | 행운 +20. 다음 무작위 카드의 희귀·영웅 등급 가중치 증가. | `lucky_charm` 공통 전용 |
 
 조건 열의 자동 마법 최소 단계는 `Augments.Eligible`을 실행해 확인한 값입니다. 실제 후보는 장착 상태와 기존 획득 횟수까지 서버에서 검증합니다.

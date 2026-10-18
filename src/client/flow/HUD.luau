@@ -25,7 +25,7 @@ return function(deps)
 	local skills=label(top,"화염탄 1 · 골렘 1",UDim2.new(1,-24,0,16),UDim2.fromOffset(12,72),nil,palette.text);skills.TextSize=11;skills.TextXAlignment=Enum.TextXAlignment.Left
 	skills.Size=UDim2.new(1,-24,0,26);skills.Position=UDim2.fromOffset(12,68)
 	local golemStatus=label(top,"대지 강타 · 자동",UDim2.new(1,-24,0,16),UDim2.fromOffset(12,96),nil,palette.gold);golemStatus.TextSize=11;golemStatus.TextXAlignment=Enum.TextXAlignment.Left
-	local pulse=make("TextButton",gui,{Name="Pulse",Size=UDim2.fromOffset(108,72),Position=UDim2.new(1,-20,1,-88),AnchorPoint=Vector2.new(1,1),BackgroundColor3=palette.mint,TextColor3=palette.bg,Text="화염탄\n[Q] 준비",Font=Enum.Font.GothamBold,TextSize=17,AutoButtonColor=true}); round(pulse,16)
+	local pulse=make("TextButton",gui,{Name="Pulse",Size=UDim2.fromOffset(108,72),Position=UDim2.new(1,-20,1,-88),AnchorPoint=Vector2.new(1,1),BackgroundColor3=palette.mint,TextColor3=palette.bg,Text="빙하 쇄도\n[Q] 준비",Font=Enum.Font.GothamBold,TextSize=17,AutoButtonColor=true}); round(pulse,16)
 	local dashButton=make("TextButton",gui,{Name="Dash",Size=UDim2.fromOffset(108,58),Position=UDim2.new(1,-20,1,-18),AnchorPoint=Vector2.new(1,1),BackgroundColor3=Color3.fromRGB(135,203,255),TextColor3=palette.bg,Text="대시 [E]\n준비",Font=Enum.Font.GothamBold,TextSize=15,AutoButtonColor=true});round(dashButton,14)
  local basicButton=make("TextButton",gui,{Name="BasicAttack",Size=UDim2.fromOffset(108,58),Position=UDim2.new(1,-20,1,-172),AnchorPoint=Vector2.new(1,1),BackgroundColor3=Color3.fromRGB(177,210,255),TextColor3=palette.bg,Text="마법탄 [F/R1]\n누르고 연속 발사",Font=Enum.Font.GothamBold,TextSize=13,AutoButtonColor=true});round(basicButton,14)
  basicButton.InputBegan:Connect(function(key)if key.UserInputType==Enum.UserInputType.MouseButton1 or key.UserInputType==Enum.UserInputType.Touch then deps.input.SetBasicHeld('HUD',true,key)end end)
@@ -115,7 +115,7 @@ return function(deps)
 		local lines={}
 		for i=1,#text,3 do table.insert(lines,table.concat(text," · ",i,math.min(i+2,#text)))end
 		skills.Text=table.concat(lines,"\n")
-		local activeName=s.activeName or "화염탄"
+		local activeName=s.activeName or "빙하 쇄도"
 		pulse.Text=activeName.."\n"..(s.cooldown>0 and s.cooldown.."초" or "[Q] 준비")
 		local dashCd=s.dashCooldown or 0
 		dashButton.Text=dashCd>0 and "대시 [E]\n"..string.format("%.1f초",dashCd) or "대시 [E]\n준비"

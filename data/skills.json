@@ -11,8 +11,8 @@
     ]
   },
   "sourceHashes": {
-    "src/server/flow/Loadout.luau": "47a4f73aa700c41e2d32abb7191249cda92d3c0db36c53f92c6ec44ecccc544c",
-    "src/server/flow/Augments.luau": "124bf3ceec8f585ae0895ab1edcd282e4fd758a1f0f3b0da30c9fa07b65ee0f8",
+    "src/server/flow/Loadout.luau": "8b5bfb5a02342c90fe7bdd8c5944d694e6021ee2b8daf9927103a48eee5a1fd3",
+    "src/server/flow/Augments.luau": "1aa17517bfc67b8479e739101db9489709004c083a780ff9ff0b80808bb72e96",
     "src/server/combat/Weapons.luau": "0b06b6e9ca0cf125f4459e75735b366c6f8b68131c8ef986e6613527b8a23860",
     "src/client/combat/AugmentStyles.luau": "c47f1c9e36fe34a9da0ffdacb2f48103a390ab36ff67dae13e2df4cf93d62087",
     "src/client/flow/SkillPreview.luau": "4ae3956c57489dbb06f80d5213da2d6badfcf32da7ae431b3590ea0de5f90f66",
@@ -233,7 +233,7 @@
     {
       "id": "fire",
       "name": "화염탄",
-      "description": "정면 불꽃 탄환 · 적중 범위 피해 · 7초",
+      "description": "정면 불꽃 탄환 · 적중 범위 피해 · 4초",
       "category": "active",
       "categoryName": "Q 사용 스킬",
       "active": true,
@@ -254,7 +254,7 @@
     {
       "id": "thunder",
       "name": "뇌창",
-      "description": "정면으로 날아가는 번개 창 · 관통 · 7초",
+      "description": "정면으로 날아가는 번개 창 · 관통 · 4초",
       "category": "active",
       "categoryName": "Q 사용 스킬",
       "active": true,
@@ -275,7 +275,7 @@
     {
       "id": "aetherLance",
       "name": "성운창",
-      "description": "아지랑이 빛의 창 · 관통 · 7초",
+      "description": "아지랑이 빛의 창 · 관통 · 4초",
       "category": "active",
       "categoryName": "Q 사용 스킬",
       "active": true,
@@ -296,7 +296,7 @@
     {
       "id": "iceRush",
       "name": "빙하 쇄도",
-      "description": "정면 얼음 기둥 · 빙결 · 7초",
+      "description": "정면 얼음 기둥 · 빙결 · 4초",
       "category": "active",
       "categoryName": "Q 사용 스킬",
       "active": true,
@@ -1110,7 +1110,7 @@
       "id": "active_focus",
       "cardId": "aug_active_focus",
       "name": "집중된 주문",
-      "description": "Q 재사용 주기 -15%p. 최대 2회, 7초 → 최저 4.9초.",
+      "description": "Q 재사용 주기 -15%p. 최대 2회, 4초 → 최저 2.8초.",
       "category": "common_augment",
       "active": true,
       "status": "implemented",

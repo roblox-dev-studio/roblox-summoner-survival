@@ -1,19 +1,29 @@
 {
-  "name": "Gilded Halberd Commander",
-  "authorship": "Original project-authored procedural geometry and poses",
-  "externalFiles": [],
+  "name": "Skeleton Knight Commander",
+  "authorship": "KayKit CC0 warrior skull/helmet; original skeletal horse geometry and barding, rider armor and greatsword; Quaternius CC0 horse skeleton and original clips drive the mount",
+  "externalFiles": [
+    "../quaternius-horse/Horse.glb",
+    "../kaykit-skeletons/Skeleton_Warrior.glb"
+  ],
   "sourceFiles": {
-    "src/client/world/CommanderMount.luau": "c514a636c68cea7e24c40fb33536321bac9de534872e43d75986607e5289a89b",
-    "src/client/world/FieldBossArt.luau": "a3519afa37dff3e6631e8243fbf13fbf6c681d534155f26a29e35aaddff5cb03",
-    "src/server/world/FieldBoss.luau": "37a47dedcc134b101905724ea881bd67e8dee4c511636814cd852e705f09ea0e"
+    "src/client/world/CommanderMount.luau": "91d6ef69b2f02d0babc628f850d559bcf6aa9a5e0db67b9783323e5543abc216",
+    "src/client/world/FieldBossArt.luau": "68de4a8b575bc71c539db67c8bd65ad55eddf140e00c2cbf953a68375912f6b8",
+    "src/server/world/FieldBoss.luau": "c4611b9b85ea54dc87ecca7f78fefddc9f4d5ba9f587128a6ba588547e1da03f",
+    "src/client/world/HorseMesh.luau": "c1dd2047c70ba8d464e99daf122f91ddf161c850ecbec8cc6fe00920bb5f576e",
+    "tools/convert_horse.py": "22326a503b8a31d500edf22f13613c2c09075e399d011031c15ecb189d7ada9c",
+    "src/client/world/CommanderSkull.luau": "f78b601c3b89a13cb5d378c56e9b3ff0671b44f781ae92a178280c2196bb2d89",
+    "src/client/world/SkeletonHorse.luau": "3b25cf5d1d607f15cffe882a5ca0db81359e6343530d645725bdb4fa650f39c9"
   },
   "reproduction": "python3 tools/build_installer.py; install into a blank Studio Baseplate; Studio lobby FieldBossTest",
-  "geometry": "Part/WedgePart armor, closed helmet, bevel-faced axe, pointed spear, articulated mount; no imported rider or shield",
+  "geometry": "Actual warrior head-weighted geometry (1820 vertices, 1480 triangles) including skull, teeth, eye sockets and original horned open helmet. Exposed neck and arm bones; iron armor, red cloak, greatsword; mounted visual scale 1.8. Living horse skin is hidden; original open rib cage, equine skull/jaw/teeth, limb and tail bones and steel head/chest/hind barding follow original animated joints.",
   "combatPatterns": [
     "cleave",
     "slam",
     "thrust",
     "charge"
   ],
-  "reference": "User-requested mounted-heavy-knight combat feel; no Elden Ring asset files reused"
+  "reference": "Tree Sentinel mentioned only for charge plus weapon-attack gameplay, not for visual identity",
+  "horseManifest": "../quaternius-horse/manifest.json",
+  "visualScale": 1.8,
+  "skullManifest": "../kaykit-skeletons/manifest.json"
 }
