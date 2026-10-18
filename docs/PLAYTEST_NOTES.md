@@ -576,3 +576,12 @@ Branch codex/light-skills-four-loadout, baseline8316189. Fetched team/main and c
 - 시각 확인: 로비 버튼 배치, 기수/군마 비율을 조정한 정면·측면, 말 머리/기수 분리, 실제 필드 HP·예고 표시를 화면으로 확인했습니다. 최종 미술 품질이나 자연스러움이 완성됐다는 판정은 아닙니다. 원본 뿔투구/수입 방패를 사용한 기수와 절차 군마의 첫 아트입니다.
 - 실제 UI: 필드보스 버튼 → 선택4개/골렘3단계로 군단장 등장, Ready 메시/군마 렌더, 처치 뒤 강화창과 생존 진행 확인. 별도 전투에서 도전 중단 버튼 → 로비 표시, 군단장/예고 제거, CameraType Custom 복구 확인. 테스트용 카메라/모델은 제거했습니다.
 - 남은 검증: 새 Baseplate 전체 설치, 일반전120초 전 구간 자연 흐름, 실제2인 참가/이탈·보상 동기화, 모바일/실제 패드, 프레임 성능, 소리와 난이도/재미 조정. 낙마2단계·군단 소환·필드보스 도감은 미구현입니다.
+
+## 2026-10-18 · PR #4 머지 후 필드보스 템포
+
+- 기존 작업 PR https://github.com/roblox-dev-studio/roblox-summoner-survival/pull/4: GitHub source-checks 성공, 충돌 없음, merge commit `43985bce840ae82fa1d48d52a6837e910fa32d1b`. 최초 대용량 push HTTP400은 전송 버퍼를 늘려 재시도해 성공했습니다.
+- 후속 소스: `codex/field-boss-tempo`, 위 merge commit 기준. 진입점2개+src 정렬 SHA-256 `aa287d01ffd9d00fd7d29a5cc389d52173e5ecb639bac33fe398b5e5527b0c84`. 이 조정은 PR #4에 포함되지 않은 후속 작업입니다.
+- 이동/회전·접근·준비·회복 시간을 줄이고, 돌진30스터드/.5초, 솔로HP1,560으로 조정했습니다. 피해/타격횟수/회피 규칙은 유지했습니다. 설치기 재생성과 정적 검사8개 Python/144개 Luau가 통과했습니다.
+- 같은 Studio 인스턴스를 Play 재시작해 새 서버 VM에서 `studio_field_boss` 통과: 새 HP/참가자 이탈 비율,30스터드 돌진, .25초 접근 이동3.3스터드 초과, 고정 예고/1회 타격/무적/보상/퇴각/초기화. 처음 Edit 검사에서는 이전 require 캐시로 옛24스터드 동작을 읽어 실패했고 Play 재시작 후 새 소스로 재검사했습니다.
+- 현재 플레이 Output에서 발견한 EnemyPresentation 메시 생성 완료 시 PrimaryPart가 사라진 경우의 nil Position 오류를 방어하고 rig를 정리합니다. `studio_commander_visual`의 실제 watcher/군마 관절/상체 모션/제거 검사를 재통과했습니다.
+- 실제 로비 버튼으로 군단장 HP1,560/Ready 군마를 확인했고, 필드 전투의 예고와 근접 압박을 화면에서 확인했습니다. 도전 중단으로 로비 복귀 후 시각 fixture를 정리했습니다. GUI 접근 문제로 새 Baseplate 전체 설치는 이번에도 하지 않았습니다. 실제 다인/패드/모바일/장기 밸런스 검증은 남아 있습니다.

@@ -3,6 +3,7 @@ return function(deps)
  local damage=require(script.Parent.Parent.shared.PlayerDamage)
  local world,enemies,states,clock=deps.world,deps.enemies,deps.states,deps.clock
  local boss,markers;local spawned=false
+ local SOLO_HEALTH=1560
  local function flat(v)return Vector3.new(v.X,0,v.Z)end
  local function bound(v)local f=flat(v);if f.Magnitude>77 then f=f.Unit*77 end;return f+Vector3.new(0,3,0)end
  local function emit(kind,pos,dir)if deps.effect then deps.effect:FireAllClients('fieldBoss',kind,pos,dir)end end
@@ -39,7 +40,7 @@ return function(deps)
    for _,x in ipairs({-3.5,3.5})do part('ChargeEdge',Vector3.new(.12,.07,boss.chargeLength+6),frame*CFrame.new(x,0,-(boss.chargeLength/2+2)),.3)end
   end
  end
- local durations={arrival=1.3,approach=1,cleaveWindup=.95,cleave=.48,chargeWindup=.95,charge=.62,recover=1.25,retreat=1}
+ local durations={arrival=1.05,approach=1,cleaveWindup=.75,cleave=.4,chargeWindup=.8,charge=.5,recover=.8,retreat=1}
  local function action(name)
   boss.action=name;boss.actionTime=0;boss.hits={};boss.model:SetAttribute('FieldAction',name);boss.model:SetAttribute('FieldProgress',0)
   if name=='cleaveWindup'or name=='chargeWindup'then warning(name)
@@ -67,7 +68,7 @@ return function(deps)
   local origin=flat(root.Position);local outward=origin.Magnitude>5 and origin.Unit or Vector3.new(0,0,-1)
   local pos=bound(origin+outward*32);if flat(pos-origin).Magnitude<24 then pos=bound(origin-outward*32)end
   local count=0;for _,s in pairs(states)do if deps.rootOf(s)then count+=1 end end
-  local hp=math.floor(1200*(1+math.max(0,count-1)*.65))
+  local hp=math.floor(SOLO_HEALTH*(1+math.max(0,count-1)*.65))
   local model=deps.creature('SkeletonCommander',Color3.new(),false,'commander')
   local dir=flat(root.Position-pos);dir=dir.Magnitude>.01 and dir.Unit or Vector3.new(0,0,-1)
   boss={model=model,pos=pos,hp=hp,maxHp=hp,kind='commander',name='망령 기마 군단장',isFieldBoss=true,slow=0,frozen=0,direction=dir,nextCharge=false,participants=count}
@@ -87,7 +88,7 @@ return function(deps)
   local root,dist=nearest(boss.pos);if not root then return end
   local participants=0;for _,s in pairs(states)do if deps.rootOf(s)then participants+=1 end end
   if participants>0 and participants<boss.participants then
-   local nextHp=math.floor(1200*(1+math.max(0,participants-1)*.65))
+   local nextHp=math.floor(SOLO_HEALTH*(1+math.max(0,participants-1)*.65))
    boss.hp=math.max(1,boss.hp/boss.maxHp*nextHp);boss.maxHp=nextHp;boss.participants=participants
    boss.model:SetAttribute('HP',boss.hp);boss.model:SetAttribute('MaxHP',nextHp)
   end
@@ -96,13 +97,13 @@ return function(deps)
   boss.model:SetAttribute('FieldProgress',math.clamp(t/(durations[name]or 1),0,1))
   if name=='approach'then
    local delta=flat(root.Position-boss.pos);local desired=delta.Magnitude>.01 and delta.Unit or boss.direction
-   local angle=math.atan2(boss.direction:Cross(desired).Y,boss.direction:Dot(desired));local turn=math.clamp(angle,-dt*1.9,dt*1.9)
+   local angle=math.atan2(boss.direction:Cross(desired).Y,boss.direction:Dot(desired));local turn=math.clamp(angle,-dt*2.8,dt*2.8)
    boss.direction=CFrame.Angles(0,turn,0):VectorToWorldSpace(boss.direction)
-   if dist>11 then boss.pos=bound(boss.pos+boss.direction*math.min(dist-11,9*(boss.slow>0 and .75 or 1)*dt))end
-   if t>=.6 and(dist<=14 or t>=2.8)then
+   if dist>11 then boss.pos=bound(boss.pos+boss.direction*math.min(dist-11,15*(boss.slow>0 and .75 or 1)*dt))end
+   if t>=.35 and(dist<=14 or t>=1.6)then
     -- Lock before the visible windup; no tracking after a telegraph appears.
     if boss.nextCharge or dist>17 then
-     boss.chargeStart=boss.pos;boss.chargeEnd=bound(boss.pos+boss.direction*24);boss.chargeLength=(boss.chargeEnd-boss.pos).Magnitude;action('chargeWindup')
+     boss.chargeStart=boss.pos;boss.chargeEnd=bound(boss.pos+boss.direction*30);boss.chargeLength=(boss.chargeEnd-boss.pos).Magnitude;action('chargeWindup')
     else action('cleaveWindup')end
    end
   elseif name=='cleave'then

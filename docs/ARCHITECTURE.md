@@ -371,3 +371,5 @@ EnemyMotion의 추가 roll도 제거했습니다. 개체별 위상/템포/수평
 클라이언트 `CommanderMount`는 기존 고정 스켈레톤 메시를 공유하고 별도 군마 관절/장비를 그립니다. `EnemyPresentation`은 `FieldAction`/`FieldProgress` 복제 속성으로 상체 공격 동작을 선택합니다. `FieldBossArt`는 `Effect('fieldBoss',kind,pos,dir)`의 짧은 시각 효과만 처리합니다. 피해는 없습니다.
 
 State 패킷에 `fieldBoss={name,hp,maxHp,action}?`, `fieldBossTest`, `fieldBossTestQueued`를 추가합니다. `Action('startFieldBossTest',fourIds,qId)`는 Studio 여부, 로비/로드 상태, 빈도 제한, 정확히4개인 장착 목록/Q, 전원 동일 모드를 서버에서 확인합니다. 세션 복귀·재시작·마지막 접속 해제는 기존 resetBoss 콜백에 필드보스 초기화를 함께 연결합니다.
+
+적 렌더러의 비동기 메시 준비가 끝나기 전에 서버 모델의 Core가 정리될 수 있으므로, EnemyPresentation은 완료 후 Parent와 PrimaryPart를 다시 확인합니다. 유효하지 않으면 준비한 시각 rig를 해제하고 등록하지 않습니다.

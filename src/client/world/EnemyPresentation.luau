@@ -10,8 +10,9 @@ return function()
    local ok,rig=pcall(mesh.create,model);creating[model]=nil
    if not ok then warn('[EnemyPresentation] '..tostring(rig));return end
    if not rig then return end
-   if not model.Parent then mesh.destroy(rig);return end
-   rig.root=model.PrimaryPart;rig.previous=rig.root.Position;rig.motion=motion.create(model.Name..':'..model:GetAttribute('EnemyKind'),mesh.duration(rig,'walk'));rig.attack=0;rig.attackTime=10;rig.prepareTime=0;rig.modelScale=model:GetScale();rig.wasElite=model:GetAttribute('Elite');rig.frame=rig.root.CFrame;rigs[model]=rig
+   local root=model.PrimaryPart
+   if not model.Parent or not root or not root.Parent then mesh.destroy(rig);return end
+   rig.root=root;rig.previous=rig.root.Position;rig.motion=motion.create(model.Name..':'..model:GetAttribute('EnemyKind'),mesh.duration(rig,'walk'));rig.attack=0;rig.attackTime=10;rig.prepareTime=0;rig.modelScale=model:GetScale();rig.wasElite=model:GetAttribute('Elite');rig.frame=rig.root.CFrame;rigs[model]=rig
   end)
  end
  for _,v in ipairs(world:GetChildren())do attach(v)end
