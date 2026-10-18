@@ -4,6 +4,15 @@ return function(deps)
 	local block, rootOf, paused = deps.block, deps.rootOf, deps.paused
 	local finishDash, update, clock = deps.finishDash, deps.update, deps.clock
 	local spellOptions=deps.spellOptions
+	local MAX_GEMS=180
+	local function showGemValue(gem,value)
+		gem.value=value
+		gem.part:SetAttribute("ExperienceValue",value)
+		local size=.8+math.min(.4,math.log(value)/math.log(2)*.05)
+		gem.part.Size=Vector3.new(size,size,size)
+		gem.part.Color=value>=20 and Color3.fromRGB(125,45,200)
+			or(value>=5 and Color3.fromRGB(30,80,200)or Color3.fromRGB(72,250,212))
+	end
 	local function need(s) return 5+(s.level-1)*3 end
 	local augments=deps.augments or require(script.Parent.Augments)
 	local function choices(s)
@@ -29,10 +38,26 @@ return function(deps)
 		end
 	end
 	local function drop(pos)
-		if #gems>=180 then return end
+		if #gems>=MAX_GEMS then
+			-- Preserve every kill's XP while keeping the replicated part count bounded.
+			-- Prefer a nearby grounded gem; do not move a gem already following a player.
+			local nearest,grounded
+			local nearestDistance,groundedDistance=math.huge,math.huge
+			for _,gem in ipairs(gems)do
+				local dx,dz=gem.pos.X-pos.X,gem.pos.Z-pos.Z
+				local distance=dx*dx+dz*dz
+				if distance<nearestDistance then nearest,nearestDistance=gem,distance end
+				if not gem.collector and distance<groundedDistance then grounded,groundedDistance=gem,distance end
+			end
+			local target=grounded or nearest
+			showGemValue(target,(target.value or 1)+1)
+			return
+		end
 		local p=block(world,"Experience",Vector3.new(.8,.8,.8),Vector3.new(pos.X,1.1,pos.Z),Color3.fromRGB(72,250,212),Enum.Material.Neon)
 		p.CFrame*=CFrame.Angles(0,math.pi/4,math.pi/4)
-		table.insert(gems,{part=p,pos=p.Position})
+		local gem={part=p,pos=p.Position}
+		showGemValue(gem,1)
+		table.insert(gems,gem)
 	end
 	local function choose(s,id,revision)
 		if s.over or s.lobby then return end
@@ -77,7 +102,7 @@ return function(deps)
                 local travel=(math.max(36,h.WalkSpeed+12)+distance*2)*dt
                 if distance<=3.5+travel then
                     gem.part:Destroy();table.remove(gems,i)
-                    for _,s in pairs(states) do if rootOf(s) then s.xp+=1;levelCheck(s) end end
+                    for _,s in pairs(states) do if rootOf(s) then s.xp+=gem.value or 1;levelCheck(s) end end
                 else
                     gem.pos+=delta.Unit*travel
                     gem.part.Position=gem.pos
