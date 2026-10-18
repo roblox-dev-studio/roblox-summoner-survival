@@ -2,6 +2,16 @@
 
 ## 2026-10-19 · Quaternius 이동/점프와 서버 승인 이단점프
 
+### 잠금 해제 후 실제 화면 확인 · 소스 `026f0e2`
+
+- 새 로컬 Baseplate `PlayerMotion026f0e2.rbxlx`(Studio `0c15c5fb-8d02-497c-97a6-cb32054ea97f`, placeId0)에 전체 생성 설치기를 실행. 기존 PR10 시안이 없는 환경에서 arena와 실행 소스189개 생성 확인.
+- 로컬 XML에 동일 설치기 문자열을 ModuleScript로 넣어 Edit에서 1회 require한 뒤 임시 모듈 제거. HTTP 설정 변경이나 외부 코드 실행 없음. 이 XML 파일의 설치 후 디스크 저장은 아직 확인하지 않음.
+- 실제 Client 렌더링 복구: 0.3초 동안 PreRender18회. Studio 입력 도구의 W/D와 Space 해제·재입력으로 이동·이단점프 실행. 기본 카메라 이동 장면과 FOV70의 임시 근접 카메라에서 공중 회전을 직접 확인.
+- 캡처: [달리기](images/player-motion/run.jpg), [이단점프 회전](images/player-motion/double-jump.jpg). 실제 Play 화면 1721×1080. 근접 카메라는 25초 뒤 Custom으로 복구하며 게임 소스에 포함되지 않음. 전후 비교 자료가 아닌 신규 구현의 두 대표 장면.
+- 두 번째 점프 시퀀스2까지 증가. 착지 후 `idle`, Root.UpVector.Y=1, Slate 접촉, HP150 및 CameraType.Custom 확인. 화면에서 팔·다리 변화와 공중 회전을 확인했지만 연속 영상의 전 구간, 모든 아바타 비율·패드/터치·협동 품질을 승인한 것은 아님.
+- Play 종료. 아래의 macOS 잠금 기록은 이전 검사 당시의 제한이며 이번에 화면 캡처·새 Baseplate 설치 제한은 해소됨.
+
+
 - 기반 main `a7c2bbe`, 브랜치 `feat/player-locomotion`. 게임 소스 SHA-256
   `77cbfad2f51b126a6d028d5570fbc429087011ce09a28fffb1455275011db8bd`
   (정렬한 client/server/arena + src 파일 경로 NUL·내용 NUL).
