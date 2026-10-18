@@ -114,3 +114,18 @@ png-clipart-flame-fire-flame.png: user supplied visual reference for a long tear
 현재 군단장 기수·투구·장식깃·흉갑·관절 갑옷·망토·도끼창·모션은 `CommanderMount.luau`의 프로젝트 자체 절차 모델입니다. 앞서 재사용했던 KayKit Warrior 기수/검/방패는 군단장에서 제거했습니다. KayKit 원본은 일반 적에 그대로 사용합니다. 별도 외부 메시·이미지·애니메이션·스크립트는 추가하지 않았습니다. 자산 구조와 재현 경로는 `assets/enemies/commander/manifest.json`에 기록합니다.
 
 사용자가 언급한 ELDEN RING 트리가드는 기마 중갑 기사와 준비/타격의 무게감에 대한 미술·전투 방향 참고입니다. 게임 모델·텍스처·모션 파일은 가져오지 않았습니다. 작품 정보 참고: https://www.bandainamcoent.com/games/elden-ring . 실제 이 게임의 실루엣과 절차 소스가 구현 기준입니다.
+
+
+## 증강 리본·공유 애니메이터 · 2026-10-18
+
+[Willikk / Roblox](https://github.com/Willikk/Roblox/tree/c77902e8f59cc0ca1f3130906ae51c92d9de310e)의
+`.claude/skills/roblox-mesh-vfx/src/shared/VFX`에서 `BeamArc.luau`, `VFXMath.luau`, `Animator.luau` 세 파일을 재사용합니다.
+원작자는 Willikk 저장소 기여자이며 고정 리비전은 `c77902e8f59cc0ca1f3130906ae51c92d9de310e`입니다.
+원본 README의 License 절은 **MIT, 개인·상업 Roblox 게임에서 사용/수정 가능**이라고 명시합니다.
+별도 루트 LICENSE 파일은 해당 리비전에서 발견하지 못했으므로 원본 라이선스 선언이 담긴 README 전체를 그대로 보관했습니다.
+
+사용 위치는 `src/client/combat/vfx/`, 근거/설치 provenance/파일 SHA-256은 `assets/vfx/roblox-mesh-vfx/`입니다.
+세 모듈은 로컬 엔진 API를 사용한 곡선 Beam·벡터 계산·공유 프레임 루프이며 검토 후 원본 그대로 포함했습니다.
+HTTP 호출, 외부 실행/자동 설치, 숫자 asset require, 원격 loadstring은 없고 다른 동봉 코드/도구는 실행하지 않았습니다.
+증강별 돔·운석 궤도·파편·빙하 관문 구성과 풀 제한/수명 관리는 프로젝트의 `AugmentArt`에서 작성했습니다.
+새 유료 구매나 이미지·메시·플러그인 업로드는 없습니다.

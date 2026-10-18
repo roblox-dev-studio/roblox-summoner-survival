@@ -32,7 +32,7 @@ return function(deps)
    s.shield=(30+level*12)*(A.Has(s,'ward_reservoir')and 1.5 or 1)
    if s.player and type(s.player.UserId)=='number'then anchor:SetAttribute('OwnerUserId',s.player.UserId)end
   end
-  anchor.Parent=world
+  A.Stamp(anchor,s,kind);anchor.Parent=world
   table.insert(s.areaCasts,{kind=kind,pos=point,level=level,radius=radius,duration=duration,time=0,hits={},anchor=anchor,shield=s.shield or 0})
   effect:FireAllClients('areaCast',anchor.Name,kind)
  end
@@ -54,7 +54,7 @@ return function(deps)
    if echo.delay<=0 then
     if echo.kind=='frost'then echo.pos=Vector3.new(root.Position.X,.35,root.Position.Z)end
     hit(echo,s,echo.amount);effect:FireAllClients(echo.kind=='meteor'and'meteorHit'or'frostHit',echo.pos,echo.radius)
-    table.remove(s.areaEchoes,i)
+    A.Impact(effect,s,echo.kind,echo.pos,echo.radius,'echo');table.remove(s.areaEchoes,i)
    end
   end
   for i=#s.areaCasts,1,-1 do
@@ -66,6 +66,7 @@ return function(deps)
     if cast.kind=='meteor' or cast.kind=='frost' then
      hit(cast,s,cast.kind=='meteor' and 65+cast.level*22 or 18+cast.level*8)
      effect:FireAllClients(cast.kind=='meteor' and 'meteorHit' or 'frostHit',cast.pos,cast.radius)
+     A.Impact(effect,s,cast.kind,cast.pos,cast.radius,'hit')
      if A.Has(s,cast.kind..'_echo')then
       table.insert(s.areaEchoes,{kind=cast.kind,pos=cast.pos,radius=cast.radius,level=cast.level,amount=(cast.kind=='meteor'and 65+cast.level*22 or 18+cast.level*8)*.5,delay=cast.kind=='meteor'and .65 or .6})
      end

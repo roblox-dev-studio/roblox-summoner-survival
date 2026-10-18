@@ -17,10 +17,10 @@ return function(deps)
   if aura and (aura.level~=level or aura.count~=count) then aura.anchor:Destroy();auras[s]=nil;aura=nil end
   if not aura then
    nextId+=1;local anchor=Instance.new('Part');anchor.Name='CrystalAura_'..nextId;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=root.CFrame
-   anchor:SetAttribute('Count',count);anchor:SetAttribute('Radius',2);anchor:SetAttribute('Duration',1000000);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Level',level);anchor.Parent=deps.world
+   anchor:SetAttribute('Count',count);anchor:SetAttribute('Radius',2);anchor:SetAttribute('Duration',1000000);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Level',level);A.Stamp(anchor,s,"blades");anchor.Parent=deps.world
    aura={anchor=anchor,time=0,index=0,level=level,recharge=0,count=count};auras[s]=aura;deps.effect:FireAllClients('areaCast',anchor.Name,'blades')
   end
-  aura.time+=dt;aura.anchor.CFrame=root.CFrame;aura.anchor:SetAttribute('Elapsed',aura.time);aura.anchor:SetAttribute('Level',level)
+  aura.time+=dt;aura.anchor.CFrame=root.CFrame;aura.anchor:SetAttribute('Elapsed',aura.time);aura.anchor:SetAttribute('Level',level);A.Stamp(aura.anchor,s,'blades')
   aura.recharge=math.max(0,aura.recharge-dt)
   if aura.recharge>0 then return end
   if aura.index>=count then aura.index=0;aura.anchor:SetAttribute('Fired',0)end
@@ -32,7 +32,7 @@ return function(deps)
   aura.index+=1
   local target=candidates[(aura.index-1)%math.min(count,#candidates)+1]
   local pos=muzzle(root.CFrame,aura.index,count);local delta=target.pos-pos;if delta.Magnitude<.01 then delta=root.CFrame.LookVector end
-  nextId+=1;local anchor=Instance.new('Part');anchor.Name='CrystalBolt_'..nextId;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,pos+delta);anchor.Parent=deps.world
+  nextId+=1;local anchor=Instance.new('Part');anchor.Name='CrystalBolt_'..nextId;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,pos+delta);A.Stamp(anchor,s,"blades");anchor.Parent=deps.world
   s.crystalClock=.18
   aura.anchor:SetAttribute('Fired',aura.index)
   if aura.index==count then aura.recharge=A.Cooldown(s,4.4-level*.35);s.crystalClock=0 end
@@ -62,7 +62,7 @@ return function(deps)
     for _,contact in ipairs(contacts)do
      local hit=contact.enemy
      shot.hits[hit]=true;shot.remaining-=1;shot.target=nil
-     deps.damage(hit,10+shot.level*4,shot.source);deps.effect:FireAllClients('crystalHit',hit.pos)
+     deps.damage(hit,10+shot.level*4,shot.source);deps.effect:FireAllClients('crystalHit',hit.pos);A.Impact(deps.effect,shot.source,'blades',hit.pos,2.5,'hit')
      if shot.remaining<=0 then remove=true;break end
     end
     if wall or shot.time>=2 then remove=true end

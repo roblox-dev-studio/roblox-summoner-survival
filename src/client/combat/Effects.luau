@@ -344,10 +344,14 @@ return function(deps)
 			task.delay(duration+.2,function()if model.Parent and not model:GetAttribute("Frozen") then clear() end end)
 		end
 	end
+	local augmentArt=require(script.Parent.AugmentArt)({folder=fx})
+	local generation=0
 	local fieldArt=require(script.Parent.Parent.world.FieldBossArt)(fx)
 	local function play(kind,a,b,c)
 		if not fx.Parent then return end
-		if kind=="fieldBoss" then fieldArt(a,b,c)
+		if kind=="augmentImpact" then augmentArt.Impact(a,b,c)
+        elseif kind=="augmentArc" then augmentArt.Arc(a,b,c)
+        elseif kind=="fieldBoss" then fieldArt(a,b,c)
         elseif kind=="hit" then
 			local p=visual(Vector3.new(.05,.05,.05),CFrame.new(a+Vector3.new(0,3,0)),palette.text); p.Transparency=1
 			local billboard=make("BillboardGui",p,{Size=UDim2.fromOffset(70,32),AlwaysOnTop=true,Adornee=p})
@@ -367,31 +371,31 @@ return function(deps)
 		elseif kind=="golemHeavy" or kind=="golemLight" then groundImpact(a,b,kind=="golemHeavy",c)
 		elseif kind=="dash" then dashEffect(a,b,c)
 		elseif kind=="fire" then magicBolt(a,b,c)
-		elseif kind=="fireProjectile" then fireArt.Projectile(a)
+		elseif kind=="fireProjectile" then fireArt.Projectile(a);augmentArt.Cast(a,"fire")
 		elseif kind=="lightning" then
-			task.delay(math.min(.3,math.max(0,(c or 1)-1)*.045),function()lightningArt.Strike(a,b,c)end)
-		elseif kind=="lightCast" then lightArt.Cast(a,b)
+			local epoch=generation;task.delay(math.min(.3,math.max(0,(c or 1)-1)*.045),function()if epoch==generation and fx.Parent then lightningArt.Strike(a,b,c)end end)
+		elseif kind=="lightCast" then lightArt.Cast(a,b);augmentArt.Cast(a,b)
 		elseif kind=="lightHit" then lightArt.Hit(a,b)
 		elseif kind=="basicBolt" then lightArt.Bolt(a)
 		elseif kind=="basicHit" then lightArt.Hit(a,"basic")
-		elseif kind=="thunderSpear" then projectileArt.Cast(a,"thunder")
-		elseif kind=="aetherSpear" then projectileArt.Cast(a,"aetherLance")
+		elseif kind=="thunderSpear" then projectileArt.Cast(a,"thunder");augmentArt.Cast(a,"thunder")
+		elseif kind=="aetherSpear" then projectileArt.Cast(a,"aetherLance");augmentArt.Cast(a,"aetherLance")
 		elseif kind=="aetherHit" then projectileArt.Impact(a,"aetherLance")
-		elseif kind=="crystalBolt" then projectileArt.Cast(a,"crystal")
+		elseif kind=="crystalBolt" then projectileArt.Cast(a,"crystal");augmentArt.Cast(a,"blades","bolt")
 		elseif kind=="skyLanceHit" then areaArt.Burst(a,b,Color3.fromRGB(157,204,255))
 		elseif kind=="crystalHit" then projectileArt.Impact(a,"crystal")
-		elseif kind=="homingMissile" then projectileArt.Cast(a,"missile")
+		elseif kind=="homingMissile" then projectileArt.Cast(a,"missile");augmentArt.Cast(a,"missile")
 		elseif kind=="thunderHit" then projectileArt.Impact(a,"thunder")
 		elseif kind=="missileHit" then projectileArt.Impact(a,"missile")
 		elseif kind=="activeCast" then activeArt.Charge(a,b)
-		elseif kind=="activeStrike" then activeArt.Strike(a,b,c)
-		elseif kind=="areaCast" then areaArt.Cast(a,b)
-		elseif kind=="augmentPulse" then art.Rupture(a,b,false)
+		elseif kind=="activeStrike" then activeArt.Strike(a,b,c);if c and c.kind=="iceRush"and(c.width or 0)>6 then augmentArt.Corridor(a,b,c.range,c.width)end
+		elseif kind=="areaCast" then areaArt.Cast(a,b);augmentArt.Cast(a,b,"aura")
+		elseif kind=="augmentPulse" then augmentArt.Impact(a,b,{ids="ward_pulse",phase="hit"})
         elseif kind=="augmentFireHit" then art.Rupture(a,b,false)
         elseif kind=="meteorHit" then art.Rupture(a,b,false);areaArt.MeteorImpact(a,b)
 		elseif kind=="frostHit" then areaArt.FrostImpact(a,b)
 		elseif kind=="wardHit" then areaArt.Burst(a,b and 5 or 2.5,Color3.fromRGB(255,222,152))
-		elseif kind=="iceCast" then iceProjectile(a,b,c)
+		elseif kind=="iceCast" then iceProjectile(a,b,c);augmentArt.Cast(a,"ice")
 		elseif kind=="iceHit" then iceImpact(a,b,c)
 		end
 	end
@@ -400,7 +404,9 @@ return function(deps)
 
 	return {
 		Folder = fx,
+        Clear = function()generation+=1;augmentArt.Clear()end,
+        AugmentStats = augmentArt.Stats,
 		Play = play,
-		Disconnect = function()if connection then connection:Disconnect();connection=nil end end,
+		Disconnect = function()generation+=1;augmentArt.Clear();if connection then connection:Disconnect();connection=nil end end,
 	}
 end

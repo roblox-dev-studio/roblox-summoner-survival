@@ -11,7 +11,7 @@ return function(deps)
   return best
  end
  local function start(s,kind,pos,level,direction,curve)
-  serial+=1;local a=Instance.new('Part');a.Name='LightCast_'..serial;a.Size=Vector3.one*.1;a.Transparency=1;a.Anchored=true;a.CanCollide=false;a.CanQuery=false;a.CanTouch=false;a.CFrame=CFrame.lookAt(pos,pos+(direction or Vector3.zAxis));a:SetAttribute('Elapsed',0);a:SetAttribute('Level',level);a:SetAttribute('Radius',3);a:SetAttribute('Returning',false);a.Parent=deps.world
+  serial+=1;local a=Instance.new('Part');a.Name='LightCast_'..serial;a.Size=Vector3.one*.1;a.Transparency=1;a.Anchored=true;a.CanCollide=false;a.CanQuery=false;a.CanTouch=false;a.CFrame=CFrame.lookAt(pos,pos+(direction or Vector3.zAxis));a:SetAttribute('Elapsed',0);a:SetAttribute('Level',level);a:SetAttribute('Radius',3);a:SetAttribute('Returning',false);A.Stamp(a,s,kind);a.Parent=deps.world
   table.insert(casts,{source=s,kind=kind,anchor=a,level=level,time=0,distance=0,origin=pos,direction=direction,hits={},returnHits={},pulse=0,returning=false,curve=curve or 1,multiplier=A.Has(s,"lightRing_twin")and .7 or 1})
   deps.effect:FireAllClients('lightCast',a.Name,kind)
  end
@@ -60,7 +60,7 @@ return function(deps)
      local delta=to-from;local length=delta:Dot(delta);local hits=c.returning and c.returnHits or c.hits
      for _,e in ipairs(deps.enemies)do if e.hp>0 and not hits[e]then
       local t=length>.0001 and math.clamp((e.pos-from):Dot(delta)/length,0,1)or 0
-      if(e.pos-from-delta*t).Magnitude<=3.3 then hits[e]=true;deps.damage(e,A.Damage(c.source,"lightRing",(18+c.level*8)*c.multiplier,e,c.returning),c.source);deps.effect:FireAllClients('lightHit',e.pos,'lightRing')end
+      if(e.pos-from-delta*t).Magnitude<=3.3 then hits[e]=true;deps.damage(e,A.Damage(c.source,"lightRing",(18+c.level*8)*c.multiplier,e,c.returning),c.source);deps.effect:FireAllClients('lightHit',e.pos,'lightRing');A.Impact(deps.effect,c.source,'lightRing',e.pos,3,c.returning and 'return' or 'hit')end
      end end
      if delta.Magnitude>.001 then c.anchor.CFrame=CFrame.lookAt(to,to+delta.Unit)end
      if not c.returning and(wall or c.distance>=38-.001)then c.returning=true;c.returnStart=to;c.returnAge=0;c.returnDuration=math.max(.1,(to-root.Position-Vector3.new(0,.8,0)).Magnitude/40);c.anchor:SetAttribute('Returning',true)end

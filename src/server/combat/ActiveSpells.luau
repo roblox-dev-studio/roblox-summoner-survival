@@ -10,13 +10,13 @@ return function(deps)
   if kind=='fire' then
    nextCast+=1
    local anchor=Instance.new('Part');anchor.Name='ActiveFireball_'..nextCast;anchor.Anchored=true;anchor.Transparency=1;anchor.Size=Vector3.one*.1;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
-   local start=origin+direction*3+Vector3.new(0,1.2,0);anchor.CFrame=CFrame.lookAt(start,start+direction);anchor.Parent=deps.world
+   local start=origin+direction*3+Vector3.new(0,1.2,0);anchor.CFrame=CFrame.lookAt(start,start+direction);A.Stamp(anchor,s,kind);anchor.Parent=deps.world
    s.activeCast={kind=kind,time=0,origin=start,direction=direction,range=42,travelled=0,hits={},anchor=anchor};s.cooldown=A.ActiveCooldown(s)
    deps.effect:FireAllClients('fireProjectile',anchor.Name);return true
   end
   nextCast+=1
   local anchor=Instance.new('Part');anchor.Name='ActiveCast_'..nextCast;anchor.Anchored=true;anchor.Transparency=1;anchor.Size=Vector3.one*.1;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
-  anchor.CFrame=CFrame.lookAt(origin,origin+direction);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Duration',.4);anchor:SetAttribute('Range',kind~='iceRush' and 52 or 34);anchor:SetAttribute('Launched',false);anchor:SetAttribute('Width',kind=='iceRush'and(A.Has(s,'iceRush_wide')and 9 or 6)or 2.4);anchor.Parent=deps.world
+  anchor.CFrame=CFrame.lookAt(origin,origin+direction);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Duration',.4);anchor:SetAttribute('Range',kind~='iceRush' and 52 or 34);anchor:SetAttribute('Launched',false);anchor:SetAttribute('Width',kind=='iceRush'and(A.Has(s,'iceRush_wide')and 9 or 6)or 2.4);A.Stamp(anchor,s,kind);anchor.Parent=deps.world
   s.activeCast={kind=kind,time=0,origin=origin,direction=direction,range=kind~='iceRush' and 52 or 34,travelled=0,hits={},anchor=anchor};s.cooldown=A.ActiveCooldown(s)
   deps.effect:FireAllClients('activeCast',anchor.Name,kind)
   if kind~='iceRush' then deps.effect:FireAllClients(kind=='thunder'and'thunderSpear'or'aetherSpear',anchor.Name)end
@@ -51,7 +51,7 @@ return function(deps)
    if target or wall then
     local radius=A.Has(s,'fire_blast')and 7 or 5
     for _,e in ipairs(deps.enemies)do if e.hp>0 and (e==target or(e.pos-pos).Magnitude<=radius)then deps.damage(e,75,s)end end
-    deps.effect:FireAllClients('augmentFireHit',pos,radius)
+    deps.effect:FireAllClients('augmentFireHit',pos,radius);A.Impact(deps.effect,s,'fire',pos,radius,'hit')
     clear(s)
    elseif cast.travelled>=cast.range-.001 then clear(s)end
    return
@@ -68,13 +68,13 @@ return function(deps)
    if wall then pos=wall.Position end
    for _,e in ipairs(deps.enemies)do
     if e.hp>0 and not cast.hits[e] and segmentDistance(e.pos,previous,pos,cast.kind=='aetherLance'and .5 or nil)<=2.4 then
-     cast.hits[e]=true;local amount=A.Damage(s,cast.kind,72+(s.lightning or 0)*8,e);deps.damage(e,amount,s);deps.effect:FireAllClients(cast.kind=='thunder'and'thunderHit'or'aetherHit',e.pos)
+     cast.hits[e]=true;local empowered=A.Damage(s,cast.kind,1,e)>1;local amount=A.Damage(s,cast.kind,72+(s.lightning or 0)*8,e);deps.damage(e,amount,s);deps.effect:FireAllClients(cast.kind=='thunder'and'thunderHit'or'aetherHit',e.pos);A.Impact(deps.effect,s,cast.kind,e.pos,3,'hit',empowered)
      if cast.kind=='thunder'and A.Has(s,'thunder_chain')then
       cast.chainHits=cast.chainHits or {};cast.chainCount=cast.chainCount or 0
       for _,other in ipairs(deps.enemies)do
        if cast.chainCount>=2 then break end
        if other~=e and other.hp>0 and not cast.chainHits[other]and(other.pos-e.pos).Magnitude<=12 then
-        cast.chainHits[other]=true;cast.chainCount+=1;deps.damage(other,amount*.5,s);deps.effect:FireAllClients('lightning',e.pos,other.pos,cast.chainCount)
+        cast.chainHits[other]=true;cast.chainCount+=1;deps.damage(other,amount*.5,s);deps.effect:FireAllClients('lightning',e.pos,other.pos,cast.chainCount);deps.effect:FireAllClients('augmentArc',e.pos,other.pos,'thunder_chain')
        end
       end
      end

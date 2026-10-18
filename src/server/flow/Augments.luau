@@ -35,6 +35,19 @@ A.SpellOrder={"ice","lightning","meteor","blades","skyLances","frost","missile",
 local descriptions={ice="피해 +8 · 빙결 +0.1초 · 둔화 +0.4초",lightning="피해 +7 · 연쇄 타깃 +1",meteor="피해 +22 · 반경 +1 · 주기 -0.3초",blades="결정 피해 +4 · 재충전 -0.35초",skyLances="창 피해 +8 · 주기 -0.4초",frost="피해 +8 · 반경 +1 · 빙결 +0.2초",missile="피해 +7 · 짝수 단계에 탄환 +1",ward="흡수량 +12 · 주기 -0.3초",lightRing="피해 +8 · 주기 -0.25초",golem="내려찍기·강타 피해와 범위 증가"}
 function A.Count(s,id) return (s.augments and s.augments[id]) or 0 end
 function A.Has(s,id) return A.Count(s,id)>0 end
+-- Cosmetic identifiers only; damage and ownership stay on the server.
+function A.Visuals(s,kind)
+ local ids={}
+ for _,d in ipairs(definitions)do
+  if (d.spell==kind or d.active==kind)and A.Has(s,d.id)then table.insert(ids,d.id)end
+ end
+ return table.concat(ids,",")
+end
+function A.Stamp(anchor,s,kind) anchor:SetAttribute("VFXAugments",A.Visuals(s,kind)) end
+function A.Impact(effect,s,kind,pos,radius,phase,empowered)
+ local ids=A.Visuals(s,kind)
+ if ids~=""then effect:FireAllClients("augmentImpact",pos,radius,{ids=ids,phase=phase,empowered=empowered==true})end
+end
 function A.Luck(s) return math.min(60,A.Count(s,"lucky_charm")*20) end
 function A.Cooldown(s,base) return base*(1-.08*math.min(3,A.Count(s,"quick_cast"))) end
 function A.ActiveCooldown(s) return 7*(1-.15*math.min(2,A.Count(s,"active_focus"))) end

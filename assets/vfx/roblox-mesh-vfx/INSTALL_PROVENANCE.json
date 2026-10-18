@@ -1,0 +1,13 @@
+{
+  "name": "roblox-mesh-vfx",
+  "repo": "Willikk/Roblox",
+  "commit": "c77902e8f59cc0ca1f3130906ae51c92d9de310e",
+  "upstream_path": ".claude/skills/roblox-mesh-vfx",
+  "installed_date": "2026-10-15",
+  "install_method": "official skill-installer helper, GitHub pinned commit",
+  "local_adaptation": null,
+  "review": "SKILL.md and package file types inspected; searched selected packages for install hooks, external execution and runtime HTTP patterns; no automatic script execution performed",
+  "installed_skill_sha256": "c74507d55be88fbdcd7ea4262e2988092a5fcd5179379b1686eed02ec365824f",
+  "file_count": 41,
+  "automatic_runtime_execution": false
+}

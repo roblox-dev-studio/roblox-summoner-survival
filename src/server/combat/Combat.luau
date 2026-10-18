@@ -49,7 +49,7 @@ return function(deps)
 		nextIceShot+=1
 		local anchor=block(world,"IceSpearAnchor_"..nextIceShot,Vector3.new(.1,.1,.1),portalPos,Color3.fromRGB(170,237,255))
 		anchor.Transparency=1;anchor.CFrame=portal
-		anchor:SetAttribute("Launched",false)
+		anchor:SetAttribute("Launched",false);A.Stamp(anchor,s,"ice")
 		table.insert(iceShots,{source=s,target=target,anchor=anchor,time=0,charge=.42,speed=36,level=s.ice,multiplier=A.Has(s,"ice_twin") and .75 or 1})
 		effect:FireAllClients("iceCast",anchor.Name,portal,.42)
 	end
@@ -83,7 +83,7 @@ return function(deps)
                                     damage(other,amount*.5,shot.source)
                                 end
                             end
-                            effect:FireAllClients("frostHit",pos,5)
+                            A.Impact(effect,shot.source,"ice",pos,5,"hit")
                         end
 						if target.hp>0 and not target.isBoss and not target.isFieldBoss then
 							local forward=shot.anchor.CFrame.LookVector
@@ -300,7 +300,9 @@ return function(deps)
 					local hit,range=nil,35
 					for _,e in ipairs(enemies) do local d=(e.pos-last).Magnitude; if e.hp>0 and not struck[e] and d<range then hit,range=e,d end end
 					if not hit then break end
-					struck[hit]=true; effect:FireAllClients("lightning",last,hit.pos,hop); damage(hit,A.Damage(s,"lightning",12+s.lightning*7,hit),s); last=hit.pos
+					struck[hit]=true; effect:FireAllClients("lightning",last,hit.pos,hop);
+                    local variants=A.Visuals(s,"lightning");if variants~=""then effect:FireAllClients("augmentArc",last,hit.pos,variants)end
+                    A.Impact(effect,s,"lightning",hit.pos,4,"hit",A.Damage(s,"lightning",1,hit)>1); damage(hit,A.Damage(s,"lightning",12+s.lightning*7,hit),s); last=hit.pos
 				end
 			end
 			local iceTarget=s.ice>0 and nearest(r.Position,46)

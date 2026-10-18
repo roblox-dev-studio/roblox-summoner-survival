@@ -50,3 +50,16 @@ assert(A.Damage(state,'aetherLance',100,{hp=50,maxHp=100})==150)
 assert(A.Damage(state,'lightRing',100,{},true)==175 and A.Damage(state,'lightRing',100,{},false)==100)
 assert(A.Damage(state,'lightning',100,{slow=1})==160 and A.Damage(state,'lightning',100,{slow=0})==100)
 print(string.format('PASS: 25 augment eligibility/caps, complete pool fallback, lottery %.2f%% -> %.2f%% epic, bounded combat multipliers',normalRate*100,luckyRate*100))
+
+local styles=require('../src/client/combat/AugmentStyles')
+local stylesById={};local visualCount=0
+for kind,entries in pairs(styles)do for _,entry in ipairs(entries)do stylesById[entry.id]=kind;visualCount+=1 end end
+assert(visualCount==22)
+for _,d in ipairs(A.Definitions)do
+ if d.spell or d.active then
+  assert(stylesById[d.id]==(d.spell or d.active),'Missing augment art: '..d.id)
+  assert(A.Visuals({augments={[d.id]=1}},d.spell or d.active)==d.id)
+ end
+end
+assert(A.Visuals({augments={lucky_charm=3}},'ice')=='','Luck never adds combat art')
+print('PASS: 22 visual variants match server catalog; common stats add no combat clutter')

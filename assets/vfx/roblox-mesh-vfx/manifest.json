@@ -1,0 +1,25 @@
+{
+  "source": "https://github.com/Willikk/Roblox",
+  "commit": "c77902e8f59cc0ca1f3130906ae51c92d9de310e",
+  "creator": "Willikk / Roblox repository contributors",
+  "license": "MIT (upstream README declaration)",
+  "license_evidence": "UPSTREAM_README.md, License section; no separate LICENSE was present at the pinned repository root",
+  "usage": "Three reviewed Luau helper modules only: circular Beam ribbons, shared animation loop and vector math. Original project augment compositions in AugmentArt. No runtime downloads, install hooks, or additional bundled scripts/assets/plugins executed.",
+  "files": {
+    "src/client/combat/vfx/BeamArc.luau": {
+      "upstream_path": ".claude/skills/roblox-mesh-vfx/src/shared/VFX/BeamArc.luau",
+      "sha256": "0fb4dd785f1b0698e41f8e75163da8a99555bea355e66e17c0b94da37e20dbf0",
+      "modified": false
+    },
+    "src/client/combat/vfx/Animator.luau": {
+      "upstream_path": ".claude/skills/roblox-mesh-vfx/src/shared/VFX/Animator.luau",
+      "sha256": "719e623ea7945488a6533724eab865c5e4e71cc0852e713c16b7d21ad5ecf498",
+      "modified": false
+    },
+    "src/client/combat/vfx/VFXMath.luau": {
+      "upstream_path": ".claude/skills/roblox-mesh-vfx/src/shared/VFX/VFXMath.luau",
+      "sha256": "c019be54c90604e6c5e7db0c245ea7d8fad58c9f9aa66a3f66b77cfa70aa5604",
+      "modified": false
+    }
+  }
+}

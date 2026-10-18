@@ -610,3 +610,19 @@ Branch codex/light-skills-four-loadout, baseline8316189. Fetched team/main and c
 - 재시작: 새로고침1회 남음/집중된 주문1회 상태에서 실제 로비 버튼 복귀, 서버 State의 레벨1·증강빈배열·행운0·새로고침2 확인. 실제 재출발 후 HP150·로비false·초기 상태 확인. 첫 관찰 도구의 Folder가 리스폰 때 삭제되어 읽기 실패한 뒤, ResetOnSpawn=false인 임시 ScreenGui로 재검사했습니다. 이 오류는 게임 코드 오류가 아닌 관찰 도구 오류입니다.
 - 시각 한계: PC 선택창·희귀 태그·설명/확률·보유창을 확인했습니다. 25증강 전체의 연속 전투 시각/청취 품질은 아직 인수하지 않았습니다. 새 로컬 place의 적이 기본 블록 외형으로 보이는 장면이 있어 기존 메시/외형 인수로 세지 않습니다. 기존 CorePackages FoundationProvider 및 asset203785492 타입 경고도 관측했습니다.
 - 남은 검증: 실제2인 동시 선택/이탈/재추첨, 모바일·패드/작은 화면, 최대 조합·다수 적 성능, 전체 생존→보스 승리 흐름, 사운드/재미·밸런스. 확률·증강 수가 많다는 것만으로 출시 품질이나 수익성을 검증한 것은 아닙니다.
+
+
+## 2026-10-18 · 증강 시각 22개·실전 원격 연결
+
+- 기준 `d764ae9` 후속, `feat/skill-augments-luck`. 진입점2개+src 경로/내용 NUL 구분 정렬 SHA-256 `4b4f3106fb47c17c9c3ede199e7f285a2d62fc5292c502c22500f8f2b2d11271`. 전용 증강22개/자동9종·Q4종의 시각 변형이며 신규 마법22종은 아닙니다. 공통3개는 전투 입자를 추가하지 않습니다.
+- 동일 독립 Studio `434a088f-5ad4-4b16-86ab-0273ee1fd09f`, 로컬 AugmentReview.rbxlx에서 Edit 소스 반영→Play 재시작. 기존 서버 피해/추첨 규칙은 유지하고 VFXAugments/augmentImpact/augmentArc를 연결했습니다. 가져온 MIT 보조 모듈3개는 ASSET_CREDITS/manifest에 기록했습니다.
+- 정적: 설치기 재생성/일치, Python8개, 기존 성장·행운·재추첨 회귀, 서버/클라이언트 전용22개 ID 일치, Luau150개 컴파일/전역 검사, diff 공백 검사 통과.
+- Server `studio_augments` 재실행 통과: 자동9종/Q4종 피해·추가타·범위·처형·취소·쿨다운 기존 조건 유지. 이는 격리된 실제 엔진 fixture이며 사람이 수행한 한 판 검증이 아닙니다.
+- Client `studio_augment_art` 최종 통과: 22개 개별 렌더 + 미리보기 총44회(13개 기본/22개 단일/9개 두 증강 동시), 기본에 추가 레이어 없음, 비정예/비처형 보너스 미표시, 취소/재사용/정상 수명 후 풀 반환, 관찰 오류0개. 44회는 시뮬레이션 시간을 전진한 테스트이며 모든 프레임의 미술 인수를 뜻하지 않습니다.
+- 실제 PC UI에서 P 스킬 미리보기 열기, 결계 선택, 기본 효과→깊은 결계 순환을 마우스로 확인했습니다. 전용 설명/ID와 효과가 함께 바뀌었습니다. 미리보기는 조건부 보너스의 발동 예시임을 명시합니다.
+- 실제 화면 검토: 같은 FOV55/단계2/표적·카메라의 결계 기본/증강 비교, 칠성 결정의7개/후광, 운석 궤도, 빙하 관문을 확인했습니다. 겹치던 돔 곡선의 회전 순서, 지면 아래쪽 반원, 운석 본체와 떨어진 궤도를 수정하고 다시 화면 확인했습니다. 새 장기 오라의90초 임의 제한도 제거했습니다.
+- 캡처 fixture는 처음 카메라 이동 전에 렌더러를 만들어 거리 제한으로 추가 형상이 생략됐습니다. 카메라→시전 순서로 수정한 뒤 재촬영했습니다. 게임 오류와 캡처 도구 오류를 구분합니다. 장면은 실제 클라이언트 렌더러에 고정된 시점/시간을 넣은 비교 시연이며 실제 전투 영상은 아닙니다.
+- 실제 단일 Server→Client 연결: `studio_augment_network` Client observer→Server AreaSpells. 실전 Effect 원격/실전 LocalScript 렌더러에서 areaCast2, meteorHit2, augmentImpact2, augmentPulse1과 echo=true를 수신했습니다. meteor_wide/meteor_echo/ward_reservoir/ward_pulse의 활성 Beam을 관측했고 격리 적의 운석109+54.5 피해를 확인했습니다. 실제 사람 캐릭터 피해/보유 상태를 변경하지 않았습니다. 실제2인 테스트는 아닙니다.
+- 로컬 증거 `artifacts/augment-vfx-review/`: ward-base.png, ward-augmented.png, blades-volley.png, meteor-wide.png, ice-corridor.png, verification.json. Git 제외 파일입니다. 기존 CorePackages FoundationProvider 및 asset203785492 타입 경고는 기존 환경 문제로 남습니다.
+- 저장 한계: 마지막 CUA 저장 호출에서 Mac 잠금 응답을 받았습니다. Studio의 최신 Edit 변경16개 소스는 작업 트리와 정확히 일치함을 MCP로 확인했습니다. 이전 Studio 저장본의 월드 객체를 보존하고149개 전체 소스를 갱신한 별도 `artifacts/augment-vfx-review/AugmentVFXReview.rbxlx`를 생성·파일 내용 일치 확인했습니다. **새 파일 재열기/Studio 직접 저장은 이번 마지막 단계에서 하지 못했습니다.** 원래 열려 있는 AugmentReview.rbxlx에는 저장되지 않은 최신 수정이 남아 있을 수 있습니다. Play는 종료했습니다.
+- 남은 검수: 실제2인, 모바일/패드·작은 화면, 최대 적/복합 마법의 프레임·가독성, 전체22개 연속 전투의 미술/청취·밸런스. 풀 상한은 새 레이어 제한이며 성능 측정 결과가 아닙니다. 새 코드로 몹 외형/전체 생존→보스 승리를 다시 인수하지 않았습니다.

@@ -258,13 +258,13 @@ return function(deps)
   if kind=='fire' then
    nextCast+=1
    local anchor=Instance.new('Part');anchor.Name='ActiveFireball_'..nextCast;anchor.Anchored=true;anchor.Transparency=1;anchor.Size=Vector3.one*.1;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
-   local start=origin+direction*3+Vector3.new(0,1.2,0);anchor.CFrame=CFrame.lookAt(start,start+direction);anchor.Parent=deps.world
+   local start=origin+direction*3+Vector3.new(0,1.2,0);anchor.CFrame=CFrame.lookAt(start,start+direction);A.Stamp(anchor,s,kind);anchor.Parent=deps.world
    s.activeCast={kind=kind,time=0,origin=start,direction=direction,range=42,travelled=0,hits={},anchor=anchor};s.cooldown=A.ActiveCooldown(s)
    deps.effect:FireAllClients('fireProjectile',anchor.Name);return true
   end
   nextCast+=1
   local anchor=Instance.new('Part');anchor.Name='ActiveCast_'..nextCast;anchor.Anchored=true;anchor.Transparency=1;anchor.Size=Vector3.one*.1;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
-  anchor.CFrame=CFrame.lookAt(origin,origin+direction);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Duration',.4);anchor:SetAttribute('Range',kind~='iceRush' and 52 or 34);anchor:SetAttribute('Launched',false);anchor:SetAttribute('Width',kind=='iceRush'and(A.Has(s,'iceRush_wide')and 9 or 6)or 2.4);anchor.Parent=deps.world
+  anchor.CFrame=CFrame.lookAt(origin,origin+direction);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Duration',.4);anchor:SetAttribute('Range',kind~='iceRush' and 52 or 34);anchor:SetAttribute('Launched',false);anchor:SetAttribute('Width',kind=='iceRush'and(A.Has(s,'iceRush_wide')and 9 or 6)or 2.4);A.Stamp(anchor,s,kind);anchor.Parent=deps.world
   s.activeCast={kind=kind,time=0,origin=origin,direction=direction,range=kind~='iceRush' and 52 or 34,travelled=0,hits={},anchor=anchor};s.cooldown=A.ActiveCooldown(s)
   deps.effect:FireAllClients('activeCast',anchor.Name,kind)
   if kind~='iceRush' then deps.effect:FireAllClients(kind=='thunder'and'thunderSpear'or'aetherSpear',anchor.Name)end
@@ -299,7 +299,7 @@ return function(deps)
    if target or wall then
     local radius=A.Has(s,'fire_blast')and 7 or 5
     for _,e in ipairs(deps.enemies)do if e.hp>0 and (e==target or(e.pos-pos).Magnitude<=radius)then deps.damage(e,75,s)end end
-    deps.effect:FireAllClients('augmentFireHit',pos,radius)
+    deps.effect:FireAllClients('augmentFireHit',pos,radius);A.Impact(deps.effect,s,'fire',pos,radius,'hit')
     clear(s)
    elseif cast.travelled>=cast.range-.001 then clear(s)end
    return
@@ -316,13 +316,13 @@ return function(deps)
    if wall then pos=wall.Position end
    for _,e in ipairs(deps.enemies)do
     if e.hp>0 and not cast.hits[e] and segmentDistance(e.pos,previous,pos,cast.kind=='aetherLance'and .5 or nil)<=2.4 then
-     cast.hits[e]=true;local amount=A.Damage(s,cast.kind,72+(s.lightning or 0)*8,e);deps.damage(e,amount,s);deps.effect:FireAllClients(cast.kind=='thunder'and'thunderHit'or'aetherHit',e.pos)
+     cast.hits[e]=true;local empowered=A.Damage(s,cast.kind,1,e)>1;local amount=A.Damage(s,cast.kind,72+(s.lightning or 0)*8,e);deps.damage(e,amount,s);deps.effect:FireAllClients(cast.kind=='thunder'and'thunderHit'or'aetherHit',e.pos);A.Impact(deps.effect,s,cast.kind,e.pos,3,'hit',empowered)
      if cast.kind=='thunder'and A.Has(s,'thunder_chain')then
       cast.chainHits=cast.chainHits or {};cast.chainCount=cast.chainCount or 0
       for _,other in ipairs(deps.enemies)do
        if cast.chainCount>=2 then break end
        if other~=e and other.hp>0 and not cast.chainHits[other]and(other.pos-e.pos).Magnitude<=12 then
-        cast.chainHits[other]=true;cast.chainCount+=1;deps.damage(other,amount*.5,s);deps.effect:FireAllClients('lightning',e.pos,other.pos,cast.chainCount)
+        cast.chainHits[other]=true;cast.chainCount+=1;deps.damage(other,amount*.5,s);deps.effect:FireAllClients('lightning',e.pos,other.pos,cast.chainCount);deps.effect:FireAllClients('augmentArc',e.pos,other.pos,'thunder_chain')
        end
       end
      end
@@ -376,10 +376,10 @@ return function(deps)
   if aura and (aura.level~=level or aura.count~=count) then aura.anchor:Destroy();auras[s]=nil;aura=nil end
   if not aura then
    nextId+=1;local anchor=Instance.new('Part');anchor.Name='CrystalAura_'..nextId;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=root.CFrame
-   anchor:SetAttribute('Count',count);anchor:SetAttribute('Radius',2);anchor:SetAttribute('Duration',1000000);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Level',level);anchor.Parent=deps.world
+   anchor:SetAttribute('Count',count);anchor:SetAttribute('Radius',2);anchor:SetAttribute('Duration',1000000);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Level',level);A.Stamp(anchor,s,"blades");anchor.Parent=deps.world
    aura={anchor=anchor,time=0,index=0,level=level,recharge=0,count=count};auras[s]=aura;deps.effect:FireAllClients('areaCast',anchor.Name,'blades')
   end
-  aura.time+=dt;aura.anchor.CFrame=root.CFrame;aura.anchor:SetAttribute('Elapsed',aura.time);aura.anchor:SetAttribute('Level',level)
+  aura.time+=dt;aura.anchor.CFrame=root.CFrame;aura.anchor:SetAttribute('Elapsed',aura.time);aura.anchor:SetAttribute('Level',level);A.Stamp(aura.anchor,s,'blades')
   aura.recharge=math.max(0,aura.recharge-dt)
   if aura.recharge>0 then return end
   if aura.index>=count then aura.index=0;aura.anchor:SetAttribute('Fired',0)end
@@ -391,7 +391,7 @@ return function(deps)
   aura.index+=1
   local target=candidates[(aura.index-1)%math.min(count,#candidates)+1]
   local pos=muzzle(root.CFrame,aura.index,count);local delta=target.pos-pos;if delta.Magnitude<.01 then delta=root.CFrame.LookVector end
-  nextId+=1;local anchor=Instance.new('Part');anchor.Name='CrystalBolt_'..nextId;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,pos+delta);anchor.Parent=deps.world
+  nextId+=1;local anchor=Instance.new('Part');anchor.Name='CrystalBolt_'..nextId;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,pos+delta);A.Stamp(anchor,s,"blades");anchor.Parent=deps.world
   s.crystalClock=.18
   aura.anchor:SetAttribute('Fired',aura.index)
   if aura.index==count then aura.recharge=A.Cooldown(s,4.4-level*.35);s.crystalClock=0 end
@@ -421,7 +421,7 @@ return function(deps)
     for _,contact in ipairs(contacts)do
      local hit=contact.enemy
      shot.hits[hit]=true;shot.remaining-=1;shot.target=nil
-     deps.damage(hit,10+shot.level*4,shot.source);deps.effect:FireAllClients('crystalHit',hit.pos)
+     deps.damage(hit,10+shot.level*4,shot.source);deps.effect:FireAllClients('crystalHit',hit.pos);A.Impact(deps.effect,shot.source,'blades',hit.pos,2.5,'hit')
      if shot.remaining<=0 then remove=true;break end
     end
     if wall or shot.time>=2 then remove=true end
@@ -469,7 +469,7 @@ return function(deps)
    s.shield=(30+level*12)*(A.Has(s,'ward_reservoir')and 1.5 or 1)
    if s.player and type(s.player.UserId)=='number'then anchor:SetAttribute('OwnerUserId',s.player.UserId)end
   end
-  anchor.Parent=world
+  A.Stamp(anchor,s,kind);anchor.Parent=world
   table.insert(s.areaCasts,{kind=kind,pos=point,level=level,radius=radius,duration=duration,time=0,hits={},anchor=anchor,shield=s.shield or 0})
   effect:FireAllClients('areaCast',anchor.Name,kind)
  end
@@ -491,7 +491,7 @@ return function(deps)
    if echo.delay<=0 then
     if echo.kind=='frost'then echo.pos=Vector3.new(root.Position.X,.35,root.Position.Z)end
     hit(echo,s,echo.amount);effect:FireAllClients(echo.kind=='meteor'and'meteorHit'or'frostHit',echo.pos,echo.radius)
-    table.remove(s.areaEchoes,i)
+    A.Impact(effect,s,echo.kind,echo.pos,echo.radius,'echo');table.remove(s.areaEchoes,i)
    end
   end
   for i=#s.areaCasts,1,-1 do
@@ -503,6 +503,7 @@ return function(deps)
     if cast.kind=='meteor' or cast.kind=='frost' then
      hit(cast,s,cast.kind=='meteor' and 65+cast.level*22 or 18+cast.level*8)
      effect:FireAllClients(cast.kind=='meteor' and 'meteorHit' or 'frostHit',cast.pos,cast.radius)
+     A.Impact(effect,s,cast.kind,cast.pos,cast.radius,'hit')
      if A.Has(s,cast.kind..'_echo')then
       table.insert(s.areaEchoes,{kind=cast.kind,pos=cast.pos,radius=cast.radius,level=cast.level,amount=(cast.kind=='meteor'and 65+cast.level*22 or 18+cast.level*8)*.5,delay=cast.kind=='meteor'and .65 or .6})
      end
@@ -630,7 +631,7 @@ return function(deps)
 		nextIceShot+=1
 		local anchor=block(world,"IceSpearAnchor_"..nextIceShot,Vector3.new(.1,.1,.1),portalPos,Color3.fromRGB(170,237,255))
 		anchor.Transparency=1;anchor.CFrame=portal
-		anchor:SetAttribute("Launched",false)
+		anchor:SetAttribute("Launched",false);A.Stamp(anchor,s,"ice")
 		table.insert(iceShots,{source=s,target=target,anchor=anchor,time=0,charge=.42,speed=36,level=s.ice,multiplier=A.Has(s,"ice_twin") and .75 or 1})
 		effect:FireAllClients("iceCast",anchor.Name,portal,.42)
 	end
@@ -664,7 +665,7 @@ return function(deps)
                                     damage(other,amount*.5,shot.source)
                                 end
                             end
-                            effect:FireAllClients("frostHit",pos,5)
+                            A.Impact(effect,shot.source,"ice",pos,5,"hit")
                         end
 						if target.hp>0 and not target.isBoss and not target.isFieldBoss then
 							local forward=shot.anchor.CFrame.LookVector
@@ -881,7 +882,9 @@ return function(deps)
 					local hit,range=nil,35
 					for _,e in ipairs(enemies) do local d=(e.pos-last).Magnitude; if e.hp>0 and not struck[e] and d<range then hit,range=e,d end end
 					if not hit then break end
-					struck[hit]=true; effect:FireAllClients("lightning",last,hit.pos,hop); damage(hit,A.Damage(s,"lightning",12+s.lightning*7,hit),s); last=hit.pos
+					struck[hit]=true; effect:FireAllClients("lightning",last,hit.pos,hop);
+                    local variants=A.Visuals(s,"lightning");if variants~=""then effect:FireAllClients("augmentArc",last,hit.pos,variants)end
+                    A.Impact(effect,s,"lightning",hit.pos,4,"hit",A.Damage(s,"lightning",1,hit)>1); damage(hit,A.Damage(s,"lightning",12+s.lightning*7,hit),s); last=hit.pos
 				end
 			end
 			local iceTarget=s.ice>0 and nearest(r.Position,46)
@@ -943,7 +946,7 @@ return function(deps)
   for index=1,count do
    local pos=root.Position+root.CFrame.RightVector*((index-(count+1)/2)*1.6)+Vector3.new(0,1.2,0)
    nextShot+=1
-   local anchor=Instance.new('Part');anchor.Name='HomingMissile_'..nextShot;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,enemy.pos);anchor.Parent=deps.world
+   local anchor=Instance.new('Part');anchor.Name='HomingMissile_'..nextShot;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,enemy.pos);A.Stamp(anchor,s,"missile");anchor.Parent=deps.world
    table.insert(shots,{source=s,target=enemy,level=level,time=0,anchor=anchor})
    deps.effect:FireAllClients('homingMissile',anchor.Name)
   end
@@ -958,8 +961,9 @@ return function(deps)
     else
      local delta=shot.target.pos-shot.anchor.Position;local travel=44*dt
      if delta.Magnitude<=travel+1.3 then
+      local empowered=A.Damage(shot.source,"missile",1,shot.target)>1
       deps.damage(shot.target,A.Damage(shot.source,"missile",18+shot.level*7,shot.target),shot.source)
-      deps.effect:FireAllClients('missileHit',shot.target.pos);remove=true
+      deps.effect:FireAllClients('missileHit',shot.target.pos);A.Impact(deps.effect,shot.source,'missile',shot.target.pos,3,'hit',empowered);remove=true
      else
       local move=delta.Unit*travel
       local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={deps.world,shot.source.player.Character};params.RespectCanCollide=true
@@ -990,7 +994,7 @@ return function(deps)
   return best
  end
  local function start(s,kind,pos,level,direction,curve)
-  serial+=1;local a=Instance.new('Part');a.Name='LightCast_'..serial;a.Size=Vector3.one*.1;a.Transparency=1;a.Anchored=true;a.CanCollide=false;a.CanQuery=false;a.CanTouch=false;a.CFrame=CFrame.lookAt(pos,pos+(direction or Vector3.zAxis));a:SetAttribute('Elapsed',0);a:SetAttribute('Level',level);a:SetAttribute('Radius',3);a:SetAttribute('Returning',false);a.Parent=deps.world
+  serial+=1;local a=Instance.new('Part');a.Name='LightCast_'..serial;a.Size=Vector3.one*.1;a.Transparency=1;a.Anchored=true;a.CanCollide=false;a.CanQuery=false;a.CanTouch=false;a.CFrame=CFrame.lookAt(pos,pos+(direction or Vector3.zAxis));a:SetAttribute('Elapsed',0);a:SetAttribute('Level',level);a:SetAttribute('Radius',3);a:SetAttribute('Returning',false);A.Stamp(a,s,kind);a.Parent=deps.world
   table.insert(casts,{source=s,kind=kind,anchor=a,level=level,time=0,distance=0,origin=pos,direction=direction,hits={},returnHits={},pulse=0,returning=false,curve=curve or 1,multiplier=A.Has(s,"lightRing_twin")and .7 or 1})
   deps.effect:FireAllClients('lightCast',a.Name,kind)
  end
@@ -1039,7 +1043,7 @@ return function(deps)
      local delta=to-from;local length=delta:Dot(delta);local hits=c.returning and c.returnHits or c.hits
      for _,e in ipairs(deps.enemies)do if e.hp>0 and not hits[e]then
       local t=length>.0001 and math.clamp((e.pos-from):Dot(delta)/length,0,1)or 0
-      if(e.pos-from-delta*t).Magnitude<=3.3 then hits[e]=true;deps.damage(e,A.Damage(c.source,"lightRing",(18+c.level*8)*c.multiplier,e,c.returning),c.source);deps.effect:FireAllClients('lightHit',e.pos,'lightRing')end
+      if(e.pos-from-delta*t).Magnitude<=3.3 then hits[e]=true;deps.damage(e,A.Damage(c.source,"lightRing",(18+c.level*8)*c.multiplier,e,c.returning),c.source);deps.effect:FireAllClients('lightHit',e.pos,'lightRing');A.Impact(deps.effect,c.source,'lightRing',e.pos,3,c.returning and 'return' or 'hit')end
      end end
      if delta.Magnitude>.001 then c.anchor.CFrame=CFrame.lookAt(to,to+delta.Unit)end
      if not c.returning and(wall or c.distance>=38-.001)then c.returning=true;c.returnStart=to;c.returnAge=0;c.returnDuration=math.max(.1,(to-root.Position-Vector3.new(0,.8,0)).Magnitude/40);c.anchor:SetAttribute('Returning',true)end
@@ -1130,7 +1134,7 @@ return function(deps)
       local delta=tip-lance.last;local length=delta:Dot(delta)
       for _,e in ipairs(deps.enemies)do if e.hp>0 and not lance.hits[e] then
        local t=length>.0001 and math.clamp((e.pos-lance.last):Dot(delta)/length,0,1)or 0
-       if (e.pos-lance.last-delta*t).Magnitude<=3.3 then lance.hits[e]=true;deps.damage(e,A.Damage(s,"skyLances",25+c.level*8,e),s)end
+       if (e.pos-lance.last-delta*t).Magnitude<=3.3 then lance.hits[e]=true;local empowered=A.Damage(s,"skyLances",1,e)>1;deps.damage(e,A.Damage(s,"skyLances",25+c.level*8,e),s);if empowered then A.Impact(deps.effect,s,"skyLances",e.pos,3.3,"hit",true)end end
       end end
       if u>=1 then lance.done=true;deps.effect:FireAllClients('skyLanceHit',lance.point,3.3)end
      end
@@ -1159,7 +1163,7 @@ return function(deps)
   if workspace:Raycast(point+Vector3.new(0,3,0),Vector3.new(0,55,0),ray)then s.skyLancesClock=1;return end
   nextId+=1;local a=Instance.new('Part');a.Name='SkyLanceCast_'..nextId;a.Size=Vector3.one*.1;a.Transparency=1;a.Anchored=true;a.CanCollide=false;a.CanQuery=false;a.CanTouch=false;a.Position=point
   local count=A.Has(s,'skyLances_rain')and 7 or 5;local duration=2.65+(count-5)*.16
-  a:SetAttribute('Count',count);a:SetAttribute('Level',level);a:SetAttribute('Elapsed',0);a:SetAttribute('Duration',duration);a:SetAttribute('Radius',8.3);a.Parent=deps.world
+  a:SetAttribute('Count',count);a:SetAttribute('Level',level);a:SetAttribute('Elapsed',0);a:SetAttribute('Duration',duration);a:SetAttribute('Radius',8.3);A.Stamp(a,s,"skyLances");a.Parent=deps.world
   local c={source=s,anchor=a,time=0,level=level,lances={},duration=duration}
   local positions=table.clone(offsets);if count==7 then table.insert(positions,Vector3.new(3.5,0,3.5));table.insert(positions,Vector3.new(-3.5,0,-3.5))end
   for _,offset in ipairs(positions)do local p=point+offset;table.insert(c.lances,{point=p,last=p+Vector3.new(0,44,0),hits={}})end
@@ -1217,6 +1221,19 @@ A.SpellOrder={"ice","lightning","meteor","blades","skyLances","frost","missile",
 local descriptions={ice="피해 +8 · 빙결 +0.1초 · 둔화 +0.4초",lightning="피해 +7 · 연쇄 타깃 +1",meteor="피해 +22 · 반경 +1 · 주기 -0.3초",blades="결정 피해 +4 · 재충전 -0.35초",skyLances="창 피해 +8 · 주기 -0.4초",frost="피해 +8 · 반경 +1 · 빙결 +0.2초",missile="피해 +7 · 짝수 단계에 탄환 +1",ward="흡수량 +12 · 주기 -0.3초",lightRing="피해 +8 · 주기 -0.25초",golem="내려찍기·강타 피해와 범위 증가"}
 function A.Count(s,id) return (s.augments and s.augments[id]) or 0 end
 function A.Has(s,id) return A.Count(s,id)>0 end
+-- Cosmetic identifiers only; damage and ownership stay on the server.
+function A.Visuals(s,kind)
+ local ids={}
+ for _,d in ipairs(definitions)do
+  if (d.spell==kind or d.active==kind)and A.Has(s,d.id)then table.insert(ids,d.id)end
+ end
+ return table.concat(ids,",")
+end
+function A.Stamp(anchor,s,kind) anchor:SetAttribute("VFXAugments",A.Visuals(s,kind)) end
+function A.Impact(effect,s,kind,pos,radius,phase,empowered)
+ local ids=A.Visuals(s,kind)
+ if ids~=""then effect:FireAllClients("augmentImpact",pos,radius,{ids=ids,phase=phase,empowered=empowered==true})end
+end
 function A.Luck(s) return math.min(60,A.Count(s,"lucky_charm")*20) end
 function A.Cooldown(s,base) return base*(1-.08*math.min(3,A.Count(s,"quick_cast"))) end
 function A.ActiveCooldown(s) return 7*(1-.15*math.min(2,A.Count(s,"active_focus"))) end
@@ -2732,6 +2749,239 @@ return function(deps)
  return {Cast=cast,Burst=burst,MeteorImpact=meteorImpact,FrostImpact=frostImpact}
 end
 ]====])
+-- Source: src/client/combat/AugmentArt.luau
+addModule(modules,{"combat","AugmentArt"},[====[
+-- Client-only augment silhouettes. BeamArc + Animator from the installed MIT VFX skill.
+-- All instances are local, pooled and bounded. No damage, RNG, camera shake or authority here.
+local BeamArc=require(script.Parent.vfx.BeamArc)
+local Animator=require(script.Parent.vfx.Animator)
+local styles=require(script.Parent.AugmentStyles)
+local known={};for _,entries in pairs(styles)do for _,v in ipairs(entries)do known[v.id]=true end end
+local colors={ice=Color3.fromRGB(130,236,255),lightning=Color3.fromRGB(170,192,255),meteor=Color3.fromRGB(255,142,58),blades=Color3.fromRGB(146,255,215),frost=Color3.fromRGB(177,244,255),ward=Color3.fromRGB(255,222,137),missile=Color3.fromRGB(205,155,255),skyLances=Color3.fromRGB(255,222,148),lightRing=Color3.fromRGB(143,218,255),fire=Color3.fromRGB(255,123,48),thunder=Color3.fromRGB(130,188,255),aether=Color3.fromRGB(211,165,255),iceRush=Color3.fromRGB(134,229,255)}
+local tau=math.pi*2
+local function ids(csv)
+ local result={};for id in string.gmatch(type(csv)=='string'and csv or '','[^,]+')do if known[id]then table.insert(result,id)end end;return result
+end
+return function(deps)
+ local folder=deps.folder
+ local container,arcFree,shardFree,jobs=nil,{},{},{}
+ local arcCount,shardCount,active=0,0,0
+ local function ensure()
+  if not container or not container.Parent then
+   container=Instance.new('Folder');container.Name='AugmentVisuals';container.Parent=folder
+   arcFree={};shardFree={};arcCount=0;shardCount=0
+  end
+ end
+ local function visible(point)
+  local camera=workspace.CurrentCamera
+  return folder.Parent and(not camera or(camera.CFrame.Position-point).Magnitude<220)
+ end
+ local function arc(color)
+  ensure();local a=table.remove(arcFree)
+  if not a then if arcCount>=128 then return end;arcCount+=1;a=BeamArc.new(container,4,{color=color,segmentsPerPiece=10})end
+  a:setColor(color);a:setEnabled(true);return a
+ end
+ local function shard(color)
+  ensure();local p=table.remove(shardFree)
+  if not p then
+   if shardCount>=192 then return end;shardCount+=1;p=Instance.new('WedgePart');p.Name='AugmentFacet';p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false;p.Material=Enum.Material.Neon;p.Parent=container
+  end
+  p.Color=color;p.Transparency=1;return p
+ end
+ local function construct(id,narcs,nshards)
+  local color=colors[id:match('^([^_]+)')]or colors.aether
+  local a,p={},{}
+  for i=1,narcs do local v=arc(color);if v then table.insert(a,v)end end
+  for i=1,nshards do local v=shard(color);if v then table.insert(p,v)end end
+  for _,v in ipairs(a)do v.holder:SetAttribute('Augment',id)end
+  for _,v in ipairs(p)do v:SetAttribute('Augment',id)end
+  return a,p
+ end
+ local function release(a,p)
+  for _,v in ipairs(a)do if v.holder.Parent then v:setEnabled(false);table.insert(arcFree,v)end end
+  for _,v in ipairs(p)do if v.Parent then v.Transparency=1;v.CFrame=CFrame.new(0,-50000,0);table.insert(shardFree,v)end end
+ end
+ local function run(seconds,a,p,step)
+  active+=1;local handle
+  handle=Animator.play(seconds,function(t,dt,age)
+   if not folder.Parent or not container or not container.Parent then handle:cancel();return end
+   if step(t,dt,age)==false then handle:cancel()end
+  end,{onComplete=function()release(a,p);active-=1;jobs[handle]=nil end})
+  jobs[handle]=true;return handle
+ end
+ local function curve(a,frame,r,start,sweep,width,alpha)
+  if not a then return end
+  a:setFrame(frame);a:set(r,start,start+sweep,function(u)return width*(.18+.82*math.sin(math.pi*u))end,alpha)
+ end
+ local function facet(p,frame,size,alpha)
+  if not p then return end;p.CFrame=frame;p.Size=size;p.Transparency=math.clamp(alpha,0,1)
+ end
+ local function castOne(anchor,kind,id,role)
+  if role=='aura'and kind=='blades'and id~='blades_volley'then return end
+  if active>=40 or not visible(anchor.Position)then return end
+  local ground=kind=='meteor'or kind=='frost'or kind=='ward'or kind=='skyLances'
+  local a,p=construct(id,kind=='ward'and 3 or 2,(id=='blades_volley'or id=='skyLances_rain')and 7 or 6)
+  local returning=false
+  run(math.huge,a,p,function(_,_,age)
+   if not anchor.Parent then return false end
+   local t=anchor:GetAttribute('Elapsed')or age
+   local radius=anchor:GetAttribute('Radius')or 3
+   local frame=anchor.CFrame;local point=frame.Position
+   if kind=='ward'then
+    local ownerId=anchor:GetAttribute('OwnerUserId');local owner=ownerId and game:GetService('Players'):GetPlayerByUserId(ownerId)
+    local r=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
+    if r then point=r.Position-Vector3.new(0,2.6,0)end
+   end
+   if ground then frame=CFrame.new(point+Vector3.new(0,.35,0))end
+   local alpha=.2;local spin=t*1.4
+   if id=='lightRing_return' then
+    returning=anchor:GetAttribute('Returning')==true
+    alpha=returning and .08 or .82
+    frame=CFrame.new(point)*CFrame.Angles(0,t*9,0)
+    for i,v in ipairs(a)do curve(v,frame*CFrame.Angles(0,(i-1)*math.pi,0),returning and 4.1 or 2.7,-1.2,2.4,returning and .8 or .12,alpha)end
+    for _,v in ipairs(p)do v.Transparency=1 end
+   elseif id=='ward_reservoir' then
+    for i,v in ipairs(a)do curve(v,frame*CFrame.new(0,3.7,0)*CFrame.Angles(0,spin+i*math.pi/3,0)*CFrame.Angles(math.pi/2,0,0),5.1,0,tau,.13,.22)end
+    for i,v in ipairs(p)do local ang=i*tau/#p+spin;facet(v,frame*CFrame.new(math.cos(ang)*4.8,3.4+math.sin(t*.8+i)*.65,math.sin(ang)*4.8)*CFrame.Angles(0,-ang,math.pi/4),Vector3.new(.12,1.1,.65),.25)end
+   elseif id=='blades_volley'and role=='aura' then
+    local center=frame*CFrame.new(0,3.5,2.1)*CFrame.Angles(math.pi/2,0,0)
+    for i,v in ipairs(a)do curve(v,center,4.8+(i-1)*.4,-1.35,2.7,.09,.35)end
+    local fired=anchor:GetAttribute('Fired')or 0
+    for i,v in ipairs(p)do local theta=i/(#p+1)*math.pi-math.pi/2;facet(v,frame*CFrame.new(math.sin(theta)*4.2,3.2+math.cos(theta)*1.7,1.8)*CFrame.Angles(0,0,t*.8+i),Vector3.new(.14,.8,.8),i<=fired and 1 or .12)end
+   elseif id=='skyLances_rain'or id=='skyLances_execute' then
+    local high=frame*CFrame.new(0,43,0)
+    for i,v in ipairs(a)do curve(v,high*CFrame.Angles(0,spin*(i==1 and 1 or -1),0),6+i,0,tau,.16,.22)end
+    for i,v in ipairs(p)do local ang=i*tau/#p;facet(v,high*CFrame.new(math.cos(ang)*7,math.sin(t+i)*.3,math.sin(ang)*7)*CFrame.Angles(0,ang,math.pi/4),Vector3.new(.17,id=='skyLances_execute'and 3 or 1.4,.7),.12)end
+   elseif id=='meteor_wide'or id=='meteor_echo' then
+    local center=frame*CFrame.new(0,.2,0)
+    if id=='meteor_wide'then
+     -- Match AreaArt's actual diagonal fall, including windup and level size.
+     local duration=anchor:GetAttribute('Duration')or 3.2
+     local fall=math.clamp((t-.35)/math.max(duration-.35,.01),0,1)
+     local size=10+(anchor:GetAttribute('Level')or 1)*.6
+     center=CFrame.new(point+Vector3.new(20*(1-fall),76*(1-fall)^1.3+size*.3,0))
+    end
+    for i,v in ipairs(a)do curve(v,center*CFrame.Angles(id=='meteor_wide'and .35*i or 0,spin*(i==1 and 1 or -1),0),id=='meteor_wide'and(7+i)or radius*(.65+i*.12),-.3,tau*.84,.22,.25)end
+    for i,v in ipairs(p)do local ang=i*tau/#p-spin;facet(v,center*CFrame.new(math.cos(ang)*8,.3,math.sin(ang)*8)*CFrame.Angles(.5,ang,1),Vector3.new(.18,2.4,.7),.18)end
+   elseif id=='frost_wide'or id=='frost_echo' then
+    for i,v in ipairs(a)do curve(v,frame*CFrame.Angles(0,spin*(i==1 and 1 or -1),0),radius*(.65+.13*i),0,tau,.12,.3)end
+    for i,v in ipairs(p)do local ang=i*tau/#p;facet(v,frame*CFrame.Angles(0,ang,0)*CFrame.new(0,.3,-radius*.72)*CFrame.Angles(0,0,math.pi/2),Vector3.new(.1,2.8,1.3),.28)end
+   elseif id=='ward_pulse' then
+    for i,v in ipairs(a)do curve(v,frame*CFrame.new(0,.4+i*.2,0)*CFrame.Angles(0,spin,0),4.4,0,tau,.13,.35)end
+    for i,v in ipairs(p)do local ang=i*tau/#p-spin;facet(v,frame*CFrame.new(math.cos(ang)*4.8,3.6,math.sin(ang)*4.8)*CFrame.Angles(0,-ang,math.pi/4),Vector3.new(.22,1.7,1.2),.15)end
+   elseif id=='missile_hunter'or id=='blades_pierce'or id=='ice_shatter' then
+    for i,v in ipairs(a)do curve(v,frame*CFrame.new(0,0,i*.8)*CFrame.Angles(math.pi/2,spin,0),id=='ice_shatter'and 1.6 or .65,0,math.pi*1.5,.09,.3)end
+    for i,v in ipairs(p)do
+     local theta=i*tau/#p+(id=='ice_shatter'and spin or 0)
+     local reach=id=='ice_shatter'and 1.6 or .55
+     facet(v,frame*CFrame.new(math.cos(theta)*reach,math.sin(theta)*reach,-.5)*CFrame.Angles(0,0,theta),Vector3.new(.12,id=='ice_shatter'and 1.1 or .5,id=='blades_pierce'and 3.8 or 1.8),.12)
+    end
+   else
+    local scale=id=='fire_blast'and 1.7 or(id=='iceRush_wide'and 3.6 or 1)
+    if kind=='lightRing'then frame=CFrame.new(point)*CFrame.Angles(0,t*7,0);scale=2.8 end
+    for i,v in ipairs(a)do
+     local cf=frame*CFrame.new(0,0,(i-1)*1.8)*CFrame.Angles(math.pi/2,spin+(i-1)*math.pi,0)
+     curve(v,cf,scale*(1+(i-1)*.3),0,math.pi*1.6,.12*scale,.2)
+    end
+    for i,v in ipairs(p)do
+     local ang=i*tau/#p+spin;local size=id=='blades_pierce'and Vector3.new(.12,.65,2.3)or Vector3.new(.12,.65,1.1)
+     facet(v,frame*CFrame.new(math.cos(ang)*scale,math.sin(ang)*scale,.8)*CFrame.Angles(0,0,ang),size,.18)
+    end
+   end
+  end)
+ end
+ local function cast(anchor,kind,role)
+  if type(anchor)=='string'then local world=workspace:FindFirstChild('SummonerRuntime');anchor=world and world:FindFirstChild(anchor)end
+  if not anchor or not anchor.Parent then return end
+  for _,id in ipairs(ids(anchor:GetAttribute('VFXAugments')))do castOne(anchor,kind,id,role)end
+ end
+ local function impact(point,radius,meta)
+  if type(meta)~='table'or active>=40 or not visible(point)then return end
+  for _,id in ipairs(ids(meta.ids))do
+   if active>=40 then break end
+   local bonus=id=='missile_hunter'or id=='skyLances_execute'or id=='aether_execute'or id=='lightning_frozen'
+   local echo=id=='meteor_echo'or id=='frost_echo'
+   if (not bonus or meta.empowered)and(not echo or meta.phase=='echo')and(id~='lightRing_return'or meta.phase=='return')then
+    local crown=id=='fire_blast'or id=='meteor_wide'
+    local a,p=construct(id,crown and 4 or(echo and 3 or 2),12)
+    local r=math.clamp(radius or 4,1,24)
+    run(echo and 1.05 or .7,a,p,function(t)
+     local out=1-(1-t)^3;local fade=math.clamp((t-.18)/.82,0,1)
+     local center=CFrame.new(point+Vector3.new(0,.2,0))
+     if id=='ward_pulse'then center=CFrame.new(point+Vector3.new(0,2,0))end
+     for i,v in ipairs(a)do
+      local u=math.clamp((t-(i-1)*.08)*1.3,0,1)
+      local plane=crown and (CFrame.Angles(0,(i-1)*math.pi/2,0)*CFrame.Angles(math.pi/2,0,0))or(bonus and CFrame.Angles(math.pi/2,0,(i-1)*math.pi/2)or CFrame.Angles(0,i*t,0))
+      curve(v,center*plane,r*(.12+.88*(1-(1-u)^3)),crown and -math.pi/2 or 0,crown and math.pi or(bonus and math.pi*1.6 or tau),(bonus and .45 or .3)*(1-u),fade)
+     end
+     for i,v in ipairs(p)do
+      local theta=i*tau/#p
+      local y=(id=='fire_blast'or id=='meteor_wide')and math.sin(t*math.pi)*4 or math.sin(t*math.pi)*(i%3)*.65
+      local cf=center*CFrame.new(math.cos(theta)*r*out,y,math.sin(theta)*r*out)*CFrame.Angles(.3,theta,bonus and math.pi/4 or t*2)
+      if bonus and i<=4 then
+       cf=center*CFrame.Angles(0,0,(i-1)*math.pi/2)*CFrame.new(0,2*out,0)
+       facet(v,cf,Vector3.new(.14,5*(1-t)+.1,.3),fade)
+      elseif id=='frost_wide'or id=='lightning_frozen'then
+       cf=center*CFrame.Angles(0,theta,0)*CFrame.new(0,.12,-r*.5*out)
+       facet(v,cf,Vector3.new(.08,.22,i%2==0 and r*.85*out+.1 or r*.3*out+.1),fade)
+      else facet(v,cf,Vector3.new(.12,(id=='ice_shatter'and 3 or 1.6)*(1-t)+.1,.7*(1-t)+.08),fade)end
+     end
+    end)
+   end
+  end
+ end
+ local function connection(from,to,csv)
+  if active>=40 or not visible(to)then return end
+  local delta=to-from;if delta.Magnitude<.1 then return end
+  local id=ids(csv)[1];if not id then return end
+  local a,p=construct(id,2,0)
+  run(.38,a,p,function(t)
+   -- Two circular ribbons linking the actual server-selected targets.
+   local mid=(from+to)/2;local axis=delta.Unit
+   local normal=axis:Cross(Vector3.yAxis);if normal.Magnitude<.01 then normal=Vector3.xAxis end
+   local cf=CFrame.fromMatrix(mid,axis,normal.Unit)
+   for i,v in ipairs(a)do curve(v,cf*CFrame.Angles(0,0,(i-1)*math.pi),delta.Magnitude/2,-math.pi/2,math.pi,.22*(1-t),.25+t*.75)end
+  end)
+ end
+ local function corridor(point,direction,length,width)
+  if active>=40 or not visible(point)then return end
+  local a,p=construct('iceRush_wide',4,0)
+  run(1.3,a,p,function(t)
+   for i,v in ipairs(a)do
+    local u=math.clamp((t-(i-1)*.1)*1.7,0,1)
+    local center=point+direction*(length*i/5)
+    curve(v,CFrame.lookAt(center,center+direction)*CFrame.Angles(math.pi/2,0,0),width*(.3+.7*(1-(1-u)^3)),-math.pi/2,math.pi,.28*(1-u),.2+.8*u)
+   end
+  end)
+ end
+ local function clear()
+  local pending={};for h in pairs(jobs)do table.insert(pending,h)end
+  for _,h in ipairs(pending)do h:cancel()end
+  if container then container:Destroy();container=nil end
+  arcFree={};shardFree={};arcCount=0;shardCount=0
+ end
+ return {Cast=cast,Impact=impact,Arc=connection,Corridor=corridor,Clear=clear,Stats=function()return {active=active,arcs=arcCount,shards=shardCount,freeArcs=#arcFree,freeShards=#shardFree}end}
+end
+]====])
+-- Source: src/client/combat/AugmentStyles.luau
+addModule(modules,{"combat","AugmentStyles"},[====[
+-- Presentation catalog only. The authoritative catalog and ownership stay on the server.
+return {
+ ice={{id='ice_twin',name='쌍빙창',note='겹친 냉기 나선 · 두 발'},{id='ice_shatter',name='빙쇄',note='회전 파편 · 방사형 얼음 파쇄'}},
+ lightning={{id='lightning_fork',name='갈래 번개',note='교차 전류 · 연쇄 +2'},{id='lightning_frozen',name='빙결 전도',note='서리 전류 · 빙결 적에 눈꽃 방전'}},
+ meteor={{id='meteor_wide',name='거대 운석',note='운석 궤도 · 넓은 불꽃 왕관'},{id='meteor_echo',name='운석의 여진',note='균열 봉인 · 지연 폭발 고리'}},
+ blades={{id='blades_volley',name='칠성 결정',note='일곱 별의 후광 · 7발'},{id='blades_pierce',name='관통 결정',note='날카로운 결정 날 · 관통 섬광'}},
+ frost={{id='frost_wide',name='광역 한파',note='육각 눈꽃 · 넓은 냉기 경계'},{id='frost_echo',name='이중 서리',note='역회전 서리 고리 · 두 번째 파동'}},
+ ward={{id='ward_reservoir',name='깊은 결계',note='교차하는 룬 돔'},{id='ward_pulse',name='결계 해방',note='떠 있는 보호 룬 · 금빛 파쇄'}},
+ missile={{id='missile_salvo',name='추적 탄막',note='쌍나선 탄두 · 추가 마탄'},{id='missile_hunter',name='거수 사냥꾼',note='사냥꾼 화살촉 · 정예 적중 표식'}},
+ skyLances={{id='skyLances_rain',name='칠성 창우',note='일곱 별의 천공진 · 7자루'},{id='skyLances_execute',name='천공의 심판',note='금빛 심판진 · 저체력 처형 십자'}},
+ lightRing={{id='lightRing_twin',name='쌍월',note='엇갈린 두 초승달'},{id='lightRing_return',name='귀환의 칼날',note='귀환 때 펼쳐지는 세 겹 칼날'}},
+ fire={{id='fire_blast',name='작열 화염탄',note='불꽃 궤도 · 작열 왕관'}},
+ thunder={{id='thunder_chain',name='뇌창 전도',note='회전 전류 · 연결 방전'}},
+ aetherLance={{id='aether_execute',name='성운 처형',note='성운 궤도 · 저체력 십자 폭발'}},
+ iceRush={{id='iceRush_wide',name='빙하 대로',note='넓은 빙하 위로 이어지는 서리 관문'}},
+}
+]====])
 -- Source: src/client/combat/Effects.luau
 addModule(modules,{"combat","Effects"},[====[
 -- Client-only spell and summon presentation; never awards damage or XP.
@@ -3080,10 +3330,14 @@ return function(deps)
 			task.delay(duration+.2,function()if model.Parent and not model:GetAttribute("Frozen") then clear() end end)
 		end
 	end
+	local augmentArt=require(script.Parent.AugmentArt)({folder=fx})
+	local generation=0
 	local fieldArt=require(script.Parent.Parent.world.FieldBossArt)(fx)
 	local function play(kind,a,b,c)
 		if not fx.Parent then return end
-		if kind=="fieldBoss" then fieldArt(a,b,c)
+		if kind=="augmentImpact" then augmentArt.Impact(a,b,c)
+        elseif kind=="augmentArc" then augmentArt.Arc(a,b,c)
+        elseif kind=="fieldBoss" then fieldArt(a,b,c)
         elseif kind=="hit" then
 			local p=visual(Vector3.new(.05,.05,.05),CFrame.new(a+Vector3.new(0,3,0)),palette.text); p.Transparency=1
 			local billboard=make("BillboardGui",p,{Size=UDim2.fromOffset(70,32),AlwaysOnTop=true,Adornee=p})
@@ -3103,31 +3357,31 @@ return function(deps)
 		elseif kind=="golemHeavy" or kind=="golemLight" then groundImpact(a,b,kind=="golemHeavy",c)
 		elseif kind=="dash" then dashEffect(a,b,c)
 		elseif kind=="fire" then magicBolt(a,b,c)
-		elseif kind=="fireProjectile" then fireArt.Projectile(a)
+		elseif kind=="fireProjectile" then fireArt.Projectile(a);augmentArt.Cast(a,"fire")
 		elseif kind=="lightning" then
-			task.delay(math.min(.3,math.max(0,(c or 1)-1)*.045),function()lightningArt.Strike(a,b,c)end)
-		elseif kind=="lightCast" then lightArt.Cast(a,b)
+			local epoch=generation;task.delay(math.min(.3,math.max(0,(c or 1)-1)*.045),function()if epoch==generation and fx.Parent then lightningArt.Strike(a,b,c)end end)
+		elseif kind=="lightCast" then lightArt.Cast(a,b);augmentArt.Cast(a,b)
 		elseif kind=="lightHit" then lightArt.Hit(a,b)
 		elseif kind=="basicBolt" then lightArt.Bolt(a)
 		elseif kind=="basicHit" then lightArt.Hit(a,"basic")
-		elseif kind=="thunderSpear" then projectileArt.Cast(a,"thunder")
-		elseif kind=="aetherSpear" then projectileArt.Cast(a,"aetherLance")
+		elseif kind=="thunderSpear" then projectileArt.Cast(a,"thunder");augmentArt.Cast(a,"thunder")
+		elseif kind=="aetherSpear" then projectileArt.Cast(a,"aetherLance");augmentArt.Cast(a,"aetherLance")
 		elseif kind=="aetherHit" then projectileArt.Impact(a,"aetherLance")
-		elseif kind=="crystalBolt" then projectileArt.Cast(a,"crystal")
+		elseif kind=="crystalBolt" then projectileArt.Cast(a,"crystal");augmentArt.Cast(a,"blades","bolt")
 		elseif kind=="skyLanceHit" then areaArt.Burst(a,b,Color3.fromRGB(157,204,255))
 		elseif kind=="crystalHit" then projectileArt.Impact(a,"crystal")
-		elseif kind=="homingMissile" then projectileArt.Cast(a,"missile")
+		elseif kind=="homingMissile" then projectileArt.Cast(a,"missile");augmentArt.Cast(a,"missile")
 		elseif kind=="thunderHit" then projectileArt.Impact(a,"thunder")
 		elseif kind=="missileHit" then projectileArt.Impact(a,"missile")
 		elseif kind=="activeCast" then activeArt.Charge(a,b)
-		elseif kind=="activeStrike" then activeArt.Strike(a,b,c)
-		elseif kind=="areaCast" then areaArt.Cast(a,b)
-		elseif kind=="augmentPulse" then art.Rupture(a,b,false)
+		elseif kind=="activeStrike" then activeArt.Strike(a,b,c);if c and c.kind=="iceRush"and(c.width or 0)>6 then augmentArt.Corridor(a,b,c.range,c.width)end
+		elseif kind=="areaCast" then areaArt.Cast(a,b);augmentArt.Cast(a,b,"aura")
+		elseif kind=="augmentPulse" then augmentArt.Impact(a,b,{ids="ward_pulse",phase="hit"})
         elseif kind=="augmentFireHit" then art.Rupture(a,b,false)
         elseif kind=="meteorHit" then art.Rupture(a,b,false);areaArt.MeteorImpact(a,b)
 		elseif kind=="frostHit" then areaArt.FrostImpact(a,b)
 		elseif kind=="wardHit" then areaArt.Burst(a,b and 5 or 2.5,Color3.fromRGB(255,222,152))
-		elseif kind=="iceCast" then iceProjectile(a,b,c)
+		elseif kind=="iceCast" then iceProjectile(a,b,c);augmentArt.Cast(a,"ice")
 		elseif kind=="iceHit" then iceImpact(a,b,c)
 		end
 	end
@@ -3136,8 +3390,10 @@ return function(deps)
 
 	return {
 		Folder = fx,
+        Clear = function()generation+=1;augmentArt.Clear()end,
+        AugmentStats = augmentArt.Stats,
 		Play = play,
-		Disconnect = function()if connection then connection:Disconnect();connection=nil end end,
+		Disconnect = function()generation+=1;augmentArt.Clear();if connection then connection:Disconnect();connection=nil end end,
 	}
 end
 ]====])
@@ -3793,24 +4049,28 @@ return function(deps)
  local time,duration,id,rank=0,3,'meteor',1
  local events,anchors={},{}
  local pet
+ local variants=''
+ local function has(id)return string.find(','..variants..',',','..id..',',1,true)~=nil end
  local function at(t,fn)table.insert(events,{time=t,run=fn,done=false})end
  local function play(kind,a,b,c)renderer.Play(kind,a,b,c)end
+ local function impact(pos,radius,phase,empowered)play('augmentImpact',pos,radius,{ids=variants,phase=phase,empowered=empowered})end
  local function anchor(kind,point,radius,seconds)
   local p=block(fx,'PreviewAnchor',Vector3.one*.1,CFrame.new(point),Color3.new());p.Transparency=1
-  p:SetAttribute('Elapsed',0);p:SetAttribute('Duration',seconds);p:SetAttribute('Radius',radius);p:SetAttribute('Level',rank);p:SetAttribute('Launched',false)
+  p:SetAttribute('VFXAugments',variants);p:SetAttribute('Elapsed',0);p:SetAttribute('Duration',seconds);p:SetAttribute('Radius',radius);p:SetAttribute('Level',rank);p:SetAttribute('Launched',false)
   table.insert(anchors,p);return p
  end
  local function clear()
-  table.clear(events);table.clear(anchors);fx:ClearAllChildren()
+  table.clear(events);table.clear(anchors);renderer.Clear();fx:ClearAllChildren()
   if pet then pet:Destroy();pet=nil end
   caster:PivotTo(CFrame.lookAt(casterPoint,casterPoint+forward))
   for _,m in ipairs(targets)do m:SetAttribute('Frozen',false)end
  end
- local function begin(spell,level)
-  clear();time=0;id=spell;rank=level
+ local function begin(spell,level,augments)
+  clear();time=0;id=spell;rank=level;variants=augments or ''
   if id=='lightRing'then
-   local point=casterPoint+Vector3.new(0,.8,0);local a=anchor(id,point,3,3.2);a.CFrame=CFrame.lookAt(point,point+forward);a:SetAttribute('Role','ring');play('lightCast',a,id)
-   at(38/34,function()a:SetAttribute('Returning',true)end);at(38/34+38/40,function()a:Destroy()end);duration=3.1
+   for _,side in ipairs(has('lightRing_twin')and {-1,1}or {0})do
+   local point=casterPoint+Vector3.new(0,.8,0);local a=anchor(id,point,3,3.2);a:SetAttribute('Side',side);a.CFrame=CFrame.lookAt(point,point+forward);a:SetAttribute('Role','ring');play('lightCast',a,id)
+   at(38/34,function()a:SetAttribute('Returning',true)end);at(38/34+38/40,function()a:Destroy()end);end;duration=3.1
   elseif id=='basic'then
    for shot=1,5 do
     local born=(shot-1)*.3
@@ -3824,72 +4084,83 @@ return function(deps)
    local point=id=='meteor' and targetPoint or casterPoint
    point=Vector3.new(point.X,.35,point.Z)
    local radius=id=='meteor' and 14+rank or(id=='blades' and 11+rank*.7 or(id=='frost' and 12+rank or 4))
+   if has('meteor_wide')then radius*=1.35 elseif has('frost_wide')then radius*=1.3 end
+   if has('ward_reservoir')then seconds=7 end
    local a=anchor(id,point,radius,seconds);play('areaCast',a,id)
    at(seconds,function()
     a:Destroy()
     if id=='meteor' then play('meteorHit',point,radius)
     elseif id=='frost' then play('frostHit',point,radius)
-    elseif id=='ward' then play('wardHit',casterPoint,true)end
+    elseif id=='ward' then play('wardHit',casterPoint,true);if has('ward_pulse')then play('augmentPulse',point,8)end end
+    if id~='ward'then impact(point,radius,'hit')end
    end)
+   if has('meteor_echo')or has('frost_echo')then at(seconds+(id=='meteor'and .65 or .6),function()play(id=='meteor'and'meteorHit'or'frostHit',point,radius);impact(point,radius,'echo')end)end
    if id=='ward' then at(2,function()play('wardHit',casterPoint,false)end)end
    duration=seconds+(id=='meteor' and 2.5 or 1.6)
   elseif id=='blades' then
-   local a=anchor(id,casterPoint,2,5);a.CFrame=CFrame.lookAt(casterPoint,casterPoint+forward);a:SetAttribute('Fired',0);play('areaCast',a,id)
-   for shot=1,5 do
+   local count=has('blades_volley')and 7 or 5
+   local a=anchor(id,casterPoint,2,5);a:SetAttribute('Count',count);a.CFrame=CFrame.lookAt(casterPoint,casterPoint+forward);a:SetAttribute('Fired',0);play('areaCast',a,id)
+   for shot=1,count do
     local born=.8+(shot-1)*.18
     at(born,function()
      a:SetAttribute('Fired',shot)
-     local angle=shot/6*math.pi-math.pi/2
+     local angle=shot/(count+1)*math.pi-math.pi/2
      local point=casterPoint+Vector3.new(math.sin(angle)*4.2,3.2+math.cos(angle)*1.7,1.8)
      local target=targets[(shot-1)%3+1]:GetPivot().Position
      local delta=target-point;local bolt=anchor(id,point,0,2);bolt:SetAttribute('Role','bolt');bolt:SetAttribute('Born',born);bolt:SetAttribute('Origin',point);bolt:SetAttribute('Direction',delta.Unit);bolt.CFrame=CFrame.lookAt(point,target);play('crystalBolt',bolt)
-     at(born+delta.Magnitude/48,function()bolt:Destroy();play('crystalHit',target)end)
+     at(born+delta.Magnitude/48,function()play('crystalHit',target);impact(target,2.5,'hit');if not has('blades_pierce')then bolt:Destroy()end end)
+     at(born+delta.Magnitude/48+.2,function()if bolt.Parent then play('crystalHit',bolt.Position);impact(bolt.Position,2.5,'hit');bolt:Destroy()end end)
     end)
    end
    at(4.3,function()a:SetAttribute('Fired',0)end)
    at(5,function()a:Destroy()end);duration=5.5
   elseif id=='skyLances' then
-   local point=Vector3.new(targetPoint.X,.35,targetPoint.Z);local a=anchor(id,point,8.3,2.65);play('areaCast',a,id)
-   for i,offset in ipairs({Vector3.zero,Vector3.new(5,0,0),Vector3.new(0,0,5),Vector3.new(-5,0,0),Vector3.new(0,0,-5)})do at(1.75+(i-1)*.16,function()play('skyLanceHit',point+offset,3.3)end)end
-   at(2.65,function()a:Destroy()end);duration=4.1
+   local count=has('skyLances_rain')and 7 or 5;local seconds=2.65+(count-5)*.16
+   local point=Vector3.new(targetPoint.X,.35,targetPoint.Z);local a=anchor(id,point,8.3,seconds);a:SetAttribute('Count',count);play('areaCast',a,id)
+   local offsets={Vector3.zero,Vector3.new(5,0,0),Vector3.new(0,0,5),Vector3.new(-5,0,0),Vector3.new(0,0,-5)}
+   if count==7 then table.insert(offsets,Vector3.new(3.5,0,3.5));table.insert(offsets,Vector3.new(-3.5,0,-3.5))end
+   for i,offset in ipairs(offsets)do at(1.75+(i-1)*.16,function()play('skyLanceHit',point+offset,3.3);if has('skyLances_execute')then impact(point+offset,3.3,'hit',true)end end)end
+   at(seconds,function()a:Destroy()end);duration=4.1
   elseif id=='fire' then
    local start=casterPoint+forward*3+Vector3.new(0,1.2,0);local flight=42/58
    local a=anchor('fire',start,0,.2+flight);a.CFrame=CFrame.lookAt(start,start+forward)
    at(.2,function()play('fireProjectile',a)end)
    for i=1,15 do at(.2+flight*i/15,function()if a.Parent then local pos=start+forward*42*i/15;a.CFrame=CFrame.lookAt(pos,pos+forward)end end)end
-   at(.2+flight,function()a:Destroy()end);duration=2.4
+   at(.2+flight,function()local pos=a.Position;a:Destroy();play('augmentFireHit',pos,has('fire_blast')and 7 or 5);impact(pos,7,'hit')end);duration=2.4
   elseif id=='lightning' then
-   for hop=1,1+rank do
+   for hop=1,1+rank+(has('lightning_fork')and 2 or 0) do
     at(.2+(hop-1)*.14,function()
      local target=targets[(hop-1)%3+1]:GetPivot().Position
-     play('lightning',casterPoint,target,hop)
+     play('lightning',casterPoint,target,hop);play('augmentArc',casterPoint,target,variants);impact(target,4,'hit',true)
     end)
    end;duration=3
   elseif id=='ice' then
-   local point=casterPoint+forward*3.5+Vector3.new(0,1.2,0)
+   for _,side in ipairs(has('ice_twin')and {-1,1}or {0})do
+   local point=casterPoint+forward*3.5+Vector3.new(side*1.1,1.2,0)
    local frame=CFrame.lookAt(point,point+forward)
-   local seconds=.42+(targetPoint-point).Magnitude/36
-   local a=anchor('ice',point,0,seconds);a.CFrame=frame
+   local goal=targetPoint+Vector3.new(side*9,0,0)
+   local seconds=.42+(goal-point).Magnitude/36
+   local a=anchor('ice',point,0,seconds);a.CFrame=frame;a:SetAttribute('Origin',point);a:SetAttribute('Goal',goal)
    play('iceCast',a,frame,.42)
-   at(seconds,function()a:Destroy();targets[2]:SetAttribute('Frozen',true);play('iceHit',targets[2],targetPoint,1.2)end)
-   at(seconds+1.2,function()targets[2]:SetAttribute('Frozen',false)end);duration=seconds+2
+   at(seconds,function()a:Destroy();local target=targets[side==0 and 2 or side+2];target:SetAttribute('Frozen',true);play('iceHit',target,goal,1.2);if has('ice_shatter')then impact(goal,5,'hit')end end)
+   at(seconds+1.2,function()targets[side==0 and 2 or side+2]:SetAttribute('Frozen',false)end);duration=seconds+2;end
   elseif id=='thunder'or id=='aetherLance' then
    local a=anchor(id,casterPoint,0,.4);a.CFrame=CFrame.lookAt(casterPoint,casterPoint+forward);a:SetAttribute('Range',52)
    play('activeCast',a,id);play(id=='thunder'and'thunderSpear'or'aetherSpear',a)
-   at(.4+27/48,function()play(id=='thunder'and'thunderHit'or'aetherHit',targetPoint)end)
+   at(.4+27/48,function()play(id=='thunder'and'thunderHit'or'aetherHit',targetPoint);impact(targetPoint,3,'hit',true);if has('thunder_chain')then for _,v in ipairs({targets[1],targets[3]})do play('lightning',targetPoint,v:GetPivot().Position,1);play('augmentArc',targetPoint,v:GetPivot().Position,variants)end end end)
    at(.4+52/48,function()a:Destroy()end);duration=3.2
   elseif id=='iceRush' then
-   local a=anchor(id,casterPoint,0,.4);a.CFrame=CFrame.lookAt(casterPoint,casterPoint+forward);a:SetAttribute('Range',34)
+   local a=anchor(id,casterPoint,0,.4);a.CFrame=CFrame.lookAt(casterPoint,casterPoint+forward);a:SetAttribute('Range',34);a:SetAttribute('Width',has('iceRush_wide')and 9 or 6)
    play('activeCast',a,id)
-   at(.4,function()a:Destroy();play('activeStrike',casterPoint,forward,{kind=id,range=34,width=6})end);duration=3
+   at(.4,function()a:Destroy();play('activeStrike',casterPoint,forward,{kind=id,range=34,width=has('iceRush_wide')and 9 or 6})end);duration=3
   elseif id=='missile' then
-   local count=2+math.floor(rank/2)
+   local count=2+math.floor(rank/2)+(has('missile_salvo')and 2 or 0)
    for index=1,count do
     local point=casterPoint+Vector3.new((index-(count+1)/2)*1.6,1.2,0)
     local seconds=(targetPoint-point).Magnitude/44
     local a=anchor(id,point,0,seconds);a.CFrame=CFrame.lookAt(point,targetPoint);a:SetAttribute('Index',index);a:SetAttribute('Count',count)
     play('homingMissile',a)
-    at(seconds,function()a:Destroy();play('missileHit',targetPoint)end)
+    at(seconds,function()a:Destroy();play('missileHit',targetPoint);impact(targetPoint,3,'hit',true)end)
    end;duration=2.8
   elseif id=='golem' then
    local runtime=workspace:FindFirstChild('SummonerRuntime');local live=runtime and runtime:FindFirstChild(deps.player.Name..'_Golem')
@@ -3914,7 +4185,8 @@ return function(deps)
     a:SetAttribute('Elapsed',time)
     if id=='lightRing'then
      local outward=38/34;local distance=time<=outward and time*34 or math.max(0,38-(time-outward)*40)
-     local point=casterPoint+Vector3.new(0,.8,0)+forward*distance+forward:Cross(Vector3.yAxis)*math.sin(distance/38*math.pi)*(time<=outward and 1.8 or -2);a.CFrame=CFrame.lookAt(point,point+(time<=outward and forward or -forward))
+     local side=a:GetAttribute('Side')or 0;local dir=CFrame.Angles(0,math.rad(side*12),0):VectorToWorldSpace(forward)
+     local point=casterPoint+Vector3.new(0,.8,0)+dir*distance+dir:Cross(Vector3.yAxis)*math.sin(distance/38*math.pi)*(time<=outward and 1.8 or -2)*(side==0 and 1 or side);a.CFrame=CFrame.lookAt(point,point+(time<=outward and forward or -forward))
     elseif id=='basic'then
      local point=casterPoint+forward*(2+math.max(0,time-a:GetAttribute('Born'))*80)+Vector3.new(0,.8,0);a.CFrame=CFrame.lookAt(point,point+forward)
     elseif id=='blades' and a:GetAttribute('Role')=='bolt' then
@@ -3927,8 +4199,8 @@ return function(deps)
      local p=start+delta.Unit*math.min(delta.Magnitude,time*44);a.CFrame=CFrame.lookAt(p,p+delta.Unit)
     elseif id=='ice' and time>=.42 then
      a:SetAttribute('Launched',true)
-     local start=casterPoint+forward*3.5+Vector3.new(0,1.2,0)
-     local delta=targetPoint-start;local p=start+delta.Unit*math.min(delta.Magnitude,(time-.42)*36)
+     local start=a:GetAttribute('Origin')
+     local delta=a:GetAttribute('Goal')-start;local p=start+delta.Unit*math.min(delta.Magnitude,(time-.42)*36)
      a.CFrame=CFrame.lookAt(p,p+delta.Unit)
     end
    end
@@ -4308,6 +4580,527 @@ return function(deps)
  return {Slam=slam,TailSpin=tailSpin,FireWave=fireWave,Rupture=rupture,Breath=breath,Dive=dive}
 end
 ]====])
+-- Source: src/client/combat/vfx/Animator.luau
+addModule(modules,{"combat","vfx","Animator"},[====[
+--!strict
+--[[
+	Animator
+	One frame loop for every running effect, instead of one Tween / RenderStepped
+	connection per part.
+
+	Why not only TweenService?
+	  * Multi-phase curves (spawn -> hold -> dissipate) from ONE normalized time value.
+	  * Time-scale groups: Hitstop can freeze every "world" effect for 80 ms, then resume.
+	  * CFrame writes are batched into a single workspace:BulkMoveTo call per frame.
+	  * A thrown error in one effect never kills the others (and cleanup still runs).
+	TweenService is still perfect for fire-and-forget single-property tweens.
+
+	Usage:
+		Animator.play(0.4, function(t, dt)
+			part.Transparency = Ease.inQuad(t)
+			Animator.move(part, origin * CFrame.Angles(0, t * math.pi, 0))
+		end, { group = "world", onComplete = function() pool:release(part) end })
+
+		Animator.setTimeScale("world", 0) -- freeze (hitstop)
+]]
+
+local RunService = game:GetService("RunService")
+
+export type StepFn = (t: number, dt: number, elapsed: number) -> ()
+export type CompleteFn = (cancelled: boolean) -> ()
+
+export type PlayOptions = {
+	group: string?, -- time-scale group, default "world"
+	delay: number?, -- seconds (time-scaled) before the first step
+	onComplete: CompleteFn?, -- always called once: finished, cancelled or errored
+}
+
+export type Handle = {
+	cancel: (self: Handle) -> (),
+	isDone: (self: Handle) -> boolean,
+}
+
+type Job = {
+	duration: number,
+	delay: number,
+	elapsed: number,
+	step: StepFn?,
+	onComplete: CompleteFn?,
+	group: string,
+	done: boolean,
+}
+
+local Animator = {}
+
+local jobs: { Job } = {}
+local timeScales: { [string]: number } = {}
+local moveParts: { BasePart } = {}
+local moveCFrames: { CFrame } = {}
+local connection: RBXScriptConnection? = nil
+
+local function finish(job: Job, cancelled: boolean)
+	if job.done then
+		return
+	end
+	job.done = true
+	local onComplete = job.onComplete
+	job.onComplete = nil
+	job.step = nil
+	if onComplete then
+		local ok, err = (pcall :: any)(onComplete, cancelled)
+		if not ok then
+			warn("[VFX.Animator] onComplete error:", err)
+		end
+	end
+end
+
+local function flushMoves()
+	if #moveParts > 0 then
+		workspace:BulkMoveTo(moveParts, moveCFrames, Enum.BulkMoveMode.FireCFrameChanged)
+		table.clear(moveParts)
+		table.clear(moveCFrames)
+	end
+end
+
+local completed: { Job } = {}
+local failed: { Job } = {}
+
+local function onFrame(dt: number)
+	local count = #jobs -- jobs added during this frame start next frame
+	for i = 1, count do
+		local job = jobs[i]
+		if job.done then
+			continue
+		end
+		local scaledDt = dt * (timeScales[job.group] or 1)
+		job.elapsed += scaledDt
+		local active = job.elapsed - job.delay
+		if active < 0 then
+			continue
+		end
+		local t = if job.duration == math.huge then 0 else math.min(active / job.duration, 1)
+		local step = job.step
+		if step then
+			local ok, err = (pcall :: any)(step, t, scaledDt, active)
+			if not ok then
+				warn("[VFX.Animator] step error:", err)
+				table.insert(failed, job)
+				continue
+			end
+		end
+		if t >= 1 then
+			table.insert(completed, job)
+		end
+	end
+
+	-- Flush CFrame writes BEFORE completion callbacks: a callback that parks a pooled
+	-- part must win over the part's last queued move.
+	flushMoves()
+
+	for _, job in completed do
+		finish(job, false)
+	end
+	for _, job in failed do
+		finish(job, true)
+	end
+	table.clear(completed)
+	table.clear(failed)
+
+	-- Compact finished jobs (stable order).
+	local write = 0
+	for read = 1, #jobs do
+		local job = jobs[read]
+		if not job.done then
+			write += 1
+			jobs[write] = job
+		end
+	end
+	for i = #jobs, write + 1, -1 do
+		jobs[i] = nil
+	end
+
+	if #jobs == 0 and #moveParts == 0 and connection then
+		connection:Disconnect()
+		connection = nil
+	end
+end
+
+local function ensureRunning()
+	if connection == nil then
+		local event = if RunService:IsClient() then RunService.PreRender else RunService.Heartbeat
+		connection = event:Connect(onFrame)
+	end
+end
+
+local HandleMethods = {}
+HandleMethods.__index = HandleMethods
+
+function HandleMethods.cancel(self: any)
+	finish(self._job, true)
+end
+
+function HandleMethods.isDone(self: any): boolean
+	return self._job.done
+end
+
+local function makeHandle(job: Job): Handle
+	return (setmetatable({ _job = job }, HandleMethods) :: any) :: Handle
+end
+
+-- Runs `step(t, dt, elapsed)` every frame for `duration` seconds (t goes 0 -> 1).
+-- The last call always receives t == 1 exactly.
+function Animator.play(duration: number, step: StepFn, options: PlayOptions?): Handle
+	local job: Job = {
+		duration = math.max(duration, 1e-3),
+		delay = if options and options.delay then options.delay else 0,
+		elapsed = 0,
+		step = step,
+		onComplete = options and options.onComplete,
+		group = if options and options.group then options.group else "world",
+		done = false,
+	}
+	table.insert(jobs, job)
+	ensureRunning()
+	return makeHandle(job)
+end
+
+-- Runs `step(dt, elapsed)` every frame until the handle is cancelled.
+function Animator.bind(step: (dt: number, elapsed: number) -> (), options: PlayOptions?): Handle
+	return Animator.play(math.huge, function(_t, dt, elapsed)
+		step(dt, elapsed)
+	end, options)
+end
+
+-- Time-scaled delay (respects hitstop freezes, unlike task.delay).
+function Animator.delay(seconds: number, callback: () -> (), group: string?): Handle
+	return Animator.play(1e-3, function() end, {
+		delay = seconds,
+		group = group,
+		onComplete = function(cancelled)
+			if not cancelled then
+				callback()
+			end
+		end,
+	})
+end
+
+function Animator.setTimeScale(group: string, scale: number)
+	timeScales[group] = math.max(scale, 0)
+end
+
+function Animator.getTimeScale(group: string): number
+	return timeScales[group] or 1
+end
+
+-- Queues a CFrame write, flushed once per frame with workspace:BulkMoveTo.
+function Animator.move(part: BasePart, cframe: CFrame)
+	table.insert(moveParts, part)
+	table.insert(moveCFrames, cframe)
+	ensureRunning()
+end
+
+function Animator.activeCount(): number
+	return #jobs
+end
+
+-- Test hook: advances one frame manually.
+Animator._step = onFrame
+
+return Animator
+]====])
+-- Source: src/client/combat/vfx/BeamArc.luau
+addModule(modules,{"combat","vfx","BeamArc"},[====[
+--!strict
+--[[
+	BeamArc
+	A circular arc (or full ring) drawn with Beams whose Bezier handles follow the circle.
+	Used as the zero-asset fallback for slashes and shockwaves, and useful on its own for
+	wind rings, sword trails and aura loops.
+
+	The arc lives in the holder's local XZ plane (Y = up); angles start at -Z (forward)
+	and grow counter-clockwise (towards -X). Each Beam covers <= 90 deg so the Bezier
+	stays within 0.03% of a true circle.
+
+	Usage:
+		local arc = BeamArc.new(folder, 2) -- 2 pieces
+		arc:setFrame(cframe)
+		arc:set(radius, -math.rad(80), math.rad(80), function(u) return math.sin(math.pi * u) end, 0.2)
+]]
+
+local VFXMath = require(script.Parent.VFXMath)
+
+export type WidthFn = (u: number) -> number
+
+export type BeamArc = {
+	holder: BasePart,
+	beams: { Beam },
+	attachments: { Attachment },
+	setFrame: (self: BeamArc, cframe: CFrame) -> (),
+	set: (
+		self: BeamArc,
+		radius: number,
+		startAngle: number,
+		endAngle: number,
+		width: WidthFn,
+		transparency: number
+	) -> (),
+	setColor: (self: BeamArc, color: Color3) -> (),
+	setEnabled: (self: BeamArc, enabled: boolean) -> (),
+}
+
+export type Options = {
+	color: Color3?,
+	lightEmission: number?,
+	lightInfluence: number?,
+	faceCamera: boolean?,
+	texture: string?,
+	textureLength: number?,
+	zOffset: number?,
+	segmentsPerPiece: number?,
+}
+
+local BeamArc = {}
+BeamArc.__index = BeamArc
+
+function BeamArc.new(parent: Instance, pieces: number, options: Options?): BeamArc
+	local opts: Options = options or {}
+	local holder = Instance.new("Part")
+	holder.Name = "BeamArc"
+	holder.Anchored = true
+	holder.CanCollide = false
+	holder.CanTouch = false
+	holder.CanQuery = false
+	holder.CastShadow = false
+	holder.Transparency = 1
+	holder.Size = Vector3.new(0.1, 0.1, 0.1)
+	holder.CFrame = CFrame.new(0, -5e4, 0)
+
+	local attachments: { Attachment } = {}
+	for i = 1, pieces + 1 do
+		local a = Instance.new("Attachment")
+		a.Name = `A{i}`
+		a.Parent = holder
+		attachments[i] = a
+	end
+
+	local beams: { Beam } = {}
+	for i = 1, pieces do
+		local beam = Instance.new("Beam")
+		beam.Attachment0 = attachments[i]
+		beam.Attachment1 = attachments[i + 1]
+		beam.FaceCamera = if opts.faceCamera == nil then true else opts.faceCamera
+		beam.LightEmission = opts.lightEmission or 1
+		beam.LightInfluence = opts.lightInfluence or 0
+		beam.Segments = opts.segmentsPerPiece or 12
+		beam.Color = ColorSequence.new(opts.color or Color3.new(1, 1, 1))
+		beam.ZOffset = opts.zOffset or 0
+		if opts.texture then
+			beam.Texture = opts.texture
+			beam.TextureMode = Enum.TextureMode.Stretch
+			beam.TextureLength = opts.textureLength or 1
+		end
+		beam.Enabled = false
+		beam.Parent = holder
+		beams[i] = beam
+	end
+
+	holder.Parent = parent
+
+	local self = setmetatable({
+		holder = holder,
+		beams = beams,
+		attachments = attachments,
+	}, BeamArc)
+	return (self :: any) :: BeamArc
+end
+
+function BeamArc.setFrame(self: BeamArc, cframe: CFrame)
+	self.holder.CFrame = cframe
+end
+
+-- `width(u)` receives u in [0, 1] along the arc (0 = start, 1 = end).
+function BeamArc.set(
+	self: BeamArc,
+	radius: number,
+	startAngle: number,
+	endAngle: number,
+	width: WidthFn,
+	transparency: number
+)
+	local pieces = #self.beams
+	local sweep = (endAngle - startAngle) / pieces
+	local curve = VFXMath.arcCurveSize(radius, math.abs(sweep))
+	-- Beams handles follow +X of attachment0 and -X of attachment1: when the arc runs
+	-- clockwise (negative sweep) the tangents flip, which arcAttachmentCFrame handles
+	-- through the sign of `direction`.
+	local direction = if sweep >= 0 then 1 else -1
+	local seq = NumberSequence.new(math.clamp(transparency, 0, 1))
+
+	for i, attachment in self.attachments do
+		local angle = startAngle + sweep * (i - 1)
+		local cf = VFXMath.arcAttachmentCFrame(radius, angle)
+		if direction < 0 then
+			cf *= CFrame.Angles(0, math.pi, 0) -- flip X (tangent) and Z, keep Y up
+		end
+		attachment.CFrame = cf
+	end
+	for i, beam in self.beams do
+		beam.CurveSize0 = curve
+		beam.CurveSize1 = curve
+		beam.Width0 = math.max(width((i - 1) / pieces), 0)
+		beam.Width1 = math.max(width(i / pieces), 0)
+		beam.Transparency = seq
+	end
+end
+
+function BeamArc.setColor(self: BeamArc, color: Color3)
+	local seq = ColorSequence.new(color)
+	for _, beam in self.beams do
+		beam.Color = seq
+	end
+end
+
+function BeamArc.setEnabled(self: BeamArc, enabled: boolean)
+	for _, beam in self.beams do
+		beam.Enabled = enabled
+	end
+	if not enabled then
+		self.holder.CFrame = CFrame.new(0, -5e4, 0)
+	end
+end
+
+return BeamArc
+]====])
+-- Source: src/client/combat/vfx/VFXMath.luau
+addModule(modules,{"combat","vfx","VFXMath"},[====[
+--!strict
+--[[
+	VFXMath
+	Pure geometry helpers (no services) - unit-tested under Lune with real CFrame math.
+
+	Conventions used by every effect in this library:
+	  * An effect "frame" is a CFrame whose UpVector is the surface normal / slash plane
+	    normal and whose LookVector is the forward direction of the effect.
+	  * Arc angles are measured around the frame's +Y axis starting from -Z (forward),
+	    positive = counter-clockwise seen from above (towards -X / the left).
+]]
+
+local VFXMath = {}
+
+local EPSILON = 1e-4
+
+--[[
+	Builds a right-handed CFrame at `position` whose UpVector is `normal` and whose
+	LookVector is `forwardHint` projected onto the surface plane.
+
+	This replaces the classic (and wrong) `CFrame.fromMatrix(pos, right, up, -look)`
+	pattern, which produces a mirrored (left-handed) matrix when `look = right:Cross(up)`.
+]]
+function VFXMath.alignToNormal(position: Vector3, normal: Vector3, forwardHint: Vector3?): CFrame
+	local up = if normal.Magnitude > EPSILON then normal.Unit else Vector3.yAxis
+	local forward = forwardHint or -Vector3.zAxis
+	forward -= up * forward:Dot(up)
+	if forward.Magnitude < EPSILON then
+		-- Hint parallel to the normal: pick any stable perpendicular.
+		forward = Vector3.xAxis - up * up.X
+		if forward.Magnitude < EPSILON then
+			forward = Vector3.zAxis - up * up.Z
+		end
+	end
+	forward = forward.Unit
+	local right = forward:Cross(up)
+	-- fromMatrix(pos, X, Y, Z): X = right, Y = up, Z = back (= -look). X:Cross(Y) == Z.
+	return CFrame.fromMatrix(position, right, up, -forward)
+end
+
+--[[
+	CFrame at `position` whose LookVector is exactly `direction` (UpVector as close to
+	`upHint` as possible). Same result as CFrame.lookAt(position, position + direction),
+	built with fromMatrix so it also runs in test runtimes whose lookAt is unreliable.
+]]
+function VFXMath.lookAlong(position: Vector3, direction: Vector3, upHint: Vector3?): CFrame
+	local look = if direction.Magnitude > EPSILON then direction.Unit else -Vector3.zAxis
+	local up = upHint or Vector3.yAxis
+	local right = look:Cross(up)
+	if right.Magnitude < EPSILON then
+		right = look:Cross(if math.abs(look.X) < 0.9 then Vector3.xAxis else Vector3.zAxis)
+	end
+	right = right.Unit
+	return CFrame.fromMatrix(position, right, right:Cross(look), -look)
+end
+
+-- Point on a circle of radius r lying in the frame's XZ plane, at arc angle `angle`.
+function VFXMath.arcPoint(radius: number, angle: number): Vector3
+	return Vector3.new(-radius * math.sin(angle), 0, -radius * math.cos(angle))
+end
+
+-- Unit tangent of the arc at `angle`, pointing towards increasing angles.
+function VFXMath.arcTangent(angle: number): Vector3
+	return Vector3.new(-math.cos(angle), 0, math.sin(angle))
+end
+
+--[[
+	Local CFrame for an Attachment sitting on the arc so that a Beam's Bezier handles
+	(which extend along the attachment's +X axis) follow the circle.
+]]
+function VFXMath.arcAttachmentCFrame(radius: number, angle: number): CFrame
+	return CFrame.fromMatrix(VFXMath.arcPoint(radius, angle), VFXMath.arcTangent(angle), Vector3.yAxis)
+end
+
+--[[
+	Beam CurveSize that makes a cubic Bezier approximate a circular arc of `sweep`
+	radians (k = 4/3 * tan(sweep / 4) * r). Error < 0.03% of the radius for 90 deg arcs,
+	so split larger arcs into <= 90 deg pieces.
+]]
+function VFXMath.arcCurveSize(radius: number, sweep: number): number
+	return (4 / 3) * math.tan(sweep / 4) * radius
+end
+
+-- Evaluates a cubic Bezier (used by tests and by effects that need points along a beam).
+function VFXMath.bezier(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, t: number): Vector3
+	local u = 1 - t
+	return p0 * (u * u * u) + p1 * (3 * u * u * t) + p2 * (3 * u * t * t) + p3 * (t * t * t)
+end
+
+-- Random unit vector inside a cone of half-angle `angle` (radians) around `direction`.
+function VFXMath.randomInCone(rng: Random, direction: Vector3, angle: number): Vector3
+	local dir = if direction.Magnitude > EPSILON then direction.Unit else Vector3.yAxis
+	-- Uniform on the spherical cap.
+	local cosAngle = math.cos(angle)
+	local z = cosAngle + (1 - cosAngle) * rng:NextNumber()
+	local phi = rng:NextNumber() * 2 * math.pi
+	local r = math.sqrt(math.max(0, 1 - z * z))
+	local localDir = Vector3.new(r * math.cos(phi), r * math.sin(phi), -z)
+	-- Frame whose LookVector (-Z) is `dir`.
+	return VFXMath.lookAlong(Vector3.zero, dir):VectorToWorldSpace(localDir)
+end
+
+function VFXMath.randomRange(rng: Random, min: number, max: number): number
+	return min + (max - min) * rng:NextNumber()
+end
+
+-- Opacity (1 = visible) <-> Transparency (1 = invisible) helpers for layered fades.
+function VFXMath.combineTransparency(baseTransparency: number, opacity: number): number
+	return 1 - (1 - baseTransparency) * math.clamp(opacity, 0, 1)
+end
+
+--[[
+	Deterministic ring layout used by crater/debris effects. Returns `count` angles
+	spread around the circle with a random jitter of +-(jitter * step / 2).
+	Seeded -> every client builds the exact same crater.
+]]
+function VFXMath.ringAngles(rng: Random, count: number, jitter: number): { number }
+	local angles = table.create(count)
+	local step = 2 * math.pi / count
+	local offset = rng:NextNumber() * step
+	for i = 1, count do
+		angles[i] = offset + (i - 1) * step + (rng:NextNumber() - 0.5) * step * jitter
+	end
+	return angles
+end
+
+return VFXMath
+]====])
 -- Source: src/client/flow/HUD.luau
 addModule(modules,{"flow","HUD"},[====[
 -- Native editable GUI, offers and state rendering.
@@ -4572,6 +5365,8 @@ return function(deps)
  local UIS=game:GetService('UserInputService');local GuiService=game:GetService('GuiService')
  local player,net,input,hud=deps.player,deps.net,deps.input,deps.hud
  local theme=require(script.Parent.Parent.Theme);local make,label,round=theme.Make,theme.Label,theme.Round;local palette=theme.Palette
+ local augmentStyles=require(script.Parent.Parent.combat.AugmentStyles)
+ local variantIndex=0
  local spells={
   {id='lightRing',name='성운 광륜',note='빛나는 초승달 부메랑 · 곡선 왕복 관통'},
   {id='basic',name='기본 공격 · 별빛 마법탄',note='작은 빛의 탄환 · 누르고 연속 발사',common=true},
@@ -4605,8 +5400,8 @@ return function(deps)
  local controlsBar=make('Frame',overlay,{Name='Controls',Size=UDim2.new(1,-236,0,42),Position=UDim2.new(0,224,1,-54),BackgroundColor3=palette.bg,BackgroundTransparency=.04});round(controlsBar,10)
  local clockLabel=label(overlay,'',UDim2.new(1,-236,0,20),UDim2.new(0,224,1,-79),nil,palette.text);clockLabel.TextSize=12
  local controls={}
- for i,item in ipairs({{'Replay','다시 재생'},{'Loop','반복 켬'},{'Level','단계 1'},{'ResetView','시점 초기화'},{'Close','닫기'}})do
-  local b=make('TextButton',controlsBar,{Name=item[1],Text=item[2],Size=UDim2.new(.2,-10,1,-12),Position=UDim2.new((i-1)*.2,5,0,6),BackgroundColor3=palette.card,TextColor3=palette.text,Font=Enum.Font.GothamBold,TextSize=12});round(b,7);controls[item[1]]=b
+ for i,item in ipairs({{'Replay','다시 재생'},{'Loop','반복 켬'},{'Level','단계 1'},{'Variant','기본 효과'},{'ResetView','시점 초기화'},{'Close','닫기'}})do
+  local b=make('TextButton',controlsBar,{Name=item[1],Text=item[2],Size=UDim2.new(1/6,-10,1,-12),Position=UDim2.new((i-1)/6,5,0,6),BackgroundColor3=palette.card,TextColor3=palette.text,Font=Enum.Font.GothamBold,TextSize=12});round(b,7);controls[item[1]]=b
  end
  local opened,lastLobby,loop,playing=false,false,true,true
  local selected,levelIndex=spells[1],1;local levels={1,3,5}
@@ -4618,6 +5413,10 @@ return function(deps)
   yaw=0;pitch=(selected.id=='meteor' or selected.id=='skyLances') and .48 or .65;distance=(selected.id=='meteor' or selected.id=='skyLances') and 140 or 84
  end
  local function refresh()
+  local variant=(augmentStyles[selected.id]or {})[variantIndex]
+  controls.Variant.Text=variant and variant.name or '기본 효과'
+  hint.Text=variant and (variant.note..' · 조건부 보너스는 발동 예시 · 연출만 재생')or'연출만 재생 · 드래그 회전 / 휠 확대 · 증강 버튼으로 기본과 비교'
+  gui:SetAttribute('AugmentVariant',variant and variant.id or '')
   title.Text='스킬 미리보기 · '..selected.name..' · '..selected.note
   controls.Loop.Text=loop and '반복 켬'or'반복 끔'
   controls.Level.Text=selected.common and(selected.id=='golem' and '단계 5 · 최대 연출'or'단계 공통')or('단계 '..levels[levelIndex])
@@ -4626,10 +5425,11 @@ return function(deps)
  end
  local function replay()
   if not scene then return end
-  scene.Play(selected.id,selected.id=='golem' and 5 or levels[levelIndex]);playing=true;clockLabel.Text='재생 중…';gui:SetAttribute('PlaybackTime',0);refresh()
+  local variant=(augmentStyles[selected.id]or {})[variantIndex]
+  scene.Play(selected.id,selected.id=='golem' and 5 or levels[levelIndex],variant and variant.id or '');playing=true;clockLabel.Text='재생 중…';gui:SetAttribute('PlaybackTime',0);refresh()
  end
  local function selectSpell(item)
-  selected=item;fit();replay()
+  selected=item;variantIndex=0;fit();replay()
  end
  for i,item in ipairs(spells)do
   local b=make('TextButton',list,{Name='Spell_'..item.id,Size=UDim2.new(1,-2,0,34),LayoutOrder=i,Text=item.name,BackgroundColor3=palette.card,TextColor3=palette.text,Font=Enum.Font.GothamBold,TextSize=12,AutoButtonColor=true});round(b,7);spellButtons[item.id]=b
@@ -4671,6 +5471,7 @@ return function(deps)
  controls.Replay.Activated:Connect(replay)
  controls.Loop.Activated:Connect(function()loop=not loop;if loop and not playing then replay()end;refresh()end)
  controls.Level.Activated:Connect(function()if selected.common then return end;levelIndex=levelIndex%#levels+1;replay()end)
+ controls.Variant.Activated:Connect(function()variantIndex=(variantIndex+1)%(#(augmentStyles[selected.id]or {})+1);replay()end)
  controls.ResetView.Activated:Connect(fit)
  surface.InputBegan:Connect(function(key)
   if key.UserInputType==Enum.UserInputType.MouseButton1 or key.UserInputType==Enum.UserInputType.MouseButton2 or key.UserInputType==Enum.UserInputType.Touch then dragging=true;lastPosition=key.Position;if key.UserInputType==Enum.UserInputType.Touch then touch=key end end

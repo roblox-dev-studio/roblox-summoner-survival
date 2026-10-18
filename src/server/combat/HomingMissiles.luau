@@ -25,7 +25,7 @@ return function(deps)
   for index=1,count do
    local pos=root.Position+root.CFrame.RightVector*((index-(count+1)/2)*1.6)+Vector3.new(0,1.2,0)
    nextShot+=1
-   local anchor=Instance.new('Part');anchor.Name='HomingMissile_'..nextShot;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,enemy.pos);anchor.Parent=deps.world
+   local anchor=Instance.new('Part');anchor.Name='HomingMissile_'..nextShot;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,enemy.pos);A.Stamp(anchor,s,"missile");anchor.Parent=deps.world
    table.insert(shots,{source=s,target=enemy,level=level,time=0,anchor=anchor})
    deps.effect:FireAllClients('homingMissile',anchor.Name)
   end
@@ -40,8 +40,9 @@ return function(deps)
     else
      local delta=shot.target.pos-shot.anchor.Position;local travel=44*dt
      if delta.Magnitude<=travel+1.3 then
+      local empowered=A.Damage(shot.source,"missile",1,shot.target)>1
       deps.damage(shot.target,A.Damage(shot.source,"missile",18+shot.level*7,shot.target),shot.source)
-      deps.effect:FireAllClients('missileHit',shot.target.pos);remove=true
+      deps.effect:FireAllClients('missileHit',shot.target.pos);A.Impact(deps.effect,shot.source,'missile',shot.target.pos,3,'hit',empowered);remove=true
      else
       local move=delta.Unit*travel
       local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={deps.world,shot.source.player.Character};params.RespectCanCollide=true
