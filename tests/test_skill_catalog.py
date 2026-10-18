@@ -130,8 +130,13 @@ assert(entry.iconKey=='ice'and entry.parentSkill=='ice'and entry.badge=='희귀 
 ready,entry=icons.Apply(image,'meteor',fallback)
 assert(not ready and image.Image==''and not image.Visible and fallback.Visible)
 assert(entry.iconKey=='meteor')
+assert(fallback.Text=='운석'and fallback.TextScaled and not fallback.TextWrapped)
+icons.Apply(image,'aug_meteor_echo',fallback);assert(fallback.Text=='운석','Variants share readable parent labels')
+icons.Apply(image,'aug_lucky_charm',fallback);assert(fallback.Text=='행운')
+icons.Apply(image,'vitality',fallback);assert(fallback.Text=='체력')
 ready,entry=icons.Apply(image,'unknown',fallback)
 assert(not ready and entry==nil and image.Image==''and fallback.Visible)
+assert(fallback.Text=='강화','No unsupported decorative glyph for unknown cards')
 assert(icons.Get('aug_ice_twin')==icons.Get('ice_twin'))
 assert(icons.Get(123)==nil)
 for _,id in ipairs({'basic','golem','dash'})do

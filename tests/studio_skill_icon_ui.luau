@@ -38,6 +38,8 @@ local ok,result=xpcall(function()
   local card=cards['Choice'..i];local id=card:GetAttribute('ChoiceId');local metadata=icons.Get(id)
   assert(card.Visible and card.IconTile.SkillIcon.Visible==(metadata~=nil and metadata.robloxAssetId~=nil),'Offer picture uses actual uploaded state')
   assert(card.IconTile.IconFallback.Visible==not card.IconTile.SkillIcon.Visible,'Unavailable and utility cards keep fallback')
+  local expected=({'운석','행운','체력'})[i]
+  assert(card.IconTile.IconFallback.Text==expected,'Readable fallback label: '..expected)
  end
  assert(sends==0,'Rendering cards does not choose or reroll')
  return {parentIcons=true,commonIcons=true,uploadGating=true,walkableDefault=true,loadoutOpenClose=true,combatCleanup=true,offerCards=3,transactions=0}
