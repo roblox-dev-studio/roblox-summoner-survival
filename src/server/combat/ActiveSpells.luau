@@ -1,6 +1,7 @@
 -- Q windup and moving spear are driven by the shared server simulation.
 return function(deps)
  local nextCast=0
+ local ACTIVE_COOLDOWN=4
  local function clear(s)
   if s.activeCast then if s.activeCast.anchor.Parent then s.activeCast.anchor:Destroy()end;s.activeCast=nil end
  end
@@ -10,13 +11,13 @@ return function(deps)
    nextCast+=1
    local anchor=Instance.new('Part');anchor.Name='ActiveFireball_'..nextCast;anchor.Anchored=true;anchor.Transparency=1;anchor.Size=Vector3.one*.1;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
    local start=origin+direction*3+Vector3.new(0,1.2,0);anchor.CFrame=CFrame.lookAt(start,start+direction);anchor.Parent=deps.world
-   s.activeCast={kind=kind,time=0,origin=start,direction=direction,range=42,travelled=0,hits={},anchor=anchor};s.cooldown=7
+   s.activeCast={kind=kind,time=0,origin=start,direction=direction,range=42,travelled=0,hits={},anchor=anchor};s.cooldown=ACTIVE_COOLDOWN
    deps.effect:FireAllClients('fireProjectile',anchor.Name);return true
   end
   nextCast+=1
   local anchor=Instance.new('Part');anchor.Name='ActiveCast_'..nextCast;anchor.Anchored=true;anchor.Transparency=1;anchor.Size=Vector3.one*.1;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
   anchor.CFrame=CFrame.lookAt(origin,origin+direction);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Duration',.4);anchor:SetAttribute('Range',kind~='iceRush' and 52 or 34);anchor:SetAttribute('Launched',false);anchor.Parent=deps.world
-  s.activeCast={kind=kind,time=0,origin=origin,direction=direction,range=kind~='iceRush' and 52 or 34,travelled=0,hits={},anchor=anchor};s.cooldown=7
+  s.activeCast={kind=kind,time=0,origin=origin,direction=direction,range=kind~='iceRush' and 52 or 34,travelled=0,hits={},anchor=anchor};s.cooldown=ACTIVE_COOLDOWN
   deps.effect:FireAllClients('activeCast',anchor.Name,kind)
   if kind~='iceRush' then deps.effect:FireAllClients(kind=='thunder'and'thunderSpear'or'aetherSpear',anchor.Name)end
   return true
@@ -43,7 +44,7 @@ return function(deps)
    local target,nearest=nil,math.huge
    for _,e in ipairs(deps.enemies)do
     local along=(e.pos-previous):Dot(cast.direction)
-    if e.hp>0 and along>=-2.4 and along<=(pos-previous).Magnitude and segmentDistance(e.pos,previous,pos)<=2.4 and along<nearest then target=e;nearest=along end
+    if e.hp>0 and along>=-4 and along<=(pos-previous).Magnitude and segmentDistance(e.pos,previous,pos,.6)<=2.4 and along<nearest then target=e;nearest=along end
    end
    if target then pos=previous+cast.direction*math.clamp(nearest,0,(pos-previous).Magnitude)end
    cast.travelled+=(pos-previous).Magnitude;cast.anchor.CFrame=CFrame.lookAt(pos,pos+cast.direction)
@@ -64,7 +65,7 @@ return function(deps)
    local wall=travel>.001 and workspace:Raycast(previous,pos-previous,params)or nil
    if wall then pos=wall.Position end
    for _,e in ipairs(deps.enemies)do
-    if e.hp>0 and not cast.hits[e] and segmentDistance(e.pos,previous,pos,cast.kind=='aetherLance'and .5 or nil)<=2.4 then
+    if e.hp>0 and not cast.hits[e] and segmentDistance(e.pos,previous,pos,cast.kind=='aetherLance'and .375 or nil)<=2.4 then
      cast.hits[e]=true;deps.damage(e,72+(s.lightning or 0)*8,s);deps.effect:FireAllClients(cast.kind=='thunder'and'thunderHit'or'aetherHit',e.pos)
     end
    end

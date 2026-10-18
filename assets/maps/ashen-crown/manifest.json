@@ -1,0 +1,39 @@
+{
+  "name": "Ashen Crown Courtyard",
+  "revision": 4,
+  "creator": "Project-authored procedural environment",
+  "source": "arena.luau",
+  "sha256": "5dfd698ef84edcdb11bbfea20a7da227633dd21349c095db47bf9f4a4f760786",
+  "externalAssets": [],
+  "textures": "Roblox built-in materials and built-in particle texture only",
+  "seed": 72418,
+  "partCount": 2026,
+  "regions": [
+    "BattlePlaza",
+    "BrokenRamparts",
+    "CommandersGate",
+    "Graveyard",
+    "BurntChapel",
+    "DistantKingdom",
+    "InteriorDebris"
+  ],
+  "combatFootprint": {
+    "floor": [
+      186,
+      3,
+      186
+    ],
+    "floorTopY": 0,
+    "boundaryCenters": 94,
+    "solidMapParts": 5
+  },
+  "reproduction": "Run arena.luau in Studio Edit to replace only SummonerArena, or use generated install.luau in an empty place. Builder yields every 100 parts; does not install scripts, change combat data, or publish.",
+  "trialInteriorDebris": {
+    "enabledBy": "arena.luau ENABLE_INTERIOR_DEBRIS",
+    "clusters": 3,
+    "parts": 24,
+    "solidParts": 0,
+    "placement": "Independent rubble on courtyard floor, separated from intact wall courses"
+  },
+  "perimeter": "East/west unframed gaps and southern gap filled; wall seams backed to below ground, tower bodies closed; northern intentional arch preserved"
+}

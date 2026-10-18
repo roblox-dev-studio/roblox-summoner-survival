@@ -1,0 +1,6 @@
+Horse by Quaternius — CC0 1.0 Universal
+Author/publisher: https://quaternius.com/packs/ultimateanimatedanimals.html
+Distribution: https://poly.pizza/m/qvTrSG9pZF
+License dedication: https://creativecommons.org/publicdomain/zero/1.0/
+Both author page and distribution identify CC0; checked 2026-10-18.
+No imported scripts. Original GLB retained with SHA-256 in manifest.json.

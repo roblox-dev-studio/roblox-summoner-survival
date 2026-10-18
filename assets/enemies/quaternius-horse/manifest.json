@@ -1,0 +1,20 @@
+{
+  "author": "Quaternius",
+  "asset": "Horse, Ultimate Animated Animal Pack",
+  "source": "https://quaternius.com/packs/ultimateanimatedanimals.html",
+  "distribution": "https://poly.pizza/m/qvTrSG9pZF",
+  "download": "https://static.poly.pizza/d37dbc87-ca61-4b2c-a2da-d2f0c4240bef.glb",
+  "license": "CC0 1.0",
+  "sha256": "fae7a7ec91e0d6a33554efb896fac9c4e8c632644183bcb8cc962f673d3ce609",
+  "vertices": 4400,
+  "triangles": 2182,
+  "bones": 67,
+  "clips": {
+    "Idle": "Idle",
+    "Walk": "Walk",
+    "Gallop": "Gallop"
+  },
+  "conversion": "python3 tools/convert_horse.py (numpy), baked ancestor scale, glTF +Z to Roblox -Z, sRGB material vertex colors, height ~9.65 studs",
+  "generated": "src/client/world/horse",
+  "scriptsImported": false
+}
