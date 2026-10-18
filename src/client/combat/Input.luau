@@ -2,6 +2,7 @@
 return function(deps)
  local UIS=game:GetService('UserInputService');local Run=game:GetService('RunService')
  local player,net=deps.player,deps.net
+ local jump=require(script.Parent.JumpInput)({player=player,net=net})
  local suspended,basicBlocked=false,false;local held={};local basicClock=0;local hudInput
  local function clearHeld()table.clear(held);basicClock=0;hudInput=nil end
  local function setBasicHeld(source,value,input)
@@ -46,6 +47,7 @@ return function(deps)
   if basicClock<=0 then basicClock=.1;net.Action:FireServer('basicAttack')end
  end)
  return {Dash=requestDash,FireWave=fireWave,SetBasicHeld=setBasicHeld,
+  SetJumpMenuBlocked=jump.SetMenuOpen,
   SetBasicBlocked=function(value)basicBlocked=value;if value then clearHeld()end end,
-  SetSuspended=function(value)suspended=value;if value then clearHeld()end end}
+  SetSuspended=function(value)suspended=value;jump.SetSuspended(value);if value then clearHeld()end end}
 end

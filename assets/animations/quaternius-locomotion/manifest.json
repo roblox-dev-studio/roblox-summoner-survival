@@ -1,0 +1,69 @@
+{
+  "provider": "Quaternius",
+  "pack": "Universal Animation Library Standard (OpenGameArt release)",
+  "source": "https://opengameart.org/content/universal-animation-library",
+  "license": "CC0-1.0",
+  "originalGLB": "assets/animations/quaternius-locomotion/AnimationLibrary_Godot_Standard.glb",
+  "originalGLBSHA256": "1b7bf67866360665426bb99e4c71bd619f19b408453c24e30f0c3071601eee5c",
+  "target": "Measured Roblox R15 Motor6D C0/C1",
+  "sampleRate": 60,
+  "rootTranslation": "removed on all axes",
+  "doubleJumpAdaptation": "Original Roll rotations compressed to 0.55 seconds for an air tumble; not a provider-authored double jump.",
+  "scriptsImported": false,
+  "clips": [
+    {
+      "name": "Walk_Loop",
+      "file": "src/client/world/clips/Walk_Loop.luau",
+      "duration": 1.3333333333333333,
+      "frames": 81,
+      "loop": true,
+      "sourceAction": "Walk_Loop",
+      "sha256": "3df684ee3a16c887bee65b93cc639d51c0539c5d87596f1167f57423d16de323"
+    },
+    {
+      "name": "Jog_Fwd_Loop",
+      "file": "src/client/world/clips/Jog_Fwd_Loop.luau",
+      "duration": 0.9333333333333333,
+      "frames": 57,
+      "loop": true,
+      "sourceAction": "Jog_Fwd_Loop",
+      "sha256": "ba8c95be4f04bdd2d5946e6e25c662415b4471a424f3fa9ca7aec73f90648f6b"
+    },
+    {
+      "name": "Jump_Start",
+      "file": "src/client/world/clips/Jump_Start.luau",
+      "duration": 1.3333333333333333,
+      "frames": 81,
+      "loop": false,
+      "sourceAction": "Jump_Start",
+      "sha256": "9b36b34be30c00cd60d57a10a01123e653068df4cb1d184964d0edff9117d1a1"
+    },
+    {
+      "name": "Jump_Loop",
+      "file": "src/client/world/clips/Jump_Loop.luau",
+      "duration": 2.5,
+      "frames": 151,
+      "loop": true,
+      "sourceAction": "Jump_Loop",
+      "sha256": "4c3d978f899fea1a817b66d83155a97b251551f0cd06503843beabfd0cd6db54"
+    },
+    {
+      "name": "Jump_Land",
+      "file": "src/client/world/clips/Jump_Land.luau",
+      "duration": 1.2666666666666666,
+      "frames": 77,
+      "loop": false,
+      "sourceAction": "Jump_Land",
+      "sha256": "9be9929fcb4c9869593425e6107a56e0c8205c3454b8057cc15135a3b448b847"
+    },
+    {
+      "name": "Roll",
+      "file": "src/client/world/clips/Roll.luau",
+      "duration": 1.4666666666666666,
+      "frames": 89,
+      "loop": false,
+      "sourceAction": "Roll",
+      "sha256": "e6b306e6c1c7c32147be6e2d57c77e5a07ead1fe06b8e1b803d1ebd6a39366a8"
+    }
+  ]
+}

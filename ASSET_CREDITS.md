@@ -26,6 +26,8 @@
 
 ## 재사용한 캐릭터 모션 (2026-10-16)
 
+이 절의 네 클립은 이전 하체 시안입니다. 현재 이동/점프 재생은 아래 2026-10-19 신규 변환본으로 대체됐습니다.
+
 Quaternius [Universal Animation Library 2](https://quaternius.com/packs/universalanimationlibrary2.html)
 Standard에서 이전 AFTERLIGHT 테스트가 R15로 변환한 네 클립을 재사용했습니다.
 제공자 페이지와 동봉 원문에서 CC0-1.0을 확인했습니다. 원문은
@@ -163,3 +165,17 @@ Roblox 업로드는 아직 하지 않았으므로 `robloxAssetId`는 `null`입�
 ### 잿빛 왕성 광장 · 2026-10-18
 
 `arena.luau`의 광장/문양·성벽/성문·탑·비석/납골당·예배당·불탄 나무/배경은 프로젝트 자체 절차 모델입니다. Roblox 기본 재질과 `rbxasset://textures/particles/sparkles_main.dds`만 사용하며 외부 모델/이미지/번들 스크립트는 추가하지 않았습니다. 재현 seed/원본 SHA/구역과 충돌 조건은 `assets/maps/ashen-crown/manifest.json`에 기록했습니다.
+
+## 이동·점프·이단점프 원본 (2026-10-19)
+
+Quaternius의 [Universal Animation Library Standard](https://opengameart.org/content/universal-animation-library)를
+원작자 배포 ZIP에서 새로 다운로드했습니다. CC0-1.0이며 원문·GLB·다운로드 주소·해시는
+`assets/animations/quaternius-locomotion/`에 보존합니다. `Walk_Loop`, `Jog_Fwd_Loop`, `Jump_Start`,
+`Jump_Loop`, `Jump_Land`, `Roll` 여섯 원본을 `tools/convert_player_motion.py`로 R15에 변환했습니다.
+
+Roll을 0.55초 공중 회전으로 재활용한 것이며, 제공자가 제작한 전용 Double Jump라고 표기하지 않습니다.
+루트 위치 변화는 제거하고 원본 관절 회전을 사용합니다. 점프 속도/추가 횟수는 게임 서버 규칙입니다.
+Mixamo에서 새로 다운로드한 것으로 주장하지 않으며, 이번에 가져온 원본은 Quaternius입니다.
+
+현재 Roblox [AnimationConstraint 공식 문서](https://create.roblox.com/docs/reference/engine/classes/AnimationConstraint)에 따라
+기존 Motor6D와 새 관절의 Transform을 모두 처리합니다. Roblox 관절 구현은 외부 모션 라이선스와 별개입니다.

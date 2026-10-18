@@ -16,6 +16,7 @@ require(world:WaitForChild("DragonPresentation"))()
 require(world:WaitForChild("EnemyPresentation"))()
 local skillPreview,enemyPreview,lobby,lobbyHub
 local function menuMovement(open)
+ input.SetJumpMenuBlocked(open)
  local module=player.PlayerScripts:FindFirstChild('PlayerModule')
  if module then local ok,controls=pcall(function()return require(module):GetControls()end);if ok then if open then controls:Disable()else controls:Enable()end end end
 end
