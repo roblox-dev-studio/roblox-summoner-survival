@@ -18,7 +18,7 @@ local ok,result=xpcall(function()
  s.offers={};assert(not combat.RequestWave(s));s.offers=nil
  s.lobby=true;assert(not combat.RequestWave(s));s.lobby=false
  paused=true;assert(not combat.RequestWave(s));paused=false
- assert(combat.RequestWave(s,Vector3.new(0,0,-1))and s.cooldown==7,'Q uses selected active')
+ assert(combat.RequestWave(s,Vector3.new(0,0,-1))and s.cooldown==4,'Q uses selected active')
  assert(not combat.RequestWave(s,Vector3.new(0,0,-1)),'Cooldown blocks repeated input')
  active.Step(s,.2);assert(ground.hp==1000,'Charge does not deal early damage')
  local anchor=s.activeCast.anchor;task.wait(.05);assert(anchor:GetAttribute('Elapsed')==.2,'No independent timer')
@@ -38,7 +38,7 @@ local ok,result=xpcall(function()
  s.cooldown=0;s.activeSkill='iceRush';combat.RequestWave(s,Vector3.new(0,0,-1));active.Step(s,.5);local cancelledHP=ground.hp;combat.ClearProjectiles(s);active.Step(s,1);assert(ground.hp==cancelledHP,'Cancelling stops remaining ice rows')
  s.cooldown=0;s.activeSkill='thunder';combat.RequestWave(s,Vector3.new(0,0,-1));combat.ClearProjectiles(s)
  assert(not s.activeCast,'Death cancels Q windup')
- local widened=enemy(Vector3.new(4.2,4.2,-25));local outside=enemy(Vector3.new(5.2,4.2,-25));local high=enemy(Vector3.new(0,7,-25),true)
+ local widened=enemy(Vector3.new(5.8,4.2,-25));local outside=enemy(Vector3.new(6.9,4.2,-25));local high=enemy(Vector3.new(0,7,-25),true)
  local before=ground.hp;s.cooldown=0;s.activeSkill='aetherLance';assert(combat.RequestWave(s,Vector3.new(0,0,-1)),'New energy Q accepted')
  active.Step(s,.2);assert(ground.hp==before,'Energy lance also has a charge')
  for _=1,14 do active.Step(s,.1)end
@@ -49,12 +49,22 @@ local ok,result=xpcall(function()
  assert(widened.hp==920,'Lightning lance keeps its original narrower reach')
  table.clear(enemies)
  local fireTarget=enemy(Vector3.new(0,4.2,-16));local splash=enemy(Vector3.new(0,4.2,-20));local untouched=enemy(Vector3.new(0,4.2,-29));local offPath=enemy(Vector3.new(9,4.2,-16));local highFire=enemy(Vector3.new(0,20,-16),true)
- s.cooldown=0;s.activeSkill='fire';assert(combat.RequestWave(s,Vector3.new(0,0,-1))and s.cooldown==7,'Fireball Q accepted')
+ s.cooldown=0;s.activeSkill='fire';assert(combat.RequestWave(s,Vector3.new(0,0,-1))and s.cooldown==4,'Fireball Q accepted')
  assert(events.fireProjectile==1 and not events.fireWave,'Fireball projectile replaces fan event')
  assert(not combat.RequestWave(s,Vector3.new(0,0,-1)),'Fireball obeys cooldown')
  active.Step(s,.1);assert(fireTarget.hp==1000 and s.activeCast,'Fireball must fly before damage')
  for _=1,5 do active.Step(s,.1)end
  assert(fireTarget.hp==925 and splash.hp==925 and untouched.hp==1000 and offPath.hp==1000 and highFire.hp==1000 and not s.activeCast,'First contact splashes only nearby enemies')
+ table.clear(enemies)
+ local wideFire=enemy(Vector3.new(3.6,4.2,-16));local outsideFire=enemy(Vector3.new(6.2,4.2,-16))
+ s.cooldown=0;assert(combat.RequestWave(s,Vector3.new(0,0,-1)))
+ for _=1,8 do active.Step(s,.1)end
+ assert(wideFire.hp==925 and outsideFire.hp==1000,'Widened fireball hits at 3.6 sideways and stays bounded')
+ table.clear(enemies)
+ local tooHigh=enemy(Vector3.new(0,8,-16),true)
+ s.cooldown=0;assert(combat.RequestWave(s,Vector3.new(0,0,-1)))
+ for _=1,9 do active.Step(s,.1)end
+ assert(tooHigh.hp==1000,'Fireball widening preserves vertical collision reach')
  table.clear(enemies);local blocked=enemy(Vector3.new(0,4.2,-30))
  local wall=Instance.new('Part');wall.Anchored=true;wall.Size=Vector3.new(20,20,1);wall.Position=Vector3.new(0,5,-12);wall.Parent=workspace
  s.cooldown=0;assert(combat.RequestWave(s,Vector3.new(0,0,-1)));active.Step(s,1);wall:Destroy();assert(blocked.hp==1000 and not s.activeCast,'Wall stops fireball')

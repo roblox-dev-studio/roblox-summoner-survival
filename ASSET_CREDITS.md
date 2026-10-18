@@ -129,3 +129,21 @@ png-clipart-flame-fire-flame.png: user supplied visual reference for a long tear
 HTTP 호출, 외부 실행/자동 설치, 숫자 asset require, 원격 loadstring은 없고 다른 동봉 코드/도구는 실행하지 않았습니다.
 증강별 돔·운석 궤도·파편·빙하 관문 구성과 풀 제한/수명 관리는 프로젝트의 `AugmentArt`에서 작성했습니다.
 새 유료 구매나 이미지·메시·플러그인 업로드는 없습니다.
+
+### 2026-10-18 정정 · Quaternius CC0 군마/후드 대검 군단장
+
+트리가드 외형 참고는 폐기했습니다. 현재 기수는 프로젝트 자체 후드·철갑·붉은 망토/양손 대검이며 금빛 투구·장식깃·도끼창은 생성하지 않습니다. 트리가드는 돌진과 무기 공격을 섞는 전투 방식만 참고합니다.
+
+- Horse: Quaternius. 저작자 페이지 https://quaternius.com/packs/ultimateanimatedanimals.html , 해당 모델 배포 https://poly.pizza/m/qvTrSG9pZF 에서 CC0 확인. 원본 https://static.poly.pizza/d37dbc87-ca61-4b2c-a2da-d2f0c4240bef.glb . CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . 확인일2026-10-18.
+- 실제 원본 `assets/enemies/quaternius-horse/Horse.glb`를 보관합니다. 원본 SHA-256/재질·기하 통계/변환 명령은 해당 manifest.json. 외부 텍스처와 스크립트는 없고 모델의 재질8종을 정점색으로 변환했습니다.
+- 변환 `python3 tools/convert_horse.py`(NumPy). 실제 메시/스킨/Idle·Walk·Gallop을 사용하며 단순 형태 참조가 아닙니다. glTF +Z 정면을 Roblox −Z로, 조상 크기/재질 색공간과 Bone 계층을 베이크했습니다. 모듈은 src/client/world/horse 아래에 포함됩니다.
+
+2026-10-18 후속 외형: 후드를 자체 제작 철제 투구(눈틈·코/볼 가리개·청동 테두리·관 장식)로 교체했습니다. 말·기수·무기1.2배 확대. 새 외부 자산은 없습니다.
+
+2026-10-18 재정정 · 해골 기사: 직전 자체 폐쇄 투구/가면/관 장식을 제거했습니다. `CommanderSkull.luau`가 기존 KayKit Skeleton Warrior CC0 데이터 중 head Bone 가중치0.5초과 정점과 그 정점만으로 구성된 면을 추출합니다(1,820정점/1,480삼각형). 두개골·치아·눈구멍과 원본 개방형 뿔 투구의 색/법선을 유지하며 새 외부 다운로드는 없습니다. KayKit 출처·원본·사용조건은 위 Skeletons 항목과 `assets/enemies/kaykit-skeletons/manifest.json`을 따릅니다.
+
+2026-10-18 해골 군마: `SkeletonHorse.luau`의 두개골/치아/갈비뼈/척추/골반/팔다리·꼬리와 철갑은 프로젝트 자체 절차 모델입니다. Quaternius 원본 말 표면은 투명하게 숨기고 CC0 원본 skeleton/Idle·Walk·Gallop을 움직임에 재사용합니다. 갈색 말을 하얗게 재색칠한 모델이 아닙니다. 새 외부 자산은 추가하지 않았습니다.
+
+### 잿빛 왕성 광장 · 2026-10-18
+
+`arena.luau`의 광장/문양·성벽/성문·탑·비석/납골당·예배당·불탄 나무/배경은 프로젝트 자체 절차 모델입니다. Roblox 기본 재질과 `rbxasset://textures/particles/sparkles_main.dds`만 사용하며 외부 모델/이미지/번들 스크립트는 추가하지 않았습니다. 재현 seed/원본 SHA/구역과 충돌 조건은 `assets/maps/ashen-crown/manifest.json`에 기록했습니다.

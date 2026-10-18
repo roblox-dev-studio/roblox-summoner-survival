@@ -112,7 +112,7 @@ return function(deps)
   if type(name)=='string'then local runtime=workspace:WaitForChild('SummonerRuntime',3);anchor=runtime and runtime:WaitForChild(name,1)end
   if typeof(anchor)~='Instance'or not anchor.Parent or not fx.Parent then return end
   local p=host('ActiveFireball',anchor.CFrame,2)
-  local animate,finish=fireballBody(p,2.8)
+  local animate,finish=fireballBody(p,3.6)
   local t=0;local connection,destroyConnection;local ended=false
   local function stop()
    if ended then return end;ended=true

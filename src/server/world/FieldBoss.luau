@@ -32,25 +32,25 @@ return function(deps)
   clearMarkers();markers=Instance.new('Folder');markers.Name='FieldBossTelegraphs';markers.Parent=world
   local origin=Vector3.new(boss.pos.X,.19,boss.pos.Z);local frame=CFrame.lookAt(origin,origin+boss.direction)
   if kind=='cleaveWindup'then
-   for i=0,20 do local a=math.rad(-75+i*7.5);local ray=frame*CFrame.Angles(0,a,0)
-    part('CleaveSector',Vector3.new(.45,.045,14),ray*CFrame.new(0,0,-7),.82)
-    part('CleaveEdge',Vector3.new(1.8,.06,.17),ray*CFrame.new(0,0,-14),.25)
+   for i=0,20 do local a=math.rad(-85+i*8.5);local ray=frame*CFrame.Angles(0,a,0)
+    part('CleaveSector',Vector3.new(.55,.045,20),ray*CFrame.new(0,0,-10),.82)
+    part('CleaveEdge',Vector3.new(2.8,.06,.17),ray*CFrame.new(0,0,-20),.25)
    end
   elseif kind=='slamWindup'then
    local point=boss.impactPoint
-   for i=1,32 do local a=i*math.pi*2/32;local d=Vector3.new(math.cos(a),0,math.sin(a));local at=Vector3.new(point.X,.2,point.Z)+d*7
+   for i=1,32 do local a=i*math.pi*2/32;local d=Vector3.new(math.cos(a),0,math.sin(a));local at=Vector3.new(point.X,.2,point.Z)+d*10
     part('SlamEdge',Vector3.new(1.4,.06,.15),CFrame.lookAt(at,at+d),.25)
    end
-   local disc=part('SlamArea',Vector3.new(.04,14,14),CFrame.new(point.X,.18,point.Z)*CFrame.Angles(0,0,math.pi/2),.86);disc.Shape=Enum.PartType.Cylinder
+   local disc=part('SlamArea',Vector3.new(.04,20,20),CFrame.new(point.X,.18,point.Z)*CFrame.Angles(0,0,math.pi/2),.86);disc.Shape=Enum.PartType.Cylinder
   elseif kind=='thrustWindup'then
-   part('ThrustLane',Vector3.new(5,.05,24),frame*CFrame.new(0,0,-12),.8)
-   for _,x in ipairs({-2.5,2.5})do part('ThrustEdge',Vector3.new(.1,.06,24),frame*CFrame.new(x,0,-12),.3)end
+   part('ThrustLane',Vector3.new(9,.05,30),frame*CFrame.new(0,0,-15),.8)
+   for _,x in ipairs({-4.5,4.5})do part('ThrustEdge',Vector3.new(.1,.06,30),frame*CFrame.new(x,0,-15),.3)end
   else
-   part('ChargeLane',Vector3.new(7,.05,boss.chargeLength+6),frame*CFrame.new(0,0,-(boss.chargeLength/2+2)),.78)
-   for _,x in ipairs({-3.5,3.5})do part('ChargeEdge',Vector3.new(.12,.07,boss.chargeLength+6),frame*CFrame.new(x,0,-(boss.chargeLength/2+2)),.3)end
+   part('ChargeLane',Vector3.new(11,.05,boss.chargeLength+6),frame*CFrame.new(0,0,-(boss.chargeLength/2+2)),.78)
+   for _,x in ipairs({-5.5,5.5})do part('ChargeEdge',Vector3.new(.12,.07,boss.chargeLength+6),frame*CFrame.new(x,0,-(boss.chargeLength/2+2)),.3)end
   end
  end
- local durations={arrival=1.05,approach=1,cleaveWindup=.75,cleave=.4,slamWindup=1.05,slam=.55,thrustWindup=.7,thrust=.45,chargeWindup=.8,charge=.5,recover=.8,retreat=1}
+ local durations={arrival=.8,approach=1,cleaveWindup=.6,cleave=.34,slamWindup=.8,slam=.44,thrustWindup=.55,thrust=.36,chargeWindup=.65,charge=.42,recover=.55,retreat=1}
  local function action(name)
   boss.action=name;boss.actionTime=0;boss.hits={};boss.model:SetAttribute('FieldAction',name);boss.model:SetAttribute('FieldProgress',0)
   if name:find('Windup')then warning(name)
@@ -62,15 +62,15 @@ return function(deps)
    if root and h and not boss.hits[s]and not s.offers and(s.invulnerable or 0)<=0 and math.abs(root.Position.Y-boss.pos.Y)<8 then
     local point=flat(root.Position);local caught=false
     if kind=='cleave'then
-     local delta=point-flat(boss.pos);caught=delta.Magnitude<=14 and(delta.Magnitude<.01 or delta.Unit:Dot(boss.direction)>=math.cos(math.rad(75)))
-    elseif kind=='slam'then caught=(point-flat(boss.impactPoint)).Magnitude<=7
+     local delta=point-flat(boss.pos);caught=delta.Magnitude<=20 and(delta.Magnitude<.01 or delta.Unit:Dot(boss.direction)>=math.cos(math.rad(85)))
+    elseif kind=='slam'then caught=(point-flat(boss.impactPoint)).Magnitude<=10
     elseif kind=='thrust'then
      local delta=point-flat(boss.strikeOrigin);local along=delta:Dot(boss.direction)
-     caught=along>=0 and along<=24 and(delta-boss.direction*along).Magnitude<=2.5
+     caught=along>=0 and along<=30 and(delta-boss.direction*along).Magnitude<=4.5
     else
      local a=flat(previous)-boss.direction*1;local b=flat(current)+boss.direction*5;local delta=b-a
      local along=(point-a):Dot(delta)/math.max(.001,delta:Dot(delta))
-     caught=along>=0 and along<=1 and(point-(a+delta*along)).Magnitude<=3.5
+     caught=along>=0 and along<=1 and(point-(a+delta*along)).Magnitude<=5.5
     end
     if caught then boss.hits[s]=true;damage(s,h,({cleave=18,slam=26,thrust=22,charge=21})[kind],deps.effect)end
    end
@@ -111,31 +111,31 @@ return function(deps)
   boss.model:SetAttribute('FieldProgress',math.clamp(t/(durations[name]or 1),0,1))
   if name=='approach'then
    local delta=flat(root.Position-boss.pos);local desired=delta.Magnitude>.01 and delta.Unit or boss.direction
-   local angle=math.atan2(boss.direction:Cross(desired).Y,boss.direction:Dot(desired));local turn=math.clamp(angle,-dt*2.8,dt*2.8)
+   local angle=math.atan2(boss.direction:Cross(desired).Y,boss.direction:Dot(desired));local turn=math.clamp(angle,-dt*4,dt*4)
    boss.direction=CFrame.Angles(0,turn,0):VectorToWorldSpace(boss.direction)
-   if dist>11 then boss.pos=bound(boss.pos+boss.direction*math.min(dist-11,15*(boss.slow>0 and .75 or 1)*dt))end
-   if t>=.35 and(dist<=14 or t>=1.6)then
+   if dist>15 then boss.pos=bound(boss.pos+boss.direction*math.min(dist-15,23*(boss.slow>0 and .75 or 1)*dt))end
+   if t>=.3 and(dist<=18 or dist>23 or t>=.95)then
     -- Lock before the visible windup; no tracking after a telegraph appears.
     boss.attackIndex=boss.attackIndex%#attackOrder+1
     local attack=attackOrder[boss.attackIndex]
-    if dist>20 then attack=boss.lastAttack=='charge'and'thrust'or'charge'
-    elseif dist>15 then attack='thrust'
+    if dist>30 then attack=boss.lastAttack=='charge'and'thrust'or'charge'
+    elseif dist>23 then attack='thrust'
     elseif attack=='charge'and dist<8 then attack='slam'end
     boss.lastAttack=attack
-    if attack=='charge'then boss.chargeStart=boss.pos;boss.chargeEnd=bound(boss.pos+boss.direction*30);boss.chargeLength=(boss.chargeEnd-boss.pos).Magnitude
-    elseif attack=='slam'then boss.impactPoint=bound(boss.pos+boss.direction*10)
-    elseif attack=='thrust'then boss.strikeOrigin=boss.pos;boss.thrustEnd=bound(boss.pos+boss.direction*5)end
+    if attack=='charge'then boss.chargeStart=boss.pos;boss.chargeEnd=bound(boss.pos+boss.direction*42);boss.chargeLength=(boss.chargeEnd-boss.pos).Magnitude
+    elseif attack=='slam'then boss.impactPoint=bound(boss.pos+boss.direction*12)
+    elseif attack=='thrust'then boss.strikeOrigin=boss.pos;boss.thrustEnd=bound(boss.pos+boss.direction*8)end
     action(attack..'Windup')
    end
   elseif name=='cleave'then
-   if t>=.16 then hitPlayers(boss.pos,boss.pos,'cleave')end
+   if t>=.12 then hitPlayers(boss.pos,boss.pos,'cleave')end
    if t>=durations.cleave then action('recover')end
   elseif name=='slam'then
-   if t>=.23 then hitPlayers(boss.pos,boss.pos,'slam')end
+   if t>=.18 then hitPlayers(boss.pos,boss.pos,'slam')end
    if t>=durations.slam then action('recover')end
   elseif name=='thrust'then
-   boss.pos=boss.strikeOrigin:Lerp(boss.thrustEnd,math.clamp(t/.24,0,1))
-   if t>=.16 then hitPlayers(boss.pos,boss.pos,'thrust')end
+   boss.pos=boss.strikeOrigin:Lerp(boss.thrustEnd,math.clamp(t/.2,0,1))
+   if t>=.12 then hitPlayers(boss.pos,boss.pos,'thrust')end
    if t>=durations.thrust then action('recover')end
   elseif name=='charge'then
    local previous=boss.pos;boss.pos=boss.chargeStart:Lerp(boss.chargeEnd,math.clamp(t/durations.charge,0,1));hitPlayers(previous,boss.pos,'charge')

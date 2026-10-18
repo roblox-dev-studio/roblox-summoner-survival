@@ -21,7 +21,7 @@ return function(deps)
 	local function addPlayer(player)
 		local s={player=player,level=1,xp=0,kills=0,fire=0,lightning=0,ice=0,meteor=0,blades=0,frost=0,ward=0,missile=0,skyLances=0,lightRing=0,weaponId="starlightWand",golem=1,vitality=0,agility=0,magnet=0,cooldown=0,fireClock=0,lightningClock=0,iceClock=0,golemClock=0,over=false}
 		s.augments={};s.rerolls=2;s.offerRevision=0
-		s.activeSkill=savedActive[player] or 'fire';s.activeName=loadouts.ActiveNames[s.activeSkill]
+		s.activeSkill=savedActive[player] or 'iceRush';s.activeName=loadouts.ActiveNames[s.activeSkill]
 		s.lobby=true;s.loadout=table.clone(saved[player] or loadouts.Defaults)
 		states[player]=s
 		s.pet=creature(player.Name.."_Golem",Color3.fromRGB(95,112,120),true)
@@ -86,7 +86,7 @@ return function(deps)
   if not s.lobby or not s.loaded or starting then return end
   if (bossTest or fieldTest) and deps.allowBossTest~=true then return end
   local now=os.clock();if now-(s.lastLobbyRequest or -10)<.5 then return end;s.lastLobbyRequest=now
-  activeId=activeId or s.activeSkill or 'fire'
+  activeId=activeId or s.activeSkill or 'iceRush'
   if not loadouts.ValidateActive(activeId) then s.lobbyMessage='사용할 Q 스킬을 선택해 주세요.';sync(s);return end
   local valid=loadouts.Validate(ids)
   if not valid then s.lobbyMessage='서로 다른 마법을 정확히 4개 골라 주세요.';sync(s);return end

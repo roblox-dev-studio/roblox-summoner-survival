@@ -40,7 +40,8 @@ return function()
      if frozen then mode=rig.mode or'idle'end;rig.mode=mode
      local visualFrame=motion.frame(rig.motion,rig.frame,delta,mode=='walk',frozen)
      if model:GetAttribute('EnemyKind')=='commander'then
-      mesh.pose(rig,visualFrame,rig.motion.gait,model:GetAttribute('FieldAction')or'idle')
+      local action=model:GetAttribute('FieldAction')or'idle'
+      mesh.pose(rig,visualFrame,(action=='approach'or action=='charge')and rig.motion.gait or rig.motion.time,action)
      else
      mesh.pose(rig,visualFrame,mode=='prepare'and rig.prepareTime or(mode=='attack'and rig.attackTime or(mode=='walk'and rig.motion.gait or rig.motion.time)),mode)
      end

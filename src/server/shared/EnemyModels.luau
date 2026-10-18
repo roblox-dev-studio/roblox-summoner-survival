@@ -3,7 +3,7 @@ return function(deps)
  local block=deps.block
  local function make(name,kind,world)
   local m=Instance.new('Model');m.Name=name
-  local visualAssets={commander='OriginalGildedHalberdCommander',stalker='KayKitSkeletonWarrior',skitter='KayKitSkeletonRogue',brute='KayKitSkeletonWarriorHeavy',caster='KayKitSkeletonMage',ember='KayKitSkeletonMinionBomber',charger='AshHound'}
+  local visualAssets={commander='CloakedCommander_QuaterniusHorse',stalker='KayKitSkeletonWarrior',skitter='KayKitSkeletonRogue',brute='KayKitSkeletonWarriorHeavy',caster='KayKitSkeletonMage',ember='KayKitSkeletonMinionBomber',charger='AshHound'}
   m:SetAttribute('VisualAsset',visualAssets[kind])
   local root=block(m,'Core',Vector3.one,CFrame.identity.Position,Color3.new());root.Transparency=1;root.Position=Vector3.new(0,3,0);m.PrimaryPart=root
   local function p(label,size,position,color,shape,rotation)

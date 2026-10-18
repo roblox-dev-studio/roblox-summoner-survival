@@ -43,7 +43,7 @@ end
 local normalRate,luckyRate=epicRate(base),epicRate(lucky)
 assert(normalRate>.04 and normalRate<.06 and luckyRate>.068 and luckyRate<.092 and luckyRate>normalRate,'Luck raises sampled eligible epic offers')
 local state={augments={quick_cast=3,active_focus=2,missile_hunter=1,skyLances_execute=1,aether_execute=1,lightRing_return=1,lightning_frozen=1}}
-assert(math.abs(A.Cooldown(state,10)-7.6)<1e-6 and math.abs(A.ActiveCooldown(state)-4.9)<1e-6)
+assert(math.abs(A.Cooldown(state,10)-7.6)<1e-6 and math.abs(A.ActiveCooldown(state)-2.8)<1e-6)
 assert(A.Damage(state,'missile',100,{isBoss=true})==150 and A.Damage(state,'missile',100,{})==100)
 assert(A.Damage(state,'skyLances',100,{hp=50,maxHp=100})==150 and A.Damage(state,'skyLances',100,{hp=51,maxHp=100})==100)
 assert(A.Damage(state,'aetherLance',100,{hp=50,maxHp=100})==150)
@@ -63,3 +63,6 @@ for _,d in ipairs(A.Definitions)do
 end
 assert(A.Visuals({augments={lucky_charm=3}},'ice')=='','Luck never adds combat art')
 print('PASS: 22 visual variants match server catalog; common stats add no combat clutter')
+
+assert(A.ActiveCooldown({})==4,"Default Q cooldown follows current combat tuning")
+assert(math.abs(A.ActiveCooldown({augments={active_focus=1}})-3.4)<1e-6,"First Q augment keeps the 15 percent reduction")

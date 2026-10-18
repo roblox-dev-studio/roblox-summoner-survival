@@ -24,10 +24,10 @@ local function validate(ids)
  return result
 end
 local activeOptions={
- {id='fire',name='화염탄',desc='정면 불꽃 탄환 · 적중 범위 피해 · 7초'},
- {id='thunder',name='뇌창',desc='정면으로 날아가는 번개 창 · 관통 · 7초'},
- {id='aetherLance',name='성운창',desc='아지랑이 빛의 창 · 관통 · 7초'},
- {id='iceRush',name='빙하 쇄도',desc='정면 얼음 기둥 · 빙결 · 7초'},
+ {id='fire',name='화염탄',desc='정면 불꽃 탄환 · 적중 범위 피해 · 4초'},
+ {id='thunder',name='뇌창',desc='정면으로 날아가는 번개 창 · 관통 · 4초'},
+ {id='aetherLance',name='성운창',desc='아지랑이 빛의 창 · 관통 · 4초'},
+ {id='iceRush',name='빙하 쇄도',desc='정면 얼음 기둥 · 빙결 · 4초'},
 }
 local activeNames={};for _,v in ipairs(activeOptions)do activeNames[v.id]=v.name end
 local function validateActive(id)return type(id)=='string' and activeNames[id]~=nil end
