@@ -22,6 +22,7 @@ def main():
     if not compiler.exists() or not analyzer.exists():
         raise SystemExit("Run python3 tools/bootstrap_luau.py first")
     subprocess.run([sys.executable, "tools/build_installer.py", "--check"], cwd=ROOT, check=True)
+    subprocess.run([sys.executable, "tools/build_skill_catalog.py", "--check"], cwd=ROOT, check=True)
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], cwd=ROOT, check=True)
     sources = [ROOT / name for name in ("server.luau", "client.luau", "arena.luau", "install.luau")]
     sources += sorted((ROOT / "src").rglob("*.luau"))
@@ -45,6 +46,7 @@ def main():
     subprocess.run([str(tool_dir / ("luau" + suffix)), "tests/progression.spec.luau"], cwd=ROOT, check=True)
     subprocess.run([str(tool_dir / ("luau" + suffix)), "tests/augments.spec.luau"], cwd=ROOT, check=True)
     subprocess.run([str(tool_dir / ("luau" + suffix)), "tests/enemy_catalog.spec.luau"], cwd=ROOT, check=True)
+    subprocess.run([str(tool_dir / ("luau" + suffix)), "tests/lobby_scores.spec.luau"], cwd=ROOT, check=True)
     print(f"PASS: {len(sources)} Luau files compile; no unexpected globals. Studio playtest still required.")
 
 

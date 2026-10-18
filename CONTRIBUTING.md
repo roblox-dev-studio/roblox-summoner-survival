@@ -44,6 +44,11 @@ python3 tools/build_installer.py
 python3 tools/check.py
 ```
 
+마법/증강 정의 또는 `assets/ui/skill-icons/manifest.json`을 바꿨다면 먼저
+`python3 tools/build_skill_catalog.py`를 실행합니다. 생성된 `data/skills.json`,
+`docs/SKILL_CATALOG.md`, `SkillIcons.luau`를 직접 수정하지 않습니다.
+아이콘의 로컬 PNG·원본 생성 프롬프트·SHA-256과 실제 Roblox 업로드 ID를 구분하여 관리합니다.
+
 검사 범위: 설치기와 소스 일치, 모듈 패키징, Luau 문법, 허용된 Roblox 전역 외 누락 참조,
 선택지 처리의 제한된 로직 회귀 시험. 전체 Roblox 타입 검사나 실제 엔진 시험은 아닙니다.
 Studio 검사는 [PLAYTEST_CHECKLIST.md](docs/PLAYTEST_CHECKLIST.md)를 사용합니다.

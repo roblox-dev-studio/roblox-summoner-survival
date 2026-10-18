@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "kind": "native-procedural",
+  "source": "src/server/world/LobbyWorld.luau",
+  "sha256": "583468715d06d631b742fbd6df5d133ef33bdd1b6f3ef91b213f4f6d2b81373e",
+  "externalAssets": [],
+  "reproduce": "Install install.luau in a new Baseplate, then Play; server invokes LobbyWorld.",
+  "center": [
+    0,
+    0,
+    178
+  ],
+  "spawn": [
+    0,
+    4,
+    187
+  ],
+  "actions": [
+    "loadout",
+    "shop",
+    "gacha",
+    "ranking"
+  ],
+  "measuredRuntime": {
+    "baseParts": 662,
+    "lights": 8
+  },
+  "visualReview": "pending; locked Mac has zero PreRender callbacks"
+}

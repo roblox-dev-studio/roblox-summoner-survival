@@ -54,7 +54,8 @@ return function(deps)
   if opened==value then return end
   if value and deps.beforeOpen then deps.beforeOpen()end
   opened=value;overlay.Visible=value;button.Visible=not value;gui:SetAttribute('Open',value)
-  input.SetSuspended(value)
+  local lobbyGui=player.PlayerGui:FindFirstChild('SummonerLobbyUI')
+  input.SetSuspended(value or(lobbyGui and lobbyGui:GetAttribute('InLobby')==true))
   net.Action:FireServer('previewDragon',value)
   if value then
    oldHudEnabled=hud.Enabled;hud.Enabled=false

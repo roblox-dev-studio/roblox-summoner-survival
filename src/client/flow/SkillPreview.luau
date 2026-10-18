@@ -94,7 +94,7 @@ return function(deps)
    if UIS.GamepadEnabled then GuiService.SelectedObject=spellButtons[selected.id]end
   else
    dragging=false;touch=nil;stick=Vector2.zero;if scene then scene.Clear()end
-   hud.Enabled=not lastLobby;if lobby then lobby.Enabled=lastLobby end
+   hud.Enabled=not lastLobby;if lobby then lobby.Enabled=lastLobby and lobby:GetAttribute('LoadoutOpen')==true end
    if deps.dragon then deps.dragon.Gui.Enabled=true end
    if playerControls then playerControls:Enable()end
    local camera=workspace.CurrentCamera

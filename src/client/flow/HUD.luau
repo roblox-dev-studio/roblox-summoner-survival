@@ -3,6 +3,7 @@ return function(deps)
 	local player, net = deps.player, deps.net
 	local theme = require(script.Parent.Parent:WaitForChild("Theme"))
 	local palette, make, round, stroke, label = theme.Palette, theme.Make, theme.Round, theme.Stroke, theme.Label
+	local icons=require(script.Parent.SkillIcons)
 	local gui=Instance.new("ScreenGui"); gui.Name="SummonerHUD"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=false; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; gui.Parent=player:WaitForChild("PlayerGui")
 	local encounter=make("Frame",gui,{Name="EncounterPanel",Size=UDim2.new(.8,0,0,26),Position=UDim2.new(1,-12,0,6),AnchorPoint=Vector2.new(1,0),BackgroundColor3=palette.bg,BackgroundTransparency=.15})
 	make("UISizeConstraint",encounter,{MaxSize=Vector2.new(320,26)});round(encounter,8)
@@ -42,7 +43,7 @@ return function(deps)
 		info.TextSize=width<500 and 10 or 12
 		skills.TextSize=width<500 and 10 or 11
 	end
-	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutActions);layoutActions()
+	local resizeConnection=workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutActions);layoutActions()
 	local rarityColors={common=Color3.fromRGB(190,214,222),rare=Color3.fromRGB(113,194,255),epic=Color3.fromRGB(219,154,255)}
     local rarityNames={common="일반",rare="희귀",epic="영웅"}
     local buildButton=make("TextButton",top,{Name="AugmentSummary",Size=UDim2.new(1,-24,0,25),Position=UDim2.fromOffset(12,116),BackgroundColor3=palette.card,TextColor3=palette.mint,Text="행운 +0 · 증강 0 · 보기",TextSize=12,Font=Enum.Font.GothamBold});round(buildButton,6)
@@ -68,10 +69,13 @@ return function(deps)
     reroll.Activated:Connect(function()if not waiting and reroll.Active then waiting=true;net.Action:FireServer("reroll",offerRevision)end end)
 	for i=1,3 do
 		local b=make("TextButton",cards,{Name="Choice"..i,Size=UDim2.new(1,-8,0,112),BackgroundColor3=palette.card,Text="",LayoutOrder=i,ZIndex=13,AutoButtonColor=true}); round(b,12); stroke(b)
-		local tag=label(b,"마법 강화",UDim2.new(1,-28,.25,0),UDim2.new(0,14,0,4),Enum.Font.GothamBold,palette.mint); tag.TextSize=11; tag.TextXAlignment=Enum.TextXAlignment.Left; tag.ZIndex=14
-		local name=label(b,"화염탄 강화",UDim2.new(1,-28,.3,0),UDim2.new(0,14,.27,0),Enum.Font.GothamBold); name.TextSize=20; name.TextXAlignment=Enum.TextXAlignment.Left; name.ZIndex=14
-		local desc=label(b,"피해량 증가",UDim2.new(1,-28,.29,0),UDim2.new(0,14,.63,0),nil,palette.muted); desc.TextSize=13; desc.TextXAlignment=Enum.TextXAlignment.Left; desc.ZIndex=14
-		buttons[i]={button=b,tag=tag,name=name,desc=desc,border=b:FindFirstChildOfClass("UIStroke")}
+		local tile=make('Frame',b,{Name='IconTile',Size=UDim2.fromOffset(68,68),Position=UDim2.fromOffset(12,22),BackgroundColor3=Color3.fromRGB(17,28,43),ZIndex=14});round(tile,9)
+		local fallback=label(tile,'✦',UDim2.fromScale(1,1),UDim2.new(),Enum.Font.GothamBold,palette.mint);fallback.Name='IconFallback';fallback.TextSize=32;fallback.ZIndex=15
+		local image=make('ImageLabel',tile,{Name='SkillIcon',Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit,Visible=false,ZIndex=15});round(image,9)
+		local tag=label(b,"마법 강화",UDim2.new(1,-108,.25,0),UDim2.new(0,94,0,4),Enum.Font.GothamBold,palette.mint); tag.TextSize=11; tag.TextXAlignment=Enum.TextXAlignment.Left; tag.ZIndex=14
+		local name=label(b,"화염탄 강화",UDim2.new(1,-108,.3,0),UDim2.new(0,94,.27,0),Enum.Font.GothamBold); name.TextSize=19; name.TextXAlignment=Enum.TextXAlignment.Left; name.ZIndex=14
+		local desc=label(b,"피해량 증가",UDim2.new(1,-108,.29,0),UDim2.new(0,94,.63,0),nil,palette.muted); desc.TextSize=13; desc.TextXAlignment=Enum.TextXAlignment.Left; desc.ZIndex=14
+		buttons[i]={button=b,tag=tag,name=name,desc=desc,image=image,fallback=fallback,border=b:FindFirstChildOfClass("UIStroke")}
 		b.Activated:Connect(function() if b:GetAttribute("ChoiceId") and not waiting then waiting=true; net.Action:FireServer("choose",b:GetAttribute("ChoiceId"),offerRevision) end end)
 	end
 	local ending=make("Frame",gui,{Name="Ending",Size=UDim2.fromScale(1,1),BackgroundColor3=palette.bg,BackgroundTransparency=.08,Visible=false,ZIndex=20})
@@ -82,7 +86,7 @@ return function(deps)
 	pulse.Activated:Connect(deps.input.FireWave)
 	dashButton.Activated:Connect(deps.input.Dash)
 	local lastChoice=""
-	net.State.OnClientEvent:Connect(function(s)
+	local stateConnection=net.State.OnClientEvent:Connect(function(s)
         returnButton.Visible=s.lobby~=true and s.over~=true
         local augments=s.augments or {};local ranks=0;local descriptions={}
         for _,a in ipairs(augments)do ranks+=a.count;table.insert(descriptions,string.format("[%s] %s ×%d\n%s",rarityNames[a.rarity]or"일반",a.name,a.count,a.desc))end
@@ -131,12 +135,13 @@ return function(deps)
             modalHint.Text=s.paused and "전투 일시 정지 · 하나를 선택하세요" or "선택하는 동안 보호됩니다 · 하나를 선택하세요"
 			for i,v in ipairs(buttons) do
 				local offer=s.offers[i]; v.button.Visible=offer~=nil
-				if offer then v.button:SetAttribute("ChoiceId",offer.id); v.tag.Text=(rarityNames[offer.rarity]or"일반").." · "..offer.tag.."  /  "..offer.level..(offer.kind=="level"and"단계"or"회");v.tag.TextColor3=rarityColors[offer.rarity]or palette.mint;if v.border then v.border.Color=v.tag.TextColor3;v.border.Thickness=offer.rarity=="epic"and 2 or 1 end; v.name.Text=offer.title; v.desc.Text=offer.desc end
+				if offer then v.button:SetAttribute("ChoiceId",offer.id); v.tag.Text=(rarityNames[offer.rarity]or"일반").." · "..offer.tag.."  /  "..offer.level..(offer.kind=="level"and"단계"or"회");v.tag.TextColor3=rarityColors[offer.rarity]or palette.mint;if v.border then v.border.Color=v.tag.TextColor3;v.border.Thickness=offer.rarity=="epic"and 2 or 1 end; v.name.Text=offer.title; v.desc.Text=offer.desc;icons.Apply(v.image,offer.id,v.fallback);v.fallback.TextColor3=v.tag.TextColor3 end
 			end
 		else waiting=false; lastChoice="" end
 		if s.over then resultTitle.Text=s.result=="victory" and "드래곤 격파!" or "다시 도전!"; resultInfo.Text=string.format("레벨 %d  ·  처치 %d  ·  증강 %d  ·  행운 +%d\n이번 판 증강은 로비 복귀 시 초기화됩니다.",s.level,s.kills,ranks,s.luck or 0) end
 	end)
 
+	gui.Destroying:Connect(function()resizeConnection:Disconnect();stateConnection:Disconnect()end)
 	return {
 		Gui = gui,
 	}

@@ -47,7 +47,7 @@ return function(deps)
   else
    dragging=false;touch=nil;stick=Vector2.zero;scene.Clear();if controls then controls:Enable()end
    if deps.camera then deps.camera.Restore(oldCamera)end
-   hud.Enabled=not lastLobby;local lobby=player.PlayerGui:FindFirstChild('SummonerLobbyUI');if lobby then lobby.Enabled=lastLobby end
+   hud.Enabled=not lastLobby;local lobby=player.PlayerGui:FindFirstChild('SummonerLobbyUI');if lobby then lobby.Enabled=lastLobby and lobby:GetAttribute('LoadoutOpen')==true end
    GuiService.SelectedObject=oldSelection and oldSelection.Parent and oldSelection or nil
   end
  end

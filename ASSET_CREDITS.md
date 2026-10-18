@@ -135,3 +135,13 @@ HTTP 호출, 외부 실행/자동 설치, 숫자 asset require, 원격 loadstrin
 신규 슬라임3종/결정체3종의 외형·모션은 `SlimeMesh.luau`, `CrystalMesh.luau`에 작성한 프로젝트 자체 절차 에셋입니다. 외부 모델·텍스처·실행 코드를 가져오지 않았습니다. 원본 경로·해시·재현은 `assets/enemies/native-families/manifest.json`에 기록합니다. 저장소에 없는 별도 라이선스를 임의 부여하지 않습니다.
 
 증강6개 보강은 기존 MIT 보조 모듈과 이미 쓰던 Roblox 내장 particles/sparkles_main.dds, fire_sparks_main.dds, smoke_main.dds, fire_main.dds를 사용합니다. 새 외부 파일·유료 에셋·업로드는 추가하지 않았습니다.
+
+## 마법 아이콘과 로비 · 2026-10-18
+
+`assets/ui/skill-icons/`의 PNG 19장은 Codex 내장 imagegen으로 이 프로젝트의 스킬 설명을 바탕으로 생성한 이미지입니다.
+외부 게임의 그림을 복사하지 않았으며, 실제 프롬프트·생성 시각·원본 파일·크기·SHA-256은 동봉 manifest에 기록합니다.
+별도 유료 API 키나 소재 구매는 사용하지 않았습니다. 저장소의 라이선스가 지정되지 않은 상태에서 CC0/MIT 등 별도 라이선스를 임의 부여하지 않습니다.
+Roblox 업로드는 아직 하지 않았으므로 `robloxAssetId`는 `null`입니다.
+
+마법 학원 로비의 건축물·결정·마법진·가판대·게시판은 `src/server/world/LobbyWorld.luau`의 프로젝트 자체 절차 모델입니다.
+외부 모델·메시·텍스처·동봉 실행 코드를 가져오지 않았습니다. 설치 후 서버 시작 시 네이티브 Instance로 재생성합니다.
