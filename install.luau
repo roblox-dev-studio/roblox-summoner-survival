@@ -6136,17 +6136,18 @@ return function(deps)
  local theme=require(script.Parent.Parent.Theme);local make,label,round,stroke=theme.Make,theme.Label,theme.Round,theme.Stroke;local colors=theme.Palette
  local gui=make('ScreenGui',playerGui,{Name='SummonerLobbyHub',ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=35,Enabled=false,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
  local connections,worldConnections,menuConnections,promptStates={},{},{},{}
- local inLobby,opened,destroyed=false,nil,false;local scores={};local savedSelection;local viewportConnection
+ local inLobby,opened,destroyed=false,nil,false;local scores={};local savedSelection;local viewportConnection;local panelHeight=510
  local copy={shop={title='별빛 교역소',eyebrow='ACADEMY SHOP',accent=colors.gold,description='마법 도구와 장비를 만나는 학술원의 교역소입니다.',note='상점 준비 중',detail='지금은 진열 공간을 둘러볼 수 있어요.\n상품 구매와 재화 사용은 아직 열리지 않았습니다.'},
   gacha={title='별의 소환 제단',eyebrow='ASTRAL SUMMONING',accent=Color3.fromRGB(185,160,231),description='별의 힘이 모이는 소환 제단입니다.',note='가챠 준비 중',detail='소환 기능을 준비하고 있어요.\n현재는 추첨이나 보상 지급이 이루어지지 않습니다.'},
-  ranking={title='최고 처치 기록관',eyebrow='ACADEMY RECORDS',accent=colors.mint,description='현재 서버에 접속한 플레이어의 이번 접속 최고 처치 수입니다.'}}
+  ranking={title='최고 처치 기록관',eyebrow='ACADEMY RECORDS',accent=colors.mint,description='현재 서버에 접속한 플레이어의 이번 접속 최고 처치 수입니다.'},
+  codex={title='마법 · 증강 도감',eyebrow='SPELL ARCHIVE',accent=colors.mint,description='마법 16종과 증강 25개. 효과와 조건을 살펴보고 다음 빌드를 준비하세요.'}}
  local dock=make('Frame',gui,{Name='Navigation',Size=UDim2.fromOffset(700,100),Position=UDim2.new(.5,0,1,-20),AnchorPoint=Vector2.new(.5,1),BackgroundColor3=colors.bg,BackgroundTransparency=.08});round(dock,15);stroke(dock)
  local dockScale=make('UIScale',dock,{Scale=1})
- local welcome=label(dock,'별빛 학술원  ·  자유롭게 둘러보세요',UDim2.new(1,-28,0,22),UDim2.fromOffset(14,8),Enum.Font.GothamBold,colors.text);welcome.TextSize=14;welcome.TextXAlignment=Enum.TextXAlignment.Left
+ local welcome=label(dock,'별빛 학술원  ·  자유롭게 둘러보세요',UDim2.fromOffset(320,22),UDim2.fromOffset(14,8),Enum.Font.GothamBold,colors.text);welcome.TextSize=14;welcome.TextXAlignment=Enum.TextXAlignment.Left
  local hint=label(dock,'WASD 이동  ·  구역 입구에서 E / 패드 X',UDim2.fromOffset(345,22),UDim2.new(1,-359,0,8),nil,colors.muted);hint.TextSize=12;hint.TextXAlignment=Enum.TextXAlignment.Right
  local buttons={}
- for i,item in ipairs({{'loadout','출전 준비'},{'shop','상점 · 준비 중'},{'gacha','가챠 · 준비 중'},{'ranking','최고 점수'}})do
-  local b=make('TextButton',dock,{Name='Open_'..item[1],Size=UDim2.fromOffset(158,44),Position=UDim2.fromOffset(14+(i-1)*171,42),Text=item[2],Font=Enum.Font.GothamBold,TextSize=14,BackgroundColor3=i==1 and colors.mint or colors.card,TextColor3=i==1 and colors.bg or colors.text});round(b,9);buttons[item[1]]=b
+ for i,item in ipairs({{'loadout','출전 준비'},{'codex','마법 도감'},{'ranking','최고 점수'},{'shop','상점 · 준비 중'},{'gacha','가챠 · 준비 중'}})do
+  local b=make('TextButton',dock,{Name='Open_'..item[1],Size=UDim2.fromOffset(128,44),Position=UDim2.fromOffset(14+(i-1)*136,42),Text=item[2],Font=Enum.Font.GothamBold,TextSize=14,BackgroundColor3=i==1 and colors.mint or colors.card,TextColor3=i==1 and colors.bg or colors.text});round(b,9);buttons[item[1]]=b
  end
  local veil=make('Frame',gui,{Name='Veil',Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(6,12,21),BackgroundTransparency=.25,Visible=false,Active=true})
  local panel=make('Frame',veil,{Name='Panel',Size=UDim2.fromOffset(720,510),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=colors.bg});round(panel,18);stroke(panel)
@@ -6163,10 +6164,11 @@ return function(deps)
  make('UIListLayout',records,{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder})
  local empty=label(panel,'아직 기록이 없어요.\n전투를 마치면 이번 접속의 최고 점수를 확인할 수 있습니다.',UDim2.fromOffset(620,160),UDim2.fromOffset(50,200),nil,colors.muted);empty.Name='EmptyScores';empty.TextSize=18;empty.Visible=false
  local footer=label(panel,'',UDim2.fromOffset(664,50),UDim2.fromOffset(28,435),nil,colors.muted);footer.Name='Scope';footer.TextSize=13;footer.TextXAlignment=Enum.TextXAlignment.Left
+ local codex=require(script.Parent.SkillCodex)(panel)
  local function connect(signal,callback)local connection=signal:Connect(callback);table.insert(connections,connection);return connection end
  local function resize()
   local camera=workspace.CurrentCamera;if not camera then return end;local size=camera.ViewportSize
-  panelScale.Scale=math.max(.3,math.min(1,(size.X-24)/720,(size.Y-24)/510));dockScale.Scale=math.max(.3,math.min(1,(size.X-24)/700))
+  panelScale.Scale=math.max(.3,math.min(1,(size.X-24)/720,(size.Y-24)/panelHeight));dockScale.Scale=math.max(.3,math.min(1,(size.X-24)/700))
  end
  local function bindCamera()
   if viewportConnection then viewportConnection:Disconnect();viewportConnection=nil end
@@ -6180,7 +6182,7 @@ return function(deps)
   return false
  end
  local function closePanel()
-  if not opened then return end;opened=nil;veil.Visible=false;gui:SetAttribute('Open',false);gui:SetAttribute('Panel',nil)
+  if not opened then return end;opened=nil;codex.SetVisible(false);veil.Visible=false;gui:SetAttribute('Open',false);gui:SetAttribute('Panel',nil)
   GuiService.SelectedObject=savedSelection and savedSelection.Parent and savedSelection or nil;savedSelection=nil
   if deps.onPanelChanged then deps.onPanelChanged(false)end
  end
@@ -6208,8 +6210,10 @@ return function(deps)
   local content=copy[action];if not content then return false end
   local wasOpen=opened~=nil;if not wasOpen then savedSelection=GuiService.SelectedObject end
   opened=action;eyebrow.Text=content.eyebrow;eyebrow.TextColor3=content.accent;heading.Text=content.title;description.Text=content.description
-  notice.Visible=action~='ranking';records.Visible=action=='ranking';empty.Visible=action=='ranking'and #scores==0
-  if action=='ranking'then footer.Text='현재 서버 · 이번 접속 기록\n영구 저장과 전체 서버 랭킹은 준비 중입니다.';renderScores()
+  panelHeight=action=='codex'and 650 or 510;panel.Size=UDim2.fromOffset(720,panelHeight);footer.Position=UDim2.fromOffset(28,panelHeight-75);resize()
+  notice.Visible=action=='shop'or action=='gacha';records.Visible=action=='ranking';empty.Visible=action=='ranking'and #scores==0;codex.SetVisible(action=='codex')
+  if action=='codex'then footer.Text='도감은 획득·장착 기능이 아닙니다. 조건을 갖춘 증강이 레벨업 선택지에 등장할 수 있습니다.'
+  elseif action=='ranking'then footer.Text='현재 서버 · 이번 접속 기록\n영구 저장과 전체 서버 랭킹은 준비 중입니다.';renderScores()
   else note.Text=content.note;note.TextColor3=content.accent;detail.Text=content.detail;footer.Text='준비 중인 기능입니다. 결제·추첨·보상 지급은 진행되지 않습니다.'end
   veil.Visible=true;gui:SetAttribute('Open',true);gui:SetAttribute('Panel',action);syncVisibility()
   if UIS.GamepadEnabled then GuiService.SelectedObject=close end
@@ -6272,59 +6276,141 @@ return function(deps)
   for _,items in pairs(menuConnections)do for _,connection in ipairs(items)do connection:Disconnect()end end
   if viewportConnection then viewportConnection:Disconnect()end
   for prompt,enabled in pairs(promptStates)do if prompt.Parent then prompt.Enabled=enabled end end
-  gui:Destroy()
+  codex.Destroy();gui:Destroy()
  end
  gui.Destroying:Connect(destroy);gui:SetAttribute('Open',false);gui:SetAttribute('InLobby',false);syncVisibility()
  return {Gui=gui,Open=open,Close=function()closePanel();syncVisibility()end,Destroy=destroy}
 end
 ]====])
+-- Source: src/client/flow/SkillCodex.luau
+addModule(modules,{"flow","SkillCodex"},[====[
+-- Read-only spell book. All descriptions/conditions come from the generated server catalog.
+-- This view never equips, grants an augmentation, or sends a remote request.
+return function(parent)
+ local theme=require(script.Parent.Parent.Theme)
+ local icons=require(script.Parent.SkillIcons)
+ local make,label,round=theme.Make,theme.Label,theme.Round
+ local colors=theme.Palette
+ local frame=make('Frame',parent,{Name='SkillCodex',Position=UDim2.fromOffset(28,154),Size=UDim2.fromOffset(664,420),BackgroundTransparency=1,Visible=false})
+ local filters={};local connections={};local group='all';local alive=true;local generation=0
+ local rarityColors={common=colors.muted,rare=Color3.fromRGB(126,191,255),epic=Color3.fromRGB(204,157,255)}
+ local tabs={{'all','전체'},{'auto','자동 마법'},{'active','Q 마법'},{'augments','증강'},{'builtin','기본 능력'}}
+ for i,tab in ipairs(tabs)do
+  local button=make('TextButton',frame,{Name='Filter_'..tab[1],Position=UDim2.fromOffset((i-1)*134,0),Size=UDim2.fromOffset(128,30),Text=tab[2],TextSize=13,Font=Enum.Font.GothamBold,BackgroundColor3=colors.card,TextColor3=colors.text})
+  round(button,7);filters[tab[1]]=button
+ end
+ local search=make('TextBox',frame,{Name='Search',Position=UDim2.fromOffset(0,40),Size=UDim2.new(1,-82,0,34),BackgroundColor3=colors.card,TextColor3=colors.text,PlaceholderColor3=colors.muted,PlaceholderText='이름 · 효과 · 조합 조건 검색',Text='',TextSize=14,Font=Enum.Font.GothamMedium,ClearTextOnFocus=false,TextXAlignment=Enum.TextXAlignment.Left})
+ round(search,7);make('UIPadding',search,{PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,12)})
+ local clear=make('TextButton',frame,{Name='ClearSearch',Position=UDim2.new(1,-72,0,40),Size=UDim2.fromOffset(72,34),Text='지우기',TextSize=13,Font=Enum.Font.GothamMedium,BackgroundColor3=colors.card,TextColor3=colors.text});round(clear,7)
+ local scroll=make('ScrollingFrame',frame,{Name='Entries',Position=UDim2.fromOffset(0,84),Size=UDim2.new(1,0,1,-84),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=5,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y})
+ make('UIListLayout',scroll,{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder})
+ local empty=label(frame,'검색 결과가 없어요.\n다른 이름이나 효과로 찾아보세요.',UDim2.new(1,-20,0,120),UDim2.fromOffset(10,150),nil,colors.muted);empty.Name='Empty';empty.Visible=false
+ local function leftText(holder,name,text,x,y,width,height,size,color,font)
+  local textLabel=label(holder,text,UDim2.fromOffset(width,height),UDim2.fromOffset(x,y),font or Enum.Font.GothamMedium,color)
+  textLabel.Name=name;textLabel.TextSize=size;textLabel.TextXAlignment=Enum.TextXAlignment.Left;textLabel.TextYAlignment=Enum.TextYAlignment.Top
+  return textLabel
+ end
+ local function render()
+  if not alive or not frame.Visible then return end
+  for _,child in ipairs(scroll:GetChildren())do if child:IsA('Frame')then child:Destroy()end end
+  local entries=icons.List(group,search.Text)
+  frame:SetAttribute('EntryCount',#entries);frame:SetAttribute('Filter',group)
+  empty.Visible=#entries==0;scroll.CanvasPosition=Vector2.zero
+  for key,button in pairs(filters)do button.BackgroundColor3=key==group and colors.mint or colors.card;button.TextColor3=key==group and colors.bg or colors.text end
+  for index,entry in ipairs(entries)do
+   local row=make('Frame',scroll,{Name='Entry_'..entry.id,LayoutOrder=index,Size=UDim2.new(1,-12,0,176),BackgroundColor3=colors.card});round(row,10)
+   local accent=rarityColors[entry.rarity]or colors.mint
+   local tile=make('Frame',row,{Name='IconTile',Position=UDim2.fromOffset(12,14),Size=UDim2.fromOffset(72,72),BackgroundColor3=colors.bg});round(tile,8)
+   local fallback=label(tile,'✦',UDim2.fromScale(1,1),UDim2.new(),Enum.Font.GothamBold,accent);fallback.Name='Fallback';fallback.TextSize=32
+   local icon=make('ImageLabel',tile,{Name='Icon',Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit});round(icon,8);icons.Apply(icon,entry.id,fallback)
+   leftText(row,'Title',entry.name,98,12,528,25,19,colors.text,Enum.Font.GothamBold)
+   leftText(row,'Category',entry.badge or entry.categoryName,98,40,528,18,12,accent)
+   leftText(row,'Description',entry.description,98,66,528,46,14,colors.text)
+   leftText(row,'Condition',entry.condition,14,116,612,33,12,colors.gold)
+   local extra=entry.visualNote or entry.upgradeDescription
+   leftText(row,'Detail',extra~=''and extra or '출전 준비에서 자신의 빌드와 함께 확인하세요.',14,151,612,21,11,colors.muted)
+  end
+ end
+ local function setFilter(value)
+  if not alive or not filters[value]then return false end
+  group=value;generation+=1;render();return true
+ end
+ for key,button in pairs(filters)do table.insert(connections,button.Activated:Connect(function()setFilter(key)end))end
+ table.insert(connections,search:GetPropertyChangedSignal('Text'):Connect(function()
+  generation+=1;local version=generation
+  task.delay(.12,function()if alive and generation==version then render()end end)
+ end))
+ table.insert(connections,clear.Activated:Connect(function()search.Text='';generation+=1;render()end))
+ local function setVisible(value)
+  if not alive then return end;generation+=1;frame.Visible=value
+  if value then render()else search:ReleaseFocus()end
+ end
+ local function destroy()
+  if not alive then return end;setVisible(false);alive=false
+  for _,connection in ipairs(connections)do connection:Disconnect()end
+  frame:Destroy()
+ end
+ return {Frame=frame,SetVisible=setVisible,SetFilter=setFilter,Destroy=destroy}
+end
+]====])
 -- Source: src/client/flow/SkillIcons.luau
 addModule(modules,{"flow","SkillIcons"},[====[
--- Generated by tools/build_skill_catalog.py. Edit only the icon upload manifest.
+-- Generated by tools/build_skill_catalog.py. Edit server definitions or the icon upload manifest.
 -- Presentation metadata only: local PNG paths never become Roblox image URLs.
 local entries={}
-entries["lightRing"]=table.freeze({iconKey="lightRing",name="성운 광륜",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightRing.png"})
-entries["ice"]=table.freeze({iconKey="ice",name="빙결 얼음창",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ice.png"})
-entries["lightning"]=table.freeze({iconKey="lightning",name="연쇄 번개",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightning.png"})
-entries["meteor"]=table.freeze({iconKey="meteor",name="메테오",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/meteor.png"})
-entries["blades"]=table.freeze({iconKey="blades",name="비전 결정",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/blades.png"})
-entries["skyLances"]=table.freeze({iconKey="skyLances",name="천공의 창",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/skyLances.png"})
-entries["frost"]=table.freeze({iconKey="frost",name="서리 폭발",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/frost.png"})
-entries["missile"]=table.freeze({iconKey="missile",name="추적 마탄",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/missile.png"})
-entries["ward"]=table.freeze({iconKey="ward",name="수호 결계",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ward.png"})
-entries["fire"]=table.freeze({iconKey="fire",name="화염탄",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/fire.png"})
-entries["thunder"]=table.freeze({iconKey="thunder",name="뇌창",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/thunder.png"})
-entries["aetherLance"]=table.freeze({iconKey="aetherLance",name="성운창",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/aetherLance.png"})
-entries["iceRush"]=table.freeze({iconKey="iceRush",name="빙하 쇄도",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/iceRush.png"})
-entries["basic"]=table.freeze({iconKey="basic",name="기본 공격 · 별빛 마법탄",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/basic.png"})
-entries["golem"]=table.freeze({iconKey="golem",name="골렘 대지 강타",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/golem.png"})
-entries["dash"]=table.freeze({iconKey="dash",name="대시",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/dash.png"})
-entries["ice_twin"]=table.freeze({iconKey="ice",name="쌍빙창",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ice.png",parentSkill="ice",rarity="rare",badge="희귀 · 쌍빙창"})
-entries["ice_shatter"]=table.freeze({iconKey="ice",name="빙쇄",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ice.png",parentSkill="ice",rarity="epic",badge="영웅 · 빙쇄"})
-entries["lightning_fork"]=table.freeze({iconKey="lightning",name="갈래 번개",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightning.png",parentSkill="lightning",rarity="rare",badge="희귀 · 갈래 번개"})
-entries["lightning_frozen"]=table.freeze({iconKey="lightning",name="빙결 전도",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightning.png",parentSkill="lightning",rarity="epic",badge="영웅 · 빙결 전도"})
-entries["meteor_wide"]=table.freeze({iconKey="meteor",name="거대 운석",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/meteor.png",parentSkill="meteor",rarity="rare",badge="희귀 · 거대 운석"})
-entries["meteor_echo"]=table.freeze({iconKey="meteor",name="운석의 여진",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/meteor.png",parentSkill="meteor",rarity="epic",badge="영웅 · 운석의 여진"})
-entries["blades_volley"]=table.freeze({iconKey="blades",name="칠성 결정",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/blades.png",parentSkill="blades",rarity="rare",badge="희귀 · 칠성 결정"})
-entries["blades_pierce"]=table.freeze({iconKey="blades",name="관통 결정",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/blades.png",parentSkill="blades",rarity="epic",badge="영웅 · 관통 결정"})
-entries["frost_wide"]=table.freeze({iconKey="frost",name="광역 한파",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/frost.png",parentSkill="frost",rarity="rare",badge="희귀 · 광역 한파"})
-entries["frost_echo"]=table.freeze({iconKey="frost",name="이중 서리",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/frost.png",parentSkill="frost",rarity="epic",badge="영웅 · 이중 서리"})
-entries["ward_reservoir"]=table.freeze({iconKey="ward",name="깊은 결계",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ward.png",parentSkill="ward",rarity="rare",badge="희귀 · 깊은 결계"})
-entries["ward_pulse"]=table.freeze({iconKey="ward",name="결계 해방",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ward.png",parentSkill="ward",rarity="epic",badge="영웅 · 결계 해방"})
-entries["missile_salvo"]=table.freeze({iconKey="missile",name="추적 탄막",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/missile.png",parentSkill="missile",rarity="rare",badge="희귀 · 추적 탄막"})
-entries["missile_hunter"]=table.freeze({iconKey="missile",name="거수 사냥꾼",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/missile.png",parentSkill="missile",rarity="epic",badge="영웅 · 거수 사냥꾼"})
-entries["skyLances_rain"]=table.freeze({iconKey="skyLances",name="칠성 창우",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/skyLances.png",parentSkill="skyLances",rarity="rare",badge="희귀 · 칠성 창우"})
-entries["skyLances_execute"]=table.freeze({iconKey="skyLances",name="천공의 심판",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/skyLances.png",parentSkill="skyLances",rarity="epic",badge="영웅 · 천공의 심판"})
-entries["lightRing_twin"]=table.freeze({iconKey="lightRing",name="쌍월",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightRing.png",parentSkill="lightRing",rarity="rare",badge="희귀 · 쌍월"})
-entries["lightRing_return"]=table.freeze({iconKey="lightRing",name="귀환의 칼날",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightRing.png",parentSkill="lightRing",rarity="epic",badge="영웅 · 귀환의 칼날"})
-entries["fire_blast"]=table.freeze({iconKey="fire",name="작열 화염탄",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/fire.png",parentSkill="fire",rarity="rare",badge="희귀 · 작열 화염탄"})
-entries["thunder_chain"]=table.freeze({iconKey="thunder",name="뇌창 전도",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/thunder.png",parentSkill="thunder",rarity="epic",badge="영웅 · 뇌창 전도"})
-entries["aether_execute"]=table.freeze({iconKey="aetherLance",name="성운 처형",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/aetherLance.png",parentSkill="aetherLance",rarity="rare",badge="희귀 · 성운 처형"})
-entries["iceRush_wide"]=table.freeze({iconKey="iceRush",name="빙하 대로",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/iceRush.png",parentSkill="iceRush",rarity="rare",badge="희귀 · 빙하 대로"})
-entries["quick_cast"]=table.freeze({iconKey="quick_cast",name="신속 시전",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/quick_cast.png",rarity="common",badge="일반 · 신속 시전"})
-entries["active_focus"]=table.freeze({iconKey="active_focus",name="집중된 주문",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/active_focus.png",rarity="common",badge="일반 · 집중된 주문"})
-entries["lucky_charm"]=table.freeze({iconKey="lucky_charm",name="행운의 부적",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lucky_charm.png",rarity="common",badge="일반 · 행운의 부적"})
+entries["lightRing"]=table.freeze({id="lightRing",iconKey="lightRing",name="성운 광륜",status="local_ready_unpublished",description="빛나는 초승달이 곡선을 그리며 날아갔다가 돌아오며 다시 타격합니다.",category="auto",categoryName="자동 마법",condition="자동 마법 4칸 중 선택",upgradeDescription="피해 +8 · 주기 -0.25초",assetPath="assets/ui/skill-icons/lightRing.png"})
+entries["ice"]=table.freeze({id="ice",iconKey="ice",name="빙결 얼음창",status="local_ready_unpublished",description="마법진에서 얼음창을 쏘아 적을 밀치고 얼립니다.",category="auto",categoryName="자동 마법",condition="자동 마법 4칸 중 선택",upgradeDescription="피해 +8 · 빙결 +0.1초 · 둔화 +0.4초",assetPath="assets/ui/skill-icons/ice.png"})
+entries["lightning"]=table.freeze({id="lightning",iconKey="lightning",name="연쇄 번개",status="local_ready_unpublished",description="하늘에서 내려꽂힌 번개가 주변 적에게 이어집니다.",category="auto",categoryName="자동 마법",condition="자동 마법 4칸 중 선택",upgradeDescription="피해 +7 · 연쇄 타깃 +1",assetPath="assets/ui/skill-icons/lightning.png"})
+entries["meteor"]=table.freeze({id="meteor",iconKey="meteor",name="메테오",status="local_ready_unpublished",description="거대한 운석이 하늘에서 낙하해 밀집한 적을 강타합니다.",category="auto",categoryName="자동 마법",condition="자동 마법 4칸 중 선택",upgradeDescription="피해 +22 · 반경 +1 · 주기 -0.3초",assetPath="assets/ui/skill-icons/meteor.png"})
+entries["blades"]=table.freeze({id="blades",iconKey="blades",name="비전 결정",status="local_ready_unpublished",description="등 뒤의 결정 5개가 한 발씩 적을 추적한 뒤 다시 충전됩니다.",category="auto",categoryName="자동 마법",condition="자동 마법 4칸 중 선택",upgradeDescription="결정 피해 +4 · 재충전 -0.35초",assetPath="assets/ui/skill-icons/blades.png"})
+entries["skyLances"]=table.freeze({id="skyLances",iconKey="skyLances",name="천공의 창",status="local_ready_unpublished",description="적 머리 위 마법진에서 긴 마법 창들이 차례로 내려꽂힙니다.",category="auto",categoryName="자동 마법",condition="자동 마법 4칸 중 선택",upgradeDescription="창 피해 +8 · 주기 -0.4초",assetPath="assets/ui/skill-icons/skyLances.png"})
+entries["frost"]=table.freeze({id="frost",iconKey="frost",name="서리 폭발",status="local_ready_unpublished",description="몸에서 냉기 파동이 퍼져 가까운 적을 한꺼번에 얼립니다.",category="auto",categoryName="자동 마법",condition="자동 마법 4칸 중 선택",upgradeDescription="피해 +8 · 반경 +1 · 빙결 +0.2초",assetPath="assets/ui/skill-icons/frost.png"})
+entries["missile"]=table.freeze({id="missile",iconKey="missile",name="추적 마탄",status="local_ready_unpublished",description="보스와 체력이 높은 적을 우선 추적하는 마탄입니다. 범위 피해는 없습니다.",category="auto",categoryName="자동 마법",condition="자동 마법 4칸 중 선택",upgradeDescription="피해 +7 · 짝수 단계에 탄환 +1",assetPath="assets/ui/skill-icons/missile.png"})
+entries["ward"]=table.freeze({id="ward",iconKey="ward",name="수호 결계",status="local_ready_unpublished",description="주기적으로 보호막을 펼칩니다. 흡수량을 다 쓰면 깨집니다.",category="auto",categoryName="자동 마법",condition="자동 마법 4칸 중 선택",upgradeDescription="흡수량 +12 · 주기 -0.3초",assetPath="assets/ui/skill-icons/ward.png"})
+entries["fire"]=table.freeze({id="fire",iconKey="fire",name="화염탄",status="local_ready_unpublished",description="정면 불꽃 탄환 · 적중 범위 피해 · 4초",category="active",categoryName="Q 사용 스킬",condition="출전 준비에서 Q로 선택",upgradeDescription="",assetPath="assets/ui/skill-icons/fire.png"})
+entries["thunder"]=table.freeze({id="thunder",iconKey="thunder",name="뇌창",status="local_ready_unpublished",description="정면으로 날아가는 번개 창 · 관통 · 4초",category="active",categoryName="Q 사용 스킬",condition="출전 준비에서 Q로 선택",upgradeDescription="",assetPath="assets/ui/skill-icons/thunder.png"})
+entries["aetherLance"]=table.freeze({id="aetherLance",iconKey="aetherLance",name="성운창",status="local_ready_unpublished",description="아지랑이 빛의 창 · 관통 · 4초",category="active",categoryName="Q 사용 스킬",condition="출전 준비에서 Q로 선택",upgradeDescription="",assetPath="assets/ui/skill-icons/aetherLance.png"})
+entries["iceRush"]=table.freeze({id="iceRush",iconKey="iceRush",name="빙하 쇄도",status="local_ready_unpublished",description="정면 얼음 기둥 · 빙결 · 4초",category="active",categoryName="Q 사용 스킬",condition="출전 준비에서 Q로 선택",upgradeDescription="",assetPath="assets/ui/skill-icons/iceRush.png"})
+entries["basic"]=table.freeze({id="basic",iconKey="basic",name="기본 공격 · 별빛 마법탄",status="local_ready_unpublished",description="작은 빛의 탄환 · 누르고 연속 발사",category="basic",categoryName="기본 공격",condition="기본 제공 · 자동 마법 칸 사용 안 함",upgradeDescription="",assetPath="assets/ui/skill-icons/basic.png"})
+entries["golem"]=table.freeze({id="golem",iconKey="golem",name="골렘 대지 강타",status="local_ready_unpublished",description="현재 게임과 같은 5단계 최대 연출",category="summon",categoryName="소환수",condition="기본 제공 · 자동 마법 칸 사용 안 함",upgradeDescription="내려찍기·강타 피해와 범위 증가",assetPath="assets/ui/skill-icons/golem.png"})
+entries["dash"]=table.freeze({id="dash",iconKey="dash",name="대시",status="local_ready_unpublished",description="이동 궤적과 잔상",category="movement",categoryName="이동",condition="기본 제공 · 자동 마법 칸 사용 안 함",upgradeDescription="",assetPath="assets/ui/skill-icons/dash.png"})
+entries["ice_twin"]=table.freeze({id="ice_twin",iconKey="ice",name="쌍빙창",status="local_ready_unpublished",description="얼음창을 2발 발사. 다른 적을 우선하고 각 발은 피해 75%.",category="auto_augment",condition="빙결 얼음창 장착 · 1단계 이상 · 최대 1회",visualNote="겹친 냉기 나선 · 두 발",assetPath="assets/ui/skill-icons/ice.png",parentSkill="ice",rarity="rare",badge="희귀 · 쌍빙창"})
+entries["ice_shatter"]=table.freeze({id="ice_shatter",iconKey="ice",name="빙쇄",status="local_ready_unpublished",description="얼음창 적중 시 반경 5에 50% 파편 피해와 짧은 빙결.",category="auto_augment",condition="빙결 얼음창 장착 · 2단계 이상 · 최대 1회",visualNote="회전 파편 · 방사형 얼음 파쇄",assetPath="assets/ui/skill-icons/ice.png",parentSkill="ice",rarity="epic",badge="영웅 · 빙쇄"})
+entries["lightning_fork"]=table.freeze({id="lightning_fork",iconKey="lightning",name="갈래 번개",status="local_ready_unpublished",description="연쇄 번개의 최대 타깃 +2. 같은 적은 한 번만 타격.",category="auto_augment",condition="연쇄 번개 장착 · 1단계 이상 · 최대 1회",visualNote="교차 전류 · 연쇄 +2",assetPath="assets/ui/skill-icons/lightning.png",parentSkill="lightning",rarity="rare",badge="희귀 · 갈래 번개"})
+entries["lightning_frozen"]=table.freeze({id="lightning_frozen",iconKey="lightning",name="빙결 전도",status="local_ready_unpublished",description="빙결 또는 둔화 중인 적에게 연쇄 번개 피해 +60%.",category="auto_augment",condition="연쇄 번개 장착 · 2단계 이상 + 빙결 얼음창 / 서리 폭발 중 하나 장착 · 최대 1회",visualNote="서리 전류 · 빙결 적에 눈꽃 방전",assetPath="assets/ui/skill-icons/lightning.png",parentSkill="lightning",rarity="epic",badge="영웅 · 빙결 전도"})
+entries["meteor_wide"]=table.freeze({id="meteor_wide",iconKey="meteor",name="거대 운석",status="local_ready_unpublished",description="메테오 폭발 반경 +35%. 예고와 폭발도 함께 확대.",category="auto_augment",condition="메테오 장착 · 1단계 이상 · 최대 1회",visualNote="분절 궤도 · 용암 파편 충격파",assetPath="assets/ui/skill-icons/meteor.png",parentSkill="meteor",rarity="rare",badge="희귀 · 거대 운석"})
+entries["meteor_echo"]=table.freeze({id="meteor_echo",iconKey="meteor",name="운석의 여진",status="local_ready_unpublished",description="메테오 착탄 0.65초 후 같은 지점에 50% 피해의 후속 폭발.",category="auto_augment",condition="메테오 장착 · 2단계 이상 · 최대 1회",visualNote="수렴 균열 · 여진의 불씨",assetPath="assets/ui/skill-icons/meteor.png",parentSkill="meteor",rarity="epic",badge="영웅 · 운석의 여진"})
+entries["blades_volley"]=table.freeze({id="blades_volley",iconKey="blades",name="칠성 결정",status="local_ready_unpublished",description="충전되는 비전 결정 5개 → 7개. 순서대로 발사.",category="auto_augment",condition="비전 결정 장착 · 1단계 이상 · 최대 1회",visualNote="일곱 별의 후광 · 7발",assetPath="assets/ui/skill-icons/blades.png",parentSkill="blades",rarity="rare",badge="희귀 · 칠성 결정"})
+entries["blades_pierce"]=table.freeze({id="blades_pierce",iconKey="blades",name="관통 결정",status="local_ready_unpublished",description="각 결정이 적을 한 번 더 관통. 같은 적 재타격 없음.",category="auto_augment",condition="비전 결정 장착 · 2단계 이상 · 최대 1회",visualNote="날카로운 결정 날 · 관통 섬광",assetPath="assets/ui/skill-icons/blades.png",parentSkill="blades",rarity="epic",badge="영웅 · 관통 결정"})
+entries["frost_wide"]=table.freeze({id="frost_wide",iconKey="frost",name="광역 한파",status="local_ready_unpublished",description="서리 폭발 탐지·피해·빙결 반경 +30%.",category="auto_augment",condition="서리 폭발 장착 · 1단계 이상 · 최대 1회",visualNote="서리 응축 · 가지치는 육각 눈꽃",assetPath="assets/ui/skill-icons/frost.png",parentSkill="frost",rarity="rare",badge="희귀 · 광역 한파"})
+entries["frost_echo"]=table.freeze({id="frost_echo",iconKey="frost",name="이중 서리",status="local_ready_unpublished",description="서리 폭발 0.6초 후 현재 위치에서 50% 피해의 추가 냉기 파동.",category="auto_augment",condition="서리 폭발 장착 · 2단계 이상 · 최대 1회",visualNote="역회전 응축 · 피어나는 서리 결정",assetPath="assets/ui/skill-icons/frost.png",parentSkill="frost",rarity="epic",badge="영웅 · 이중 서리"})
+entries["ward_reservoir"]=table.freeze({id="ward_reservoir",iconKey="ward",name="깊은 결계",status="local_ready_unpublished",description="수호 결계 흡수량 +50%, 지속시간 5초 → 7초.",category="auto_augment",condition="수호 결계 장착 · 1단계 이상 · 최대 1회",visualNote="교차하는 룬 돔",assetPath="assets/ui/skill-icons/ward.png",parentSkill="ward",rarity="rare",badge="희귀 · 깊은 결계"})
+entries["ward_pulse"]=table.freeze({id="ward_pulse",iconKey="ward",name="결계 해방",status="local_ready_unpublished",description="결계 소진·만료 시 반경 8에 최초 흡수량의 75% 피해. 취소 시 발동 안 함.",category="auto_augment",condition="수호 결계 장착 · 2단계 이상 · 최대 1회",visualNote="보호 룬 아치 · 열리는 금빛 결계",assetPath="assets/ui/skill-icons/ward.png",parentSkill="ward",rarity="epic",badge="영웅 · 결계 해방"})
+entries["missile_salvo"]=table.freeze({id="missile_salvo",iconKey="missile",name="추적 탄막",status="local_ready_unpublished",description="추적 마탄 시전마다 탄환 +2. 각 탄환은 한 대상만 타격.",category="auto_augment",condition="추적 마탄 장착 · 1단계 이상 · 최대 1회",visualNote="쌍나선 탄두 · 추가 마탄",assetPath="assets/ui/skill-icons/missile.png",parentSkill="missile",rarity="rare",badge="희귀 · 추적 탄막"})
+entries["missile_hunter"]=table.freeze({id="missile_hunter",iconKey="missile",name="거수 사냥꾼",status="local_ready_unpublished",description="추적 마탄이 정예·필드보스·드래곤에게 피해 +50%.",category="auto_augment",condition="추적 마탄 장착 · 2단계 이상 · 최대 1회",visualNote="사냥꾼 화살촉 · 정예 적중 표식",assetPath="assets/ui/skill-icons/missile.png",parentSkill="missile",rarity="epic",badge="영웅 · 거수 사냥꾼"})
+entries["skyLances_rain"]=table.freeze({id="skyLances_rain",iconKey="skyLances",name="칠성 창우",status="local_ready_unpublished",description="천공의 창 5자루 → 7자루. 추가 두 창은 대각선에 낙하.",category="auto_augment",condition="천공의 창 장착 · 1단계 이상 · 최대 1회",visualNote="일곱 별의 천공진 · 7자루",assetPath="assets/ui/skill-icons/skyLances.png",parentSkill="skyLances",rarity="rare",badge="희귀 · 칠성 창우"})
+entries["skyLances_execute"]=table.freeze({id="skyLances_execute",iconKey="skyLances",name="천공의 심판",status="local_ready_unpublished",description="체력 50% 이하 적에게 천공의 창 피해 +50%.",category="auto_augment",condition="천공의 창 장착 · 2단계 이상 · 최대 1회",visualNote="금빛 심판진 · 저체력 처형 십자",assetPath="assets/ui/skill-icons/skyLances.png",parentSkill="skyLances",rarity="epic",badge="영웅 · 천공의 심판"})
+entries["lightRing_twin"]=table.freeze({id="lightRing_twin",iconKey="lightRing",name="쌍월",status="local_ready_unpublished",description="광륜을 좌우 12도로 2개 발사. 각각 기존 피해의 70%.",category="auto_augment",condition="성운 광륜 장착 · 1단계 이상 · 최대 1회",visualNote="엇갈린 두 초승달",assetPath="assets/ui/skill-icons/lightRing.png",parentSkill="lightRing",rarity="rare",badge="희귀 · 쌍월"})
+entries["lightRing_return"]=table.freeze({id="lightRing_return",iconKey="lightRing",name="귀환의 칼날",status="local_ready_unpublished",description="돌아오는 광륜 피해 +75%. 출발·귀환 각각 적당 1회.",category="auto_augment",condition="성운 광륜 장착 · 2단계 이상 · 최대 1회",visualNote="귀환 때 펼쳐지는 세 겹 칼날",assetPath="assets/ui/skill-icons/lightRing.png",parentSkill="lightRing",rarity="epic",badge="영웅 · 귀환의 칼날"})
+entries["fire_blast"]=table.freeze({id="fire_blast",iconKey="fire",name="작열 화염탄",status="local_ready_unpublished",description="Q 화염탄 폭발 반경 5 → 7. 착탄 범위가 화면에 표시됨.",category="active_augment",condition="Q에 화염탄 선택 · 최대 1회",visualNote="나선 화염 꼬리 · 솟아오르는 작열",assetPath="assets/ui/skill-icons/fire.png",parentSkill="fire",rarity="rare",badge="희귀 · 작열 화염탄"})
+entries["thunder_chain"]=table.freeze({id="thunder_chain",iconKey="thunder",name="뇌창 전도",status="local_ready_unpublished",description="Q 뇌창 적중 시 근처 최대 2명에 50% 전류. 시전당 추가 타격 2회 제한.",category="active_augment",condition="Q에 뇌창 선택 · 최대 1회",visualNote="회전 전류 · 연결 방전",assetPath="assets/ui/skill-icons/thunder.png",parentSkill="thunder",rarity="epic",badge="영웅 · 뇌창 전도"})
+entries["aether_execute"]=table.freeze({id="aether_execute",iconKey="aetherLance",name="성운 처형",status="local_ready_unpublished",description="체력 50% 이하 적에게 Q 성운창 피해 +50%.",category="active_augment",condition="Q에 성운창 선택 · 최대 1회",visualNote="성운 궤도 · 저체력 십자 폭발",assetPath="assets/ui/skill-icons/aetherLance.png",parentSkill="aetherLance",rarity="rare",badge="희귀 · 성운 처형"})
+entries["iceRush_wide"]=table.freeze({id="iceRush_wide",iconKey="iceRush",name="빙하 대로",status="local_ready_unpublished",description="Q 빙하 쇄도 폭 +50%. 기둥 연출과 판정 함께 확대.",category="active_augment",condition="Q에 빙하 쇄도 선택 · 최대 1회",visualNote="넓은 빙하 위로 이어지는 서리 관문",assetPath="assets/ui/skill-icons/iceRush.png",parentSkill="iceRush",rarity="rare",badge="희귀 · 빙하 대로"})
+entries["quick_cast"]=table.freeze({id="quick_cast",iconKey="quick_cast",name="신속 시전",status="local_ready_unpublished",description="자동 마법 재사용 주기 -8%p. 최대 3회, Q·골렘·비행 시간 제외.",category="common_augment",condition="모든 빌드에서 선택 가능 · 최대 3회",visualNote="전투 수치 강화",assetPath="assets/ui/skill-icons/quick_cast.png",rarity="common",badge="일반 · 신속 시전"})
+entries["active_focus"]=table.freeze({id="active_focus",iconKey="active_focus",name="집중된 주문",status="local_ready_unpublished",description="Q 재사용 주기 -15%p. 최대 2회, 4초 → 최저 2.8초.",category="common_augment",condition="모든 빌드에서 선택 가능 · 최대 2회",visualNote="전투 수치 강화",assetPath="assets/ui/skill-icons/active_focus.png",rarity="common",badge="일반 · 집중된 주문"})
+entries["lucky_charm"]=table.freeze({id="lucky_charm",iconKey="lucky_charm",name="행운의 부적",status="local_ready_unpublished",description="행운 +20. 다음 무작위 카드의 희귀·영웅 등급 가중치 증가.",category="common_augment",condition="모든 빌드에서 선택 가능 · 최대 3회",visualNote="전투 수치 강화",assetPath="assets/ui/skill-icons/lucky_charm.png",rarity="common",badge="일반 · 행운의 부적"})
 table.freeze(entries)
+local order=table.freeze({"lightRing","ice","lightning","meteor","blades","skyLances","frost","missile","ward","fire","thunder","aetherLance","iceRush","basic","golem","dash","ice_twin","ice_shatter","lightning_fork","lightning_frozen","meteor_wide","meteor_echo","blades_volley","blades_pierce","frost_wide","frost_echo","ward_reservoir","ward_pulse","missile_salvo","missile_hunter","skyLances_rain","skyLances_execute","lightRing_twin","lightRing_return","fire_blast","thunder_chain","aether_execute","iceRush_wide","quick_cast","active_focus","lucky_charm"})
+local function list(group,query)
+ if group~='all'and group~='auto'and group~='active'and group~='builtin'and group~='augments'then return {} end
+ query=type(query)=='string'and string.lower(query)or '';local found={}
+ for _,id in ipairs(order)do
+  local entry=entries[id];local category=entry.category;local augment=string.find(category,'_augment',1,true)~=nil
+  local match=group=='all'or category==group or(group=='augments'and augment)or(group=='builtin'and not augment and category~='auto'and category~='active')
+  local searchable=string.lower(entry.name..' '..entry.description..' '..entry.condition)
+  if match and(query==''or string.find(searchable,query,1,true))then table.insert(found,entry)end
+ end;return found
+end
 local function get(id)
  if type(id)~='string'then return nil end
  return entries[string.gsub(id,'^aug_','')]
@@ -6338,7 +6424,7 @@ local function apply(imageLabel,id,fallback)
  if fallback then fallback.Visible=not ready end
  return ready,entry
 end
-return table.freeze({Get=get,Apply=apply})
+return table.freeze({Get=get,Apply=apply,List=list})
 ]====])
 -- Source: src/client/flow/SkillPreview.luau
 addModule(modules,{"flow","SkillPreview"},[====[
