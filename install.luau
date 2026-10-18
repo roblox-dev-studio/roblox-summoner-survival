@@ -326,6 +326,7 @@ local clock = {elapsed = 0, roundLength = script:GetAttribute("BossSpawnAt") or 
 local actors = require(modules.shared.Actors)({world = world})
 if RunService:IsStudio()then require(modules.world.EnemyGallery)({create=require(modules.shared.EnemyModels)({block=actors.Block}),parent=RS})end
 local players = require(modules.shared.PlayerState)({states = states})
+local airJump = require(modules.combat.AirJump)({runtime=world,paused=players.Paused,effect=net.Effect})
 local movement = require(modules.combat.Movement)({
     world = world, rootOf = players.RootOf, paused = players.Paused, effect = net.Effect,
 })
@@ -388,6 +389,10 @@ net.Action.OnServerEvent:Connect(function(player,kind,id,activeId)
     if kind == "startBossTest" then if RunService:IsStudio()then session.StartBossTest(s,id,activeId)end;return end
     if kind == "startRound" then session.StartRound(s,id,activeId); return end
     if kind == "cancelReady" then session.CancelReady(s); return end
+    if kind == "airJump" then
+        if id==nil and activeId==nil then airJump.Request(s)end
+        return
+    end
     if s.lobby then return end
     if kind == "restart" then if s.over then session.Restart() end; return end
     if s.over then return end
@@ -412,6 +417,7 @@ RunService.Heartbeat:Connect(function(dt)
     dt = math.min(tickClock,.15)
     tickClock = 0
     session.StepLobby()
+    for _,s in pairs(states) do airJump.Step(s,dt) end
     local alive = players.LiveCount()
     if alive > 0 and not players.Paused() then
         clock.elapsed += dt
@@ -553,6 +559,58 @@ return function(deps)
   if cast.iceRow>=7 then clear(s)end
  end
  return {Request=request,Step=step,Clear=clear}
+end
+]====])
+-- Source: src/server/combat/AirJump.luau
+addModule(modules,{"combat","AirJump"},[====[
+-- One server-approved air jump per stable ground contact. No client-supplied velocity.
+return function(deps)
+ local world=deps.world or workspace
+ local now=deps.now or os.clock
+ local function body(s)
+  local c=s.player.Character;local h=c and c:FindFirstChildOfClass('Humanoid');local r=c and c:FindFirstChild('HumanoidRootPart')
+  return c,h,r
+ end
+ local function grounded(c,h,r)
+  if r.AssemblyLinearVelocity.Y>3 then return false end
+  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
+  params.FilterDescendantsInstances={c,deps.runtime};params.RespectCanCollide=true
+  return world:Raycast(r.Position,Vector3.new(0,-(h.HipHeight+r.Size.Y*.5+.25),0),params)~=nil
+ end
+ local function step(s,dt)
+  local c,h,r=body(s)
+  if not c or not h or not r or h.Health<=0 then s.airJump=nil;return end
+  local a=s.airJump
+  if not a or a.character~=c or a.lobby~=s.lobby then
+   a={character=c,lobby=s.lobby,available=false,groundTime=0,airTime=0,sequence=c:GetAttribute('SummonerAirJumpSequence')or 0,lastRequest=-10};s.airJump=a
+   c:SetAttribute('SummonerAirJumpSequence',a.sequence);c:SetAttribute('SummonerAirJumpAt',nil)
+  end
+  if grounded(c,h,r)then
+   a.groundTime+=dt;a.airTime=0
+   if a.groundTime>=.08 then a.available=true end
+  else a.groundTime=0;a.airTime+=dt end
+ end
+ local function request(s)
+  local a=s.airJump;local c,h,r=body(s);local t=now()
+  if not a or a.character~=c or a.lobby~=s.lobby or t-a.lastRequest<.12 then return false end
+  a.lastRequest=t
+  if not h or not r or h.Health<=0 or not s.loaded or s.over or s.offers or s.returning or s.queued
+   or s.dash or s.previewDragon or s.previewSkills or deps.paused() or h.WalkSpeed<=0
+   or h.Sit or h.PlatformStand or r.Anchored or not a.available then return false end
+  local state=h:GetState()
+  if state~=Enum.HumanoidStateType.Jumping and state~=Enum.HumanoidStateType.Freefall then return false end
+  if grounded(c,h,r)then return false end
+  a.available=false;a.sequence+=1
+  local base=h.UseJumpPower and h.JumpPower or math.sqrt(2*world.Gravity*h.JumpHeight)
+  local speed=math.clamp(base*.9,30,55)
+  local v=r.AssemblyLinearVelocity;r.AssemblyLinearVelocity=Vector3.new(v.X,speed,v.Z)
+  c:SetAttribute('SummonerAirJumpAt',workspace:GetServerTimeNow())
+  c:SetAttribute('SummonerAirJumpSequence',a.sequence)
+  -- Network owner applies the already-approved impulse; observers use replicated attributes.
+  deps.effect:FireClient(s.player,'airJump',c,a.sequence,speed)
+  return true
+ end
+ return {Step=step,Request=request}
 end
 ]====])
 -- Source: src/server/combat/ArcaneCrystals.luau
@@ -2934,6 +2992,7 @@ require(world:WaitForChild("DragonPresentation"))()
 require(world:WaitForChild("EnemyPresentation"))()
 local skillPreview,enemyPreview,lobby,lobbyHub
 local function menuMovement(open)
+ input.SetJumpMenuBlocked(open)
  local module=player.PlayerScripts:FindFirstChild('PlayerModule')
  if module then local ok,controls=pcall(function()return require(module):GetControls()end);if ok then if open then controls:Disable()else controls:Enable()end end end
 end
@@ -4452,6 +4511,7 @@ addModule(modules,{"combat","Input"},[====[
 return function(deps)
  local UIS=game:GetService('UserInputService');local Run=game:GetService('RunService')
  local player,net=deps.player,deps.net
+ local jump=require(script.Parent.JumpInput)({player=player,net=net})
  local suspended,basicBlocked=false,false;local held={};local basicClock=0;local hudInput
  local function clearHeld()table.clear(held);basicClock=0;hudInput=nil end
  local function setBasicHeld(source,value,input)
@@ -4496,8 +4556,67 @@ return function(deps)
   if basicClock<=0 then basicClock=.1;net.Action:FireServer('basicAttack')end
  end)
  return {Dash=requestDash,FireWave=fireWave,SetBasicHeld=setBasicHeld,
+  SetJumpMenuBlocked=jump.SetMenuOpen,
   SetBasicBlocked=function(value)basicBlocked=value;if value then clearHeld()end end,
-  SetSuspended=function(value)suspended=value;if value then clearHeld()end end}
+  SetSuspended=function(value)suspended=value;jump.SetSuspended(value);if value then clearHeld()end end}
+end
+]====])
+-- Source: src/client/combat/JumpInput.luau
+addModule(modules,{"combat","JumpInput"},[====[
+-- Keep Roblox's first jump. A fresh second press only submits an air-jump intent.
+return function(deps)
+ local UIS=deps.inputService or game:GetService('UserInputService')
+ local GuiService=game:GetService('GuiService')
+ local player,net=deps.player,deps.net
+ local held,menu,suspended,inLobby,blocked=false,false,false,true,true
+ local touch,receivedCharacter,receivedSequence=nil,nil,0
+ local connections={}
+ local function characterBody()
+  local c=player.Character;return c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart')
+ end
+ local function release()held=false;touch=nil end
+ local function press()
+  if held then return false end
+  held=true
+  if menu or blocked or GuiService.MenuIsOpen or(suspended and not inLobby)or UIS:GetFocusedTextBox()then return false end
+  local _,h,r=characterBody();if not h or not r or h.Health<=0 or h.WalkSpeed<=0 or h.Sit or h.PlatformStand then return false end
+  local state=h:GetState()
+  if h.FloorMaterial~=Enum.Material.Air or(state~=Enum.HumanoidStateType.Jumping and state~=Enum.HumanoidStateType.Freefall)then return false end
+  net.Action:FireServer('airJump');return true
+ end
+ local function jumpKey(input)return input.KeyCode==Enum.KeyCode.Space or input.KeyCode==Enum.KeyCode.ButtonA end
+ local function jumpTouch(input)
+  if input.UserInputType~=Enum.UserInputType.Touch then return false end
+  local gui=player:FindFirstChildOfClass('PlayerGui');local tg=gui and gui:FindFirstChild('TouchGui')
+  local controls=tg and tg:FindFirstChild('TouchControlFrame');local button=controls and controls:FindFirstChild('JumpButton')
+  if not button or not button.Visible then return false end
+  local p,size=button.AbsolutePosition,button.AbsoluteSize;local point=input.Position
+  return point.X>=p.X and point.X<=p.X+size.X and point.Y>=p.Y and point.Y<=p.Y+size.Y
+ end
+ table.insert(connections,UIS.InputBegan:Connect(function(input)
+  if jumpTouch(input)then touch=input;press()
+  elseif jumpKey(input)then press()end
+ end))
+ table.insert(connections,UIS.InputEnded:Connect(function(input)if jumpKey(input)or input==touch then release()end end))
+ table.insert(connections,UIS.WindowFocusReleased:Connect(release))
+ table.insert(connections,player.CharacterRemoving:Connect(function()release();receivedCharacter=nil;receivedSequence=0 end))
+ table.insert(connections,net.State.OnClientEvent:Connect(function(s)
+  inLobby=s.lobby==true;blocked=s.over==true or s.offers~=nil or s.paused==true or s.queued==true
+ end))
+ table.insert(connections,net.Effect.OnClientEvent:Connect(function(kind,c,sequence,speed)
+  if kind~='airJump'or c~=player.Character then return end
+  if receivedCharacter~=c then receivedCharacter=c;receivedSequence=0 end
+  if type(sequence)~='number'or sequence<=receivedSequence or type(speed)~='number'or speed<30 or speed>55 then return end
+  receivedSequence=sequence
+  local _,h,r=characterBody()
+  if not h or not r or h.Health<=0 or menu or blocked or h.Sit or h.PlatformStand then return end
+  local state=h:GetState()
+  if h.FloorMaterial~=Enum.Material.Air or(state~=Enum.HumanoidStateType.Jumping and state~=Enum.HumanoidStateType.Freefall)then return end
+  h.Jump=false -- Do not retrigger the native takeoff impulse on the following physics step.
+  local v=r.AssemblyLinearVelocity;r.AssemblyLinearVelocity=Vector3.new(v.X,speed,v.Z)
+ end))
+ return {Press=press,Release=release,SetMenuOpen=function(v)menu=v end,SetSuspended=function(v)suspended=v end,
+  Destroy=function()for _,c in connections do c:Disconnect()end;release()end}
 end
 ]====])
 -- Source: src/client/combat/LightArt.luau
@@ -6571,101 +6690,89 @@ end
 ]====])
 -- Source: src/client/world/CharacterMotion.luau
 addModule(modules,{"world","CharacterMotion"},[====[
--- Reused CC0 R15 leg clips. Roblox Animate keeps ownership of the upper body.
+-- Quaternius locomotion, retargeted to R15. Original Animate remains the idle fallback.
 -- Presentation only: no root displacement, jump physics or server state changes.
-return function()
-	local Players = game:GetService("Players")
-	local RunService = game:GetService("RunService")
-	local folder = script.Parent:WaitForChild("clips")
-	local clips = {
-		walk = require(folder:WaitForChild("Walk_Carry_Loop")),
-		jump = require(folder:WaitForChild("NinjaJump_Start")),
-		air = require(folder:WaitForChild("NinjaJump_Idle_Loop")),
-		land = require(folder:WaitForChild("NinjaJump_Land")),
-	}
-	local legs = {LeftHip=true,RightHip=true,LeftKnee=true,RightKnee=true,LeftAnkle=true,RightAnkle=true}
-	local records = {}
-	local function sample(clip, time)
-		local t = clip.Loop and time % clip.Duration or math.clamp(time,0,clip.Duration)
-		local frames = clip.Frames
-		local index = math.clamp(math.floor(t*60)+1,1,#frames)
-		local a, b = frames[index], frames[math.min(index+1,#frames)]
-		local alpha = math.clamp((t-a.Time)/math.max(b.Time-a.Time,.00001),0,1)
-		local pose = {}
-		for name in pairs(legs) do pose[name] = a.Pose[name]:Lerp(b.Pose[name],alpha) end
-		return pose
-	end
-	local function restore(record)
-		for motor, transform in pairs(record.restore) do
-			if motor.Parent then motor.Transform = transform end
-		end
-		table.clear(record.restore)
-	end
-	-- Restore the previous frame before Animator writes; prevents additive drift.
-	local before = RunService.PreAnimation:Connect(function()
-		for _, record in pairs(records) do restore(record) end
-	end)
-	local step = RunService.PreSimulation:Connect(function(dt)
-		dt = math.min(dt,.1)
-		local live = {}
-		for _, player in ipairs(Players:GetPlayers()) do
-			local character = player.Character
-			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-			local root = character and character:FindFirstChild("HumanoidRootPart")
-			if not humanoid or not root or humanoid.RigType ~= Enum.HumanoidRigType.R15 then continue end
-			live[character] = true
-			local record = records[character]
-			if not record then
-				record = {motors={},restore={},phase=0,time=0,weight=0,mode="idle",wasAir=false,pose=nil}
-				for _, child in ipairs(character:GetDescendants()) do
-					if child:IsA("Motor6D") and legs[child.Name] then record.motors[child.Name] = child end
-				end
-				records[character] = record
-			end
-			local state = humanoid:GetState()
-			local velocity = root.AssemblyLinearVelocity
-			local speed = Vector3.new(velocity.X,0,velocity.Z).Magnitude
-			local airborne = state==Enum.HumanoidStateType.Jumping or state==Enum.HumanoidStateType.Freefall
-			local blocked = humanoid.Health<=0 or humanoid.WalkSpeed<=0 or humanoid.Sit or humanoid.PlatformStand
-				or state==Enum.HumanoidStateType.Swimming or state==Enum.HumanoidStateType.Climbing
-			local mode = "idle"
-			if not blocked then
-				if airborne then
-					mode = (not record.wasAir or (record.mode=="jump" and record.time<.18)) and "jump" or "air"
-				elseif record.wasAir or (record.mode=="land" and record.time<.2) then mode="land"
-				elseif speed>1 and humanoid.AutoRotate then mode="walk" end
-			end
-			if mode~=record.mode then record.time=0;record.mode=mode end
-			record.time+=dt;record.wasAir=airborne
-			local target = clips[mode]
-			if target then
-				local time = record.time
-				if mode=="walk" then
-					record.phase+=dt*math.clamp(speed/7,.5,3.5);time=record.phase
-				elseif mode=="jump" then time=math.min(time/.18,1)*target.Duration
-				elseif mode=="land" then time=math.min(time/.2,1)*target.Duration end
-				local pose=sample(target,time)
-				if record.pose then for name,value in pairs(pose) do pose[name]=record.pose[name]:Lerp(value,1-math.exp(-dt*22)) end end
-				record.pose=pose
-			end
-			record.weight+=( (target and 1 or 0)-record.weight)*(1-math.exp(-dt*18))
-			if humanoid.Health<=0 then record.weight=0 end
-			if record.pose and record.weight>.001 then
-				for name,motor in pairs(record.motors) do
-					if motor.Parent then record.restore[motor]=motor.Transform;motor.Transform=motor.Transform:Lerp(record.pose[name],record.weight) end
-				end
-			end
-			character:SetAttribute("SummonerMotion",mode)
-		end
-		for character,record in pairs(records) do
-			if not live[character] then restore(record);records[character]=nil end
-		end
-	end)
-	return {Destroy=function()
-		before:Disconnect();step:Disconnect()
-		for character,record in pairs(records) do restore(record);character:SetAttribute("SummonerMotion",nil) end
-		table.clear(records)
-	end}
+return function(deps)
+ deps=deps or {}
+ local Players=deps.players or game:GetService("Players")
+ local RunService=deps.runService or game:GetService("RunService")
+ local now=deps.now or function()return workspace:GetServerTimeNow()end
+ local folder=script.Parent:WaitForChild("clips")
+ local clips={walk=require(folder.Walk_Loop),run=require(folder.Jog_Fwd_Loop),
+  jump=require(folder.Jump_Start),air=require(folder.Jump_Loop),land=require(folder.Jump_Land),roll=require(folder.Roll)}
+ local Motion=require(script.Parent.Locomotion)
+ local joints=clips.walk.Frames[1].Pose
+ local records={}
+ local function restore(record)
+  for motor,transform in pairs(record.restore)do if motor.Parent then motor.Transform=transform end end
+  table.clear(record.restore)
+ end
+ local function clear(character,record)
+  restore(record);record.added:Disconnect()
+  character:SetAttribute("SummonerMotion",nil);character:SetAttribute('SummonerMotionJointCount',nil);records[character]=nil
+ end
+ local function beforeStep()for _,record in pairs(records)do restore(record)end end
+ local function step(dt)
+  local live={}
+  for _,player in ipairs(Players:GetPlayers())do
+   local character=player.Character
+   local h=character and character:FindFirstChildOfClass("Humanoid")
+   local root=character and character:FindFirstChild("HumanoidRootPart")
+   if not h or not root or h.RigType~=Enum.HumanoidRigType.R15 then continue end
+   live[character]=true
+   local record=records[character]
+   if not record then
+    record={motors={},restore={},motion=Motion.New()}
+    local function addJoint(child)
+     if (child:IsA('AnimationConstraint')or child:IsA('Motor6D'))and joints[child.Name]then
+      local existing=record.motors[child.Name]
+      if not existing or child:IsA('AnimationConstraint')then record.motors[child.Name]=child end
+      local count=0;for _ in pairs(record.motors)do count+=1 end
+      character:SetAttribute('SummonerMotionJointCount',count)
+     end
+    end
+    for _,child in ipairs(character:GetDescendants())do addJoint(child)end
+    record.added=character.DescendantAdded:Connect(addJoint)
+    records[character]=record
+   end
+   local state=h:GetState();local v=root.AssemblyLinearVelocity
+   local airborne=state==Enum.HumanoidStateType.Jumping or state==Enum.HumanoidStateType.Freefall
+   local blocked=h.Health<=0 or h.WalkSpeed<=0 or h.Sit or h.PlatformStand or not h.AutoRotate
+    or state==Enum.HumanoidStateType.Swimming or state==Enum.HumanoidStateType.Climbing
+    or state==Enum.HumanoidStateType.Physics or state==Enum.HumanoidStateType.Ragdoll
+   local started=character:GetAttribute('SummonerAirJumpAt')
+   local pose,weight,mode=Motion.Step(record.motion,dt,{speed=Vector3.new(v.X,0,v.Z).Magnitude,
+    airborne=airborne,rising=v.Y>0,blocked=blocked,dead=h.Health<=0,
+    sequence=character:GetAttribute('SummonerAirJumpSequence')or 0,airJumpAge=started and now()-started or 10},clips)
+   -- Equipped tools and Action tracks retain their upper-body gestures during normal movement.
+   local upperOwned=character:FindFirstChildOfClass('Tool')~=nil
+   local animator=h:FindFirstChildOfClass('Animator')
+   if animator and mode~='doubleJump'then
+    for _,track in animator:GetPlayingAnimationTracks()do
+     if track.Priority.Value>=Enum.AnimationPriority.Action.Value and track.WeightCurrent>.1 then upperOwned=true;break end
+    end
+   end
+   if pose and weight>.001 then
+    for name,motor in pairs(record.motors)do
+     local upper=name=='Waist'or name=='Neck'or name:find('Shoulder')or name:find('Elbow')or name:find('Wrist')
+     if motor.Parent and (not motor:IsA('AnimationConstraint')or motor.IsKinematic)
+      and not(upperOwned and upper and mode~='doubleJump')then
+      record.restore[motor]=motor.Transform
+      motor.Transform=motor.Transform:Lerp(pose[name],weight)
+     end
+    end
+   end
+   if character:GetAttribute('SummonerMotion')~=mode then character:SetAttribute('SummonerMotion',mode)end
+  end
+  for character,record in pairs(records)do if not live[character]then clear(character,record)end end
+ end
+ -- Restore before Animator writes, apply after it writes. No additive Transform drift.
+ local before=RunService.PreAnimation:Connect(beforeStep)
+ local connection=RunService.PreSimulation:Connect(step)
+ return {Destroy=function()
+  before:Disconnect();connection:Disconnect()
+  for character,record in pairs(records)do clear(character,record)end
+ end}
 end
 ]====])
 -- Source: src/client/world/CommanderMount.luau
@@ -7859,6 +7966,69 @@ function Mesh.place(rig,origin)Mesh.pose(rig,origin,0,'idle')end
 function Mesh.destroy(rig)if not rig or rig.destroyed then return end;rig.destroyed=true;for p,previous in pairs(rig.hidden)do if p.Parent then p.LocalTransparencyModifier=previous end end;rig.visual:Destroy()end
 return Mesh
 ]====])
+-- Source: src/client/world/Locomotion.luau
+addModule(modules,{"world","Locomotion"},[====[
+-- Pose selection/blending only. Native Humanoid remains responsible for displacement.
+local Motion={}
+local function sample(clip,time)
+ local t=clip.Loop and time%clip.Duration or math.clamp(time,0,clip.Duration)
+ local index=math.clamp(math.floor(t*60)+1,1,#clip.Frames)
+ local a,b=clip.Frames[index],clip.Frames[math.min(index+1,#clip.Frames)]
+ local alpha=math.clamp((t-a.Time)/math.max(b.Time-a.Time,.00001),0,1);local pose={}
+ for name,value in pairs(a.Pose)do pose[name]=value:Lerp(b.Pose[name],alpha)end
+ return pose
+end
+local function blend(a,b,alpha)
+ local pose={};for name,value in pairs(b)do pose[name]=(a[name]or value):Lerp(value,alpha)end;return pose
+end
+function Motion.New()
+ return {mode='idle',time=0,phase=0,weight=0,wasAir=false,speed=0,pose=nil,from=nil,transition=1,sequence=0,rollTime=1}
+end
+function Motion.Step(r,dt,input,clips)
+ dt=math.clamp(dt,0,.1)
+ r.speed+=(input.speed-r.speed)*(1-math.exp(-dt*12))
+ if input.sequence~=r.sequence then
+  r.sequence=input.sequence
+  if input.sequence>0 and input.airJumpAge>=0 and input.airJumpAge<.55 then r.rollTime=input.airJumpAge end
+ end
+ local mode='idle'
+ if not input.blocked then
+  if input.airborne then
+   if r.rollTime<.55 then mode='doubleJump'
+   elseif input.rising and(not r.wasAir or(r.mode=='jump'and r.time<.2))then mode='jump'
+   else mode='air'end
+  elseif r.wasAir or(r.mode=='land'and r.time<.16)then mode='land'
+  elseif r.speed>.6 then mode='move'end
+ end
+ if not input.airborne or input.blocked then r.rollTime=1 end
+ if mode~=r.mode then r.from=r.pose;r.transition=0;r.time=0;r.mode=mode end
+ r.time+=dt;r.transition=math.min(1,r.transition+dt/.1);r.wasAir=input.airborne
+ local pose
+ if mode=='move'then
+  local run=math.clamp((r.speed-10)/8,0,1)
+  r.phase=(r.phase+dt*r.speed/(8+6*run))%1
+  pose=blend(sample(clips.walk,r.phase*clips.walk.Duration),sample(clips.run,r.phase*clips.run.Duration),run)
+ elseif mode=='jump'then pose=sample(clips.jump,clips.jump.Duration*(.35+.65*math.min(r.time/.2,1)))
+ elseif mode=='air'then pose=sample(clips.air,r.time)
+ elseif mode=='land'then
+  pose=sample(clips.land,clips.land.Duration*math.min(r.time/.16,1))
+  if r.speed>1 then
+   r.phase=(r.phase+dt*r.speed/14)%1
+   pose=blend(pose,sample(clips.run,r.phase*clips.run.Duration),math.clamp(r.speed/22,0,.65))
+  end
+ elseif mode=='doubleJump'then pose=sample(clips.roll,clips.roll.Duration*math.min(r.rollTime/.55,1))end
+ if pose then
+  local alpha=r.transition*r.transition*(3-2*r.transition)
+  -- Roll interpolation must follow the source's full rotation, not repeatedly damp toward it.
+  r.pose=r.from and r.transition<1 and blend(r.from,pose,alpha)or pose
+ end
+ r.rollTime+=dt
+ r.weight+=((pose and 1 or 0)-r.weight)*(1-math.exp(-dt*20))
+ if input.dead then r.weight=0 end
+ return r.pose,r.weight,mode
+end
+return Motion
+]====])
 -- Source: src/client/world/SkeletonHorse.luau
 addModule(modules,{"world","SkeletonHorse"},[====[
 -- Original skeletal barding, retargeted to the checked-in Quaternius horse bones.
@@ -8212,6 +8382,432 @@ function Mesh.destroy(rig)
 end
 return Mesh
 ]====])
+-- Source: src/client/world/clips/Jog_Fwd_Loop.luau
+addModule(modules,{"world","clips","Jog_Fwd_Loop"},[====[
+--!strict
+-- Quaternius CC0 original action; R15 retarget. See assets/animations/quaternius-locomotion.
+local joints={"Root","RightHip","RightKnee","RightAnkle","LeftHip","LeftKnee","LeftAnkle","Waist","LeftShoulder","LeftElbow","LeftWrist","RightShoulder","RightElbow","RightWrist","Neck"}
+local rows={
+{0,0,0,-9886,813,-9624,-52284,-2511,8110,-86411,1320,1573,-17286,-2404,-4452,79620,3514,9347,-529,218,-1,-1702,-8763,5640,-89651,60082,38273,-4955,17706,-15294,106425,-48103,11342,49062,-27729,-12229,12839,31524,25853,160461,24417,53784,63614,37961,6472,52167,-73211,10551},
+{0,0,0,-9888,788,-9316,-45217,-2154,7939,-100237,1193,1933,-10523,-2257,-4352,97600,3981,8253,-53683,1408,1389,-35,-8181,1757,-85965,58008,35324,-4790,16926,-14812,106697,-47884,10939,49062,-27729,-12229,12618,30556,25288,159983,24373,52318,63614,37961,6472,49434,-70019,9329},
+{0,0,0,-9891,762,-9008,-38151,-1810,7744,-114061,1018,2271,-3760,-2103,-4262,115586,4245,7093,-106854,1728,3190,1653,-7664,-2133,-82408,55842,32502,-4625,16147,-14329,106969,-47666,10535,49062,-27729,-12229,12394,29589,24721,159504,24335,50853,63614,37961,6472,46828,-66800,8253},
+{0,0,0,-9896,694,-8201,-21051,-1069,7371,-135565,542,2742,670,-1381,-3909,115353,3778,6329,-128408,1080,3900,14908,-4811,-2266,-75102,49569,26540,-4144,14180,-13811,107745,-47034,9321,49062,-27729,-12229,11686,26913,23455,158235,24267,46974,63614,37961,6472,41623,-58477,5868},
+{0,0,0,-9902,625,-7394,-3950,-403,6879,-157067,-24,3102,5098,-645,-3588,115116,3312,5564,-149956,294,4455,28154,-2001,-2774,-68501,42926,21267,-3663,12214,-13280,108526,-46411,8105,49062,-27729,-12229,10957,24247,22173,156965,24248,43094,63614,37961,6472,36943,-50051,4109},
+{0,0,0,-9908,530,-6262,21106,394,5887,-178228,-723,3177,1230,205,-2916,105105,2614,4938,-158169,-43,3889,36153,-818,-2143,-63126,33028,16062,-2914,9530,-12769,109737,-45485,6177,49062,-27729,-12229,9678,20217,20917,155163,24302,37590,63614,37961,6472,33493,-38572,2281},
+{0,0,0,-9914,434,-5130,46170,920,4729,-199391,-1422,3104,-2643,1029,-2210,95092,1982,4245,-166384,-332,3297,44145,412,-1609,-58555,22865,11541,-2164,6849,-12231,110963,-44580,4245,49062,-27729,-12229,8369,16203,19608,153366,24453,32087,63614,37961,6472,30481,-27025,944},
+{0,0,0,-9918,325,-3844,78529,1173,3176,-209913,-1491,2560,-8298,5580,-8120,76466,1237,3458,-157737,-82,2330,45524,131,-1221,-57981,11689,7434,-1196,3932,-11802,112542,-43496,1700,49062,-27729,-12229,6657,11437,18860,151337,24740,25831,63614,37961,6472,31013,-14715,163},
+{0,0,0,-9921,217,-2559,110888,920,1623,-220435,-1502,2012,-13694,10450,-13784,57836,651,2546,-149089,83,1346,46905,-144,-828,-58021,502,3417,-224,1019,-11335,114144,-42450,-850,49062,-27729,-12229,4924,6685,18020,149328,25149,19577,63614,37961,6472,31746,-2417,-674},
+{0,0,0,-9924,108,-1279,131075,533,752,-211441,-726,1054,-11671,5422,-23003,32741,164,1308,-121091,130,675,40404,-60,-422,-61466,-8744,-1364,903,-1627,-11082,116014,-41351,-3899,49062,-27729,-12229,3200,2124,17840,147400,25664,13495,63614,37961,6472,35206,8255,-527},
+{0,0,0,-9925,0,0,151257,-20,-23,-202441,-38,29,-10123,230,-32106,7643,0,-11,-93094,-11,17,33904,-2,-11,-65521,-17771,-6508,2035,-4270,-10794,117912,-40305,-6955,49062,-27729,-12229,1468,-2434,17567,145506,26291,7415,63614,37961,6472,38788,18899,-761},
+{0,0,0,-9924,-97,1142,154001,-467,-521,-186478,148,-804,-5552,-6592,-28203,-2741,65,-1237,-90901,-201,-222,16775,222,364,-70968,-23721,-12101,3238,-6660,-10851,119979,-39320,-10373,49062,-27729,-12229,275,-5687,17564,143972,26891,2400,63614,37961,6472,43157,26970,-248},
+{0,0,0,-9922,-193,2284,156742,-928,-1006,-170515,200,-1656,-686,-13221,-23964,-13124,256,-2449,-88708,-396,-457,-354,379,772,-76911,-29318,-18083,4442,-9051,-10879,122074,-38401,-13799,49062,-27729,-12229,-923,-8939,17515,142469,27565,-2614,63614,37961,6472,47646,35030,-111},
+{0,0,0,-9920,-276,3256,154080,-1413,-1574,-156776,-56,-2038,4543,-13295,-17365,-21914,515,-3444,-76636,-532,-481,-19194,436,1188,-82378,-32999,-23561,5614,-11449,-11332,124231,-37630,-17428,49062,-27729,-12229,-1594,-10855,17450,140807,27983,-6080,63614,37961,6472,51510,41292,186},
+{0,0,0,-9917,-358,4227,151416,-1884,-2155,-143039,-361,-2382,9764,-13027,-10772,-30702,859,-4413,-64564,-670,-488,-38034,415,1606,-88165,-36361,-29291,6779,-13852,-11757,126410,-36932,-21063,49062,-27729,-12229,-2269,-12770,17369,139160,28457,-9543,63614,37961,6472,55501,47544,206},
+{0,0,0,-9914,-425,5018,148449,-2303,-2715,-133592,-629,-2495,13897,-9720,-6254,-37569,1189,-5155,-54501,-710,-417,-39504,616,1901,-91775,-38773,-33598,7818,-16116,-12594,128539,-36428,-24726,49062,-27729,-12229,-2772,-14016,17366,136831,28699,-11693,63614,37961,6472,57535,52229,302},
+{0,0,0,-9911,-491,5808,145480,-2706,-3287,-124145,-907,-2583,17865,-6233,-1888,-44433,1569,-5874,-44438,-742,-343,-40974,812,2198,-95558,-41027,-38028,8841,-18388,-13410,130682,-35998,-28394,49062,-27729,-12229,-3276,-15262,17355,134506,28989,-13837,63614,37961,6473,59645,56908,278},
+{0,0,0,-9908,-542,6409,144049,-3011,-3712,-119141,-1080,-2640,21078,-4306,-353,-47312,1816,-6426,-40213,-760,-314,-39518,1008,2399,-96933,-43044,-40721,9670,-20397,-14561,132669,-35768,-31910,49062,-27729,-12229,-3631,-16006,17325,131759,29136,-14920,63614,37961,6473,59726,60250,249},
+{0,0,0,-9904,-593,7011,142617,-3310,-4141,-114137,-1256,-2689,24260,-2330,1119,-50190,2078,-6970,-35987,-776,-284,-38062,1207,2597,-98398,-45024,-43469,10478,-22414,-15699,134662,-35603,-35429,49062,-27729,-12229,-3986,-16750,17292,129012,29311,-15999,63614,37961,6473,59825,63592,210},
+{0,0,0,-9902,-628,7421,140300,-3530,-4522,-108812,-1390,-2606,26144,-3077,1555,-48795,2138,-7358,-41219,-897,-387,-37193,1257,2803,-98388,-46792,-44843,11064,-24081,-17038,136410,-35603,-38624,49062,-27729,-12229,-4223,-17236,17172,126123,29366,-16285,63614,37961,6472,58867,65823,140},
+{0,0,0,-9899,-662,7831,137983,-3741,-4909,-103486,-1519,-2517,28032,-3815,2006,-47399,2193,-7746,-46451,-1012,-496,-36324,1309,3008,-98415,-48560,-46234,11629,-25755,-18372,138158,-35655,-41819,49062,-27729,-12229,-4460,-17722,17052,123235,29428,-16570,63614,37961,6472,57903,68058,94},
+{0,0,0,-9897,-683,8082,132658,-3884,-5388,-94266,-1607,-2196,27661,-5284,2987,-47330,2233,-7899,-51433,-1096,-610,-35506,1364,3188,-97284,-50169,-46491,11987,-27037,-19733,139594,-35809,-44536,49062,-27729,-12229,-4605,-18005,16831,120490,29381,-16338,63614,37961,6473,56182,69406,28},
+{0,0,0,-9896,-705,8333,127333,-4001,-5873,-85045,-1664,-1869,27304,-6756,3964,-47261,2273,-8052,-56415,-1174,-729,-34688,1421,3368,-96154,-51782,-46735,12327,-28324,-21094,141025,-36000,-47251,49062,-27729,-12229,-4751,-18287,16610,117746,29328,-16108,63614,37961,6473,54449,70760,-10},
+{0,0,0,-9895,-716,8463,119844,-4014,-6395,-72314,-1603,-1425,24413,-8370,5219,-48093,2302,-8024,-61105,-1216,-839,-33365,1499,3519,-94240,-53199,-46159,12507,-29218,-22288,142097,-36216,-49349,49062,-27729,-12229,-4830,-18419,16298,115434,29197,-15634,63614,37961,6472,52279,71450,-50},
+{0,0,0,-9894,-727,8593,112354,-3989,-6916,-59583,-1486,-992,21538,-10020,6428,-48925,2330,-7996,-65795,-1253,-951,-32041,1580,3669,-92305,-54610,-45550,12677,-30114,-23483,143165,-36452,-51445,49062,-27729,-12229,-4909,-18551,15986,113124,29055,-15163,63614,37961,6472,50101,72146,-74},
+{0,0,0,-9893,-731,8643,102637,-3822,-7439,-42284,-1182,-567,15286,-11306,7531,-50041,2336,-7855,-70513,-1260,-1055,-29482,1699,3783,-90017,-55772,-44482,12746,-30641,-24319,143836,-36636,-52796,49062,-27729,-12229,-4944,-18583,15603,111529,28905,-14712,63614,37961,6472,47820,72399,-89},
+{0,0,0,-9893,-735,8692,92922,-3605,-7944,-24988,-809,-202,9039,-12659,8551,-51156,2341,-7715,-75232,-1262,-1159,-26923,1821,3893,-87700,-56915,-43377,12810,-31169,-25156,144505,-36828,-54146,49062,-27729,-12229,-4979,-18615,15221,109935,28748,-14263,63614,37961,6473,45537,72656,-99},
+{0,0,0,-9893,-736,8700,86304,-3402,-8208,-12757,-510,-84,3845,-13197,9011,-51718,2310,-7536,-80736,-1243,-1276,-22182,1999,3954,-85510,-57784,-42206,12825,-31346,-25466,144740,-36902,-54625,49062,-27729,-12229,-4991,-18597,14793,109335,28682,-14081,63614,37961,6473,43499,72691,-101},
+{0,0,0,-9893,-736,8708,79688,-3182,-8458,-526,-198,-3,-1350,-13758,9442,-52281,2278,-7358,-86239,-1216,-1392,-17442,2180,4007,-83298,-58634,-41008,12840,-31523,-25776,144973,-36977,-55105,49062,-27729,-12229,-5004,-18578,14366,108735,28615,-13900,63614,37961,6473,41462,72729,-103},
+{0,0,0,-9896,-697,8240,96844,-3495,-7316,-52476,-1193,-1105,-222,-11297,4949,-34234,1570,-7367,-111386,-981,-2076,-10324,1589,3811,-78447,-55569,-37359,12621,-30688,-25205,144689,-37151,-53590,49062,-27729,-12229,-4845,-18146,13860,109105,28402,-13488,63614,37961,6472,38210,68128,1337},
+{0,0,0,-9899,-657,7773,114004,-3607,-6137,-104439,-1510,-2556,1014,-8890,440,-16190,872,-7249,-136530,-583,-2680,-3208,987,3658,-73832,-52352,-33949,12398,-29853,-24633,144407,-37329,-52075,49062,-27729,-12229,-4684,-17715,13354,109475,28191,-13077,63614,37961,6472,35163,63490,2538},
+{0,0,0,-9905,-574,6780,114201,-3090,-5246,-126618,-950,-3018,14406,-5020,1150,15328,-246,-6493,-165788,330,-3216,-5433,-102,3013,-67544,-42906,-28506,11693,-27518,-23357,143674,-37818,-48063,49062,-27729,-12229,-4210,-16548,12770,110538,27584,-11846,63614,37961,6472,31985,52211,4818},
+{0,0,0,-9911,-490,5786,114393,-2572,-4357,-148794,-302,-3345,27755,-1090,1335,46854,-1075,-5428,-195043,1359,-3465,-7665,-1175,2343,-62146,-33154,-23903,10964,-25191,-22071,142961,-38335,-44047,49062,-27729,-12229,-3731,-15384,12180,111607,26989,-10610,63614,37961,6472,29344,40868,6584},
+{0,0,0,-9915,-404,4773,104857,-1992,-3775,-157808,-25,-2875,36047,-695,1260,75369,-1412,-4015,-210406,1852,-3183,-13444,1435,-1371,-58715,-20551,-19456,9683,-21622,-20823,141987,-39112,-38341,49062,-27729,-12229,-2976,-13598,11625,113269,26119,-8650,63614,37961,6472,28673,27038,7906},
+{0,0,0,-9919,-318,3760,95318,-1471,-3142,-166824,209,-2382,44340,-308,1153,103886,-1337,-2564,-225771,2297,-2829,-19127,4253,-4931,-56066,-7792,-15530,8371,-18069,-19533,141060,-39940,-32625,49062,-27729,-12229,-2214,-11815,11056,114944,25281,-6679,63614,37961,6472,28337,13201,9115},
+{0,0,0,-9921,-237,2805,76624,-916,-2553,-158069,24,-1666,45687,-103,863,121965,-1072,-1669,-224362,1740,-2204,-20153,6664,-13159,-55627,3152,-11502,6653,-13798,-18826,140066,-40938,-26110,49062,-27729,-12229,-1226,-9532,10653,117106,24303,-4081,63614,37961,6472,29421,1276,9271},
+{0,0,0,-9923,-157,1850,57927,-480,-1872,-149313,-97,-936,47034,99,571,140041,-650,-835,-222950,1192,-1571,-20978,9152,-21378,-55755,14109,-7488,4917,-9540,-18044,139140,-41995,-19577,49062,-27729,-12229,-233,-7253,10225,119288,23381,-1467,63614,37961,6472,30632,-10635,9580},
+{0,0,0,-9924,-78,925,32786,-122,-972,-121202,-121,-453,40466,39,282,145650,-347,-420,-212699,536,-802,-15422,4836,-26869,-57042,21662,-3496,3196,-5419,-17937,138311,-43073,-13202,49062,-27729,-12229,916,-4615,10084,121838,22456,1659,63614,37961,6472,32125,-19222,9169},
+{0,0,0,-9925,0,0,7643,0,-11,-93091,-11,17,33897,-2,-11,151257,-20,-23,-202443,-38,29,-10117,229,-32106,-58745,29153,670,1472,-1300,-17752,137554,-44197,-6803,49062,-27729,-12229,2067,-1978,9907,124412,21609,4803,63614,37961,6472,33667,-27806,8901},
+{0,0,0,-9924,77,-914,-2769,-51,969,-90813,141,207,16711,-178,-310,151837,343,391,-189812,-223,725,-4940,-4616,-28935,-60951,34909,4483,290,1653,-17819,136988,-45157,-1505,49062,-27729,-12229,3282,858,10106,127219,20879,8318,63614,37961,6472,35308,-34641,8747},
+{0,0,0,-9923,155,-1827,-13179,-204,1939,-88535,298,393,-475,-301,-635,152415,709,803,-177179,-318,1439,405,-9286,-25507,-63497,40572,8514,-892,4606,-17846,136477,-46142,3813,49062,-27729,-12229,4493,3697,10264,130046,20246,11847,63614,37961,6473,37018,-41469,8725},
+{0,0,0,-9922,229,-2705,-21995,-426,2844,-76400,425,421,-19352,-358,-1002,151103,1132,1299,-164579,-139,1872,5265,-9380,-19152,-66159,44708,12132,-1553,6446,-17821,135516,-46766,7396,49062,-27729,-12229,5667,6563,10836,132957,19812,15580,63614,37961,6473,38675,-46757,8757},
+{0,0,0,-9919,303,-3583,-30809,-727,3725,-64265,555,433,-38229,-346,-1372,149788,1547,1799,-151980,92,2279,10121,-9165,-12801,-69079,48746,15942,-2215,8285,-17781,134578,-47421,10984,49062,-27729,-12229,6830,9435,11369,135881,19484,19321,63614,37961,6472,40403,-52037,8902},
+{0,0,0,-9917,371,-4388,-37699,-1039,4495,-54160,607,378,-39718,-536,-1671,147720,1969,2338,-140755,387,2431,14107,-5870,-8147,-71796,51521,19210,-2712,9765,-17779,132697,-47799,12997,49062,-27729,-12229,7864,12169,12297,138738,19387,23080,63614,37961,6473,41959,-55985,9045},
+{0,0,0,-9913,440,-5194,-44586,-1404,5241,-44055,654,318,-41207,-722,-1972,145649,2380,2886,-129530,696,2548,17930,-2396,-3635,-74681,54211,22611,-3211,11244,-17768,130821,-48210,15005,49062,-27729,-12229,8880,14912,13195,141596,19396,26839,63614,37961,6473,43576,-59926,9273},
+{0,0,0,-9910,499,-5893,-47453,-1670,5896,-39869,688,298,-39725,-925,-2211,144185,2739,3371,-121904,926,2578,21126,-123,-2321,-77133,55917,25355,-3566,12393,-17710,128306,-48444,15756,49062,-27729,-12229,9702,17371,14409,144246,19615,30430,63614,37961,6473,44940,-62738,9457},
+{0,0,0,-9907,558,-6591,-50317,-1956,6543,-35682,721,276,-38243,-1132,-2447,142720,3090,3862,-114279,1158,2590,24294,2191,-1079,-79677,57562,28173,-3922,13541,-17645,125791,-48696,16500,49062,-27729,-12229,10503,19840,15603,146888,19927,34015,63614,37961,6472,46347,-65546,9698},
+{0,0,0,-9903,605,-7154,-48870,-2061,7082,-41035,858,387,-37305,-1207,-2710,140019,3389,4354,-107492,1332,2506,26185,1706,-934,-81662,58492,30284,-4163,14396,-17491,122970,-48797,16334,49062,-27729,-12229,11083,21919,16983,149207,20382,37257,63614,37961,6472,47458,-67421,9869},
+{0,0,0,-9900,653,-7717,-47422,-2159,7622,-46388,989,505,-36368,-1286,-2973,137317,3674,4854,-100705,1499,2409,28077,1224,-780,-83687,59386,32426,-4404,15251,-17334,120148,-48894,16164,49062,-27729,-12229,11642,24006,18353,151512,20911,40490,63614,37961,6472,48593,-69295,10071},
+{0,0,0,-9897,689,-8144,-47327,-2246,7946,-51448,1096,637,-35499,-1370,-3225,131381,3902,5486,-90389,1607,2088,27314,-146,0,-85129,59787,33896,-4555,15850,-17079,117363,-48855,15440,49062,-27729,-12229,11996,25642,19739,153406,21486,43227,63614,37961,6472,49424,-70428,10197},
+{0,0,0,-9894,725,-8571,-47231,-2333,8269,-56509,1197,773,-34632,-1456,-3477,125443,4092,6130,-80073,1681,1757,26561,-1522,770,-86585,60169,35374,-4706,16449,-16822,114580,-48798,14718,49062,-27729,-12229,12333,27283,21122,155286,22112,45955,63614,37961,6473,50265,-71561,10337},
+{0,0,0,-9892,750,-8867,-48056,-2405,8391,-61241,1263,907,-33274,-1566,-3704,117199,4166,6835,-66281,1602,1300,22888,-3149,1887,-87506,60249,36271,-4790,16828,-16477,112179,-48646,13798,49062,-27729,-12229,12511,28454,22330,156695,22672,48053,63614,37961,6473,50819,-72142,10409},
+{0,0,0,-9889,775,-9164,-48881,-2478,8512,-65973,1323,1044,-31917,-1678,-3930,108954,4182,7544,-52490,1461,859,19231,-4816,2944,-88430,60322,37169,-4874,17206,-16132,109781,-48475,12883,49062,-27729,-12229,12679,29626,23539,158093,23260,50146,63614,37961,6473,51376,-72722,10486},
+{0,0,0,-9888,789,-9338,-50005,-2517,8468,-70702,1346,1173,-29342,-1831,-4107,96914,3971,8306,-31075,1009,399,10575,-6164,3956,-88906,60257,37607,-4913,17399,-15722,108101,-48295,12110,49062,-27729,-12229,12747,30334,24383,158973,23675,51491,63614,37961,6472,51680,-72936,10514},
+{0,0,0,-9887,804,-9511,-51128,-2555,8423,-75432,1363,1302,-26766,-1987,-4280,84877,3670,9036,-9663,470,46,1925,-7594,4848,-89382,60190,38044,-4952,17591,-15311,106425,-48103,11342,49062,-27729,-12229,12810,31041,25228,159848,24101,52833,63614,37961,6472,51984,-73150,10543},
+{0,0,0,-9886,809,-9567,-51706,-2534,8267,-80922,1345,1438,-22026,-2194,-4371,82248,3594,9192,-5096,344,20,110,-8175,5249,-89516,60136,38159,-4966,17629,-14863,105791,-48023,11040,49062,-27729,-12229,12825,31283,25540,160155,24258,53308,63614,37961,6472,52075,-73180,10547},
+{0,0,0,-9886,813,-9624,-52284,-2511,8110,-86411,1320,1573,-17286,-2404,-4452,79620,3514,9347,-529,218,-1,-1702,-8763,5640,-89651,60082,38273,-4980,17668,-14414,105158,-47942,10738,49062,-27729,-12229,12839,31524,25853,160461,24417,53784,63614,37961,6472,52167,-73211,10551},
+}
+local clip={Duration=0.9333333333333333,Loop=true,Source="Quaternius original GLB",Role="Jog_Fwd_Loop",Frames={}}
+for i,row in rows do
+ local pose:{[string]:CFrame}={}
+ for j,joint in joints do local k=4+(j-1)*3;pose[joint]=CFrame.Angles(row[k]/100000,row[k+1]/100000,row[k+2]/100000) end
+ clip.Frames[i]={Time=math.min((i-1)/60,clip.Duration),Pose=pose}
+end
+return clip
+]====])
+-- Source: src/client/world/clips/Jump_Land.luau
+addModule(modules,{"world","clips","Jump_Land"},[====[
+--!strict
+-- Quaternius CC0 original action; R15 retarget. See assets/animations/quaternius-locomotion.
+local joints={"Root","RightHip","RightKnee","RightAnkle","LeftHip","LeftKnee","LeftAnkle","Waist","LeftShoulder","LeftElbow","LeftWrist","RightShoulder","RightElbow","RightWrist","Neck"}
+local rows={
+{0,0,0,7294,-24060,9274,-1515,-865,18608,-51015,-67413,-33596,-20869,31759,-9589,38385,-7213,-45911,-52904,64019,33608,-72469,-53262,-31865,-63528,-6563,-6569,-275,11532,-73216,43138,12988,-26885,44040,20941,-14449,-3111,-14210,70654,51466,-53,23038,52491,15750,12576,-31802,20319,17257},
+{0,0,0,5681,-23958,7664,10110,350,29391,-80827,-55148,-49880,-1061,31111,-12228,51764,-11465,-50222,-77168,49491,42165,-51536,-51268,-22367,-63633,-5688,-5739,-994,6033,-70021,44134,17211,-29193,44049,20869,-14455,-561,-15762,70411,51262,649,22677,52402,16179,12491,-29807,18953,16534},
+{0,0,0,4070,-23832,6058,21541,2798,39964,-106129,-39734,-60543,18666,29983,-14675,65030,-16249,-53947,-98480,33716,46265,-31220,-47631,-13679,-63753,-4815,-4908,-1830,549,-66864,45238,21411,-31564,44057,20798,-14460,1980,-17316,70149,51062,1352,22317,52314,16608,12406,-27818,17591,15812},
+{0,0,0,640,-23628,2969,35540,7484,52307,-131264,-21118,-65990,45203,28006,-19661,87274,-21423,-50126,-121655,17568,39291,-4148,-39450,1001,-64461,-3186,-3346,-2819,-12260,-61781,48255,31289,-36739,44087,20540,-14480,6741,-19492,69558,51273,2037,22011,52082,17686,12216,-22705,15111,14578},
+{0,0,0,-2781,-23322,-109,48935,13811,63944,-154825,-1802,-66558,71422,24853,-23905,109956,-25632,-45178,-145514,3431,28915,20515,-28139,12423,-65224,-1577,-1779,-4257,-24995,-56823,51938,40995,-42431,44117,20283,-14500,11462,-21677,68894,51486,2722,21704,51852,18765,12028,-17617,12632,13402},
+{0,0,0,-6669,-23127,-2236,59468,19946,72325,-172982,11355,-63123,88350,22862,-28421,131648,-28020,-39045,-165122,-537,19027,32231,-21718,19393,-66703,-713,-912,-4094,-37073,-54632,56043,50803,-47902,44175,19776,-14539,14233,-20552,67201,53440,1086,22772,51527,20177,11833,-10745,11635,12581},
+{0,0,0,-10550,-22851,-4353,69598,26900,80124,-192002,23652,-57231,105083,20165,-32508,153560,-29073,-32490,-185032,-2485,8552,43324,-14569,25473,-68197,129,-39,-4058,-49124,-52322,61047,60379,-54196,44233,19270,-14577,17009,-19431,65491,55411,-528,23871,51205,21590,11642,-3883,10617,11851},
+{0,0,0,-13565,-22714,-5034,79332,29793,76314,-201652,24665,-47991,109254,13116,-34309,164531,-30805,-30894,-192896,-2095,5829,43564,-14690,27900,-70135,130,-37,-2672,-56519,-51954,65211,66020,-58270,44323,18450,-14637,17658,-15052,63108,58399,-3500,25959,50834,23021,11539,3396,11244,11266},
+{0,0,0,-16578,-22556,-5710,89259,32312,72193,-211370,24806,-38680,113268,6002,-35801,175589,-32358,-29100,-200746,-1492,3145,43807,-14805,30329,-72072,131,-34,-1181,-63909,-51428,69870,71511,-62842,44413,17631,-14697,18410,-10690,60708,61452,-6408,28138,50463,24452,11440,10684,11834,10643},
+{0,0,0,-18954,-22417,-6240,97064,32445,65867,-216463,22101,-31658,114911,-800,-36479,181873,-32883,-27778,-203936,-703,1407,43433,-14738,32777,-74315,131,-31,29,-70497,-52037,75921,74513,-67148,44538,16434,-14780,19410,-5633,58550,64231,-9068,30286,50088,25582,11515,17049,12285,10134},
+{0,0,0,-21328,-22266,-6766,104858,32110,59552,-221320,19061,-24828,116511,-7612,-37047,188175,-33327,-26422,-207111,142,-304,43058,-14681,35226,-76557,132,-28,1272,-77089,-52557,82315,77309,-71819,44661,15238,-14861,20519,-601,56341,67074,-11666,32514,49712,26712,11595,23418,12708,9602},
+{0,0,0,-23153,-22142,-7168,106805,32919,59659,-222114,19335,-24769,116634,-7677,-37522,190902,-33462,-25803,-207701,515,-967,42856,-14437,37210,-78994,133,-25,2122,-82784,-53943,88725,78393,-76184,44817,13602,-14967,21844,4941,54428,69499,-14145,34657,49383,27222,11923,27509,12898,9366},
+{0,0,0,-24977,-22011,-7567,108756,33730,59749,-222908,19608,-24708,116756,-7742,-37998,193632,-33582,-25179,-208288,891,-1629,42650,-14198,39195,-81431,133,-22,2927,-88485,-55329,95260,79275,-80683,44970,11965,-15069,23284,10454,52428,71986,-16571,36869,49052,27731,12254,31601,13082,9124},
+{0,0,0,-26327,-21909,-7861,109533,34008,59707,-221702,19821,-25574,115955,-7565,-37754,193759,-33678,-25219,-207261,697,-1309,42691,-13836,40313,-83953,134,-18,3309,-93266,-57312,101318,78717,-84570,45147,9859,-15190,24874,16245,50737,74136,-18845,38938,48812,27491,12844,33968,13112,9108},
+{0,0,0,-27676,-21803,-8154,110310,34287,59662,-220493,20023,-26442,115153,-7391,-37509,193887,-33775,-25259,-206235,505,-988,42728,-13473,41430,-86475,134,-15,3574,-98050,-59384,107303,77996,-88378,45321,7753,-15307,26586,22004,48927,76343,-21073,41066,48573,27249,13433,36336,13142,9092},
+{0,0,0,-28614,-21727,-8356,110156,34139,59516,-217886,20066,-27947,113770,-7092,-36774,192208,-33818,-25732,-204085,-62,103,42865,-13067,41330,-88981,134,-12,3475,-101947,-61766,112495,76183,-91370,45495,5282,-15431,28359,27775,47419,78369,-23028,43023,48429,26448,14197,38399,13157,9105},
+{0,0,0,-29551,-21650,-8558,110002,33992,59371,-215279,20070,-29452,112386,-6803,-36034,190529,-33853,-26206,-201929,-605,1207,43003,-12661,41229,-91488,135,-8,3204,-105839,-64304,117521,74262,-94179,45666,2811,-15550,30260,33515,45766,80443,-24943,45028,48291,25646,14957,40461,13172,9118},
+{0,0,0,-30134,-21601,-8683,109096,33490,59117,-211681,19764,-31337,110616,-6454,-35037,187646,-33711,-26873,-198906,-1203,2710,43073,-12288,40307,-93879,135,-5,2723,-108911,-66826,121643,71613,-96131,45816,115,-15664,32113,38979,44397,82307,-26592,46833,48249,24442,15819,42162,13174,9156},
+{0,0,0,-30716,-21551,-8808,108191,32989,58859,-208093,19392,-33208,108843,-6123,-34035,184767,-33551,-27534,-195875,-1755,4231,43148,-11916,39386,-96271,135,-2,2054,-111972,-69527,125604,68907,-97897,45963,-2581,-15774,34100,44415,42873,84210,-28207,48677,48218,23237,16677,43862,13177,9195},
+{0,0,0,-30991,-21527,-8867,106698,32208,58493,-203838,18610,-35229,106783,-5731,-32977,181103,-33153,-28225,-192138,-2119,5808,43029,-11625,38351,-98450,135,1,1411,-114303,-71841,128681,65821,-98874,46076,-5364,-15872,35910,49284,41616,85862,-29556,50280,48276,21789,17569,45142,13170,9254},
+{0,0,0,-31266,-21503,-8925,105206,31432,58115,-199607,17745,-37212,104720,-5361,-31911,177448,-32732,-28898,-188395,-2424,7396,42914,-11333,37317,-100628,135,4,612,-116623,-74309,131651,62714,-99711,46186,-8146,-15966,37850,54129,40209,87544,-30879,51913,48347,20341,18460,46422,13164,9313},
+{0,0,0,-31276,-21502,-8927,103230,30428,57626,-194918,16442,-39191,102443,-4938,-30899,173322,-32071,-29495,-184113,-2461,8883,42534,-11128,36262,-102495,135,7,130,-118308,-75994,133793,59545,-99868,46256,-10876,-16044,39473,58132,39056,88921,-31927,53252,48487,18808,19322,47223,13150,9389},
+{0,0,0,-31286,-21501,-8930,101255,29434,57118,-190266,15050,-41102,100162,-4538,-29878,169209,-31387,-30061,-179831,-2434,10369,42157,-10920,35209,-104361,135,9,-441,-119988,-77769,135886,56375,-99940,46323,-13605,-16120,41206,62115,37780,90319,-32957,54610,48640,17276,20185,48024,13136,9465},
+{0,0,0,-31069,-21520,-8883,98885,28265,56506,-185311,13246,-42901,97712,-4083,-28969,164798,-30504,-30512,-175114,-2134,11675,41484,-10793,34189,-105816,134,11,-404,-121124,-78387,137189,53432,-99435,46352,-16144,-16179,42479,65012,36747,91343,-33691,55606,48831,15815,20959,48286,13118,9554},
+{0,0,0,-30851,-21539,-8837,96516,27110,55867,-180400,11356,-44604,95259,-3651,-28049,160404,-29603,-30921,-170402,-1772,12965,40813,-10659,33171,-107272,134,13,-382,-122259,-79021,138487,50495,-98894,46379,-18683,-16238,43826,67895,35634,92377,-34415,56613,49033,14356,21734,48548,13100,9643},
+{0,0,0,-30439,-21575,-8749,93835,25834,55139,-175310,9116,-46125,92671,-3157,-27271,155824,-28556,-31208,-165340,-1169,14038,39843,-10595,32215,-108218,134,14,482,-122918,-78201,138981,48041,-97856,46375,-20894,-16281,44578,69484,34754,92953,-34812,57174,49233,13123,22363,48213,13081,9740},
+{0,0,0,-30027,-21610,-8660,91154,24578,54379,-170264,6803,-47528,90081,-2684,-26481,151260,-27497,-31443,-160285,-512,15080,38874,-10523,31260,-109163,134,15,1380,-123574,-77348,139497,45592,-96817,46371,-23105,-16323,45364,71066,33841,93533,-35205,57738,49441,11891,22993,47877,13060,9837},
+{0,0,0,-29450,-21658,-8536,88201,23235,53541,-165086,4194,-48717,87372,-2139,-25847,146596,-26346,-31566,-154973,335,15895,37631,-10508,30378,-109501,134,16,3241,-123783,-74866,139132,43849,-95339,46349,-24852,-16352,45783,71656,32818,93552,-35218,57757,49598,11040,23416,46884,13042,9939},
+{0,0,0,-28873,-21706,-8412,85247,21917,52664,-159943,1528,-49768,84661,-1611,-25199,141947,-25191,-31633,-149668,1224,16663,36387,-10482,29497,-109838,134,16,5128,-123978,-72359,138799,42101,-93880,46327,-26599,-16381,46216,72240,31784,93572,-35231,57776,49760,10189,23840,45891,13023,10040},
+{0,0,0,-28157,-21764,-8258,82085,20554,51729,-154736,-1354,-50588,81856,-1002,-24714,137226,-23984,-31607,-144140,2257,17213,34889,-10502,28691,-109645,134,16,7733,-123756,-68579,137559,41262,-92148,46303,-27747,-16398,46583,72314,30380,93085,-34902,57302,49823,9871,23996,44357,13008,10143},
+{0,0,0,-27442,-21822,-8103,78919,19220,50753,-149549,-4275,-51256,79048,-406,-24212,132518,-22779,-31523,-138616,3318,17706,33390,-10510,27884,-109452,134,16,10293,-123505,-64843,136340,40403,-90434,46279,-28894,-16415,46957,72380,28973,92600,-34570,56830,49887,9554,24151,42823,12993,10245},
+{0,0,0,-26611,-21887,-7923,75573,17860,49715,-144297,-7368,-51695,76172,248,-23847,127778,-21559,-31365,-132930,4473,17993,31673,-10556,27151,-108894,134,15,13186,-122884,-60416,134518,40101,-88552,46269,-29307,-16421,47241,72035,27338,91757,-33983,56009,49879,9604,24120,40955,12986,10343},
+{0,0,0,-25781,-21951,-7743,72221,16535,48634,-139045,-10480,-51972,73293,890,-23463,123048,-20347,-31148,-127244,5643,18215,29956,-10589,26417,-108337,134,14,15949,-122226,-56117,132704,39767,-86679,46259,-29720,-16427,47521,71681,25707,90920,-33390,55195,49872,9654,24088,39086,12977,10442},
+{0,0,0,-24857,-22020,-7541,68732,15205,47491,-133747,-13711,-52022,70387,1553,-23182,118312,-19144,-30875,-121440,6865,18250,28055,-10651,25750,-107449,134,13,18838,-121222,-51413,130618,39494,-84621,46259,-29720,-16427,47676,70930,23916,89773,-32558,54079,49852,9797,23997,36954,12981,10532},
+{0,0,0,-23933,-22087,-7339,65234,13916,46304,-128424,-16940,-51898,67479,2207,-22882,113583,-17955,-30545,-115631,8088,18214,26153,-10701,25082,-106561,134,12,21531,-120179,-46903,128541,39181,-82572,46259,-29720,-16427,47817,70171,22137,88639,-31714,52977,49831,9941,23906,34823,12983,10623},
+{0,0,0,-22936,-22157,-7120,61639,12644,45064,-123072,-20238,-51549,64566,2876,-22677,108863,-16793,-30176,-109734,9330,18011,24097,-10774,24476,-105374,135,10,24161,-118834,-42251,126253,38909,-80408,46259,-29720,-16427,47797,69031,20272,87244,-30647,51622,49800,10170,23761,32501,13000,10701},
+{0,0,0,-21938,-22226,-6901,58033,11416,43780,-117669,-23514,-51016,61652,3539,-22453,104148,-15649,-29752,-103827,10558,17735,22041,-10835,23869,-104188,135,9,26565,-117452,-37823,123975,38592,-78253,46259,-29720,-16427,47753,67884,18425,85869,-29561,50287,49768,10399,23617,30179,13017,10780},
+{0,0,0,-20885,-22295,-6668,54361,10222,42450,-112244,-26815,-50260,58753,4210,-22316,99475,-14548,-29303,-97889,11773,17314,19871,-10915,23319,-102737,135,7,28801,-115827,-33426,121547,38304,-76051,46259,-29720,-16427,47515,66380,16564,84282,-28267,48747,49728,10704,23423,27741,13053,10842},
+{0,0,0,-19831,-22363,-6435,50678,9078,41078,-106740,-30072,-49311,55852,4878,-22160,94804,-13468,-28804,-91936,12960,16821,17700,-10983,22767,-101286,135,5,30814,-114170,-29248,119130,37967,-73860,46259,-29720,-16427,47248,64872,14723,82722,-26950,47235,49687,11009,23230,25302,13087,10904},
+{0,0,0,-18739,-22430,-6192,46977,7985,39678,-101257,-33296,-48151,53003,5549,-22086,90213,-12443,-28294,-86021,14106,16210,15462,-11067,22267,-99603,135,3,32597,-112248,-25154,116504,37606,-71563,46259,-29720,-16427,46762,63035,12935,80998,-25441,45565,49641,11381,22994,22821,13145,10943},
+{0,0,0,-17646,-22495,-5949,43264,6945,38239,-95670,-36454,-46790,50153,6218,-21993,85622,-11442,-27738,-80089,15214,15531,13223,-11140,21766,-97921,135,0,34175,-110301,-21262,113892,37189,-69280,46259,-29720,-16427,46246,61199,11163,79306,-23904,43929,49594,11754,22758,20340,13202,10983},
+{0,0,0,-16528,-22558,-5699,39590,5975,36801,-90177,-39512,-45252,47404,6885,-21978,81168,-10510,-27188,-74304,16251,14768,10978,-11226,21314,-96039,135,-2,35422,-108025,-17533,110996,36673,-66816,46259,-29720,-16427,45500,59069,9499,77495,-22195,42178,49544,12184,22484,17890,13286,10995},
+{0,0,0,-15411,-22619,-5449,35905,5059,35329,-84561,-42487,-43512,44654,7551,-21944,76713,-9603,-26598,-68502,17242,13945,8733,-11302,20861,-94158,135,-5,36488,-105734,-13977,108120,36092,-64373,46259,-29720,-16427,44726,56943,7844,75721,-20456,40466,49494,12615,22211,15441,13370,11008},
+{0,0,0,-14283,-22678,-5195,32341,4231,33908,-79191,-45276,-41673,42086,8210,-21984,72495,-8781,-26038,-63039,18129,13091,6582,-11389,20454,-92111,135,-7,37167,-103129,-10689,105002,35381,-61796,46259,-29720,-16427,43724,54565,6339,73868,-18567,38680,49442,13095,21905,13099,13483,10985},
+{0,0,0,-13154,-22733,-4941,28767,3454,32459,-73690,-47970,-39642,39517,8870,-22006,68275,-7984,-25445,-57560,18968,12188,4430,-11466,20045,-90064,135,-10,37704,-100518,-7530,101912,34596,-59251,46259,-29720,-16427,42698,52193,4833,72056,-16646,36936,49392,13575,21599,10757,13597,10964},
+{0,0,0,-12028,-22786,-4687,25441,2786,31153,-68732,-50363,-37682,37267,9518,-22100,64468,-7299,-24922,-52770,19659,11344,2543,-11552,19682,-87885,134,-13,37842,-97620,-4701,98627,33660,-56622,46259,-29720,-16427,41459,49616,3507,70200,-14603,35153,49341,14096,21266,8600,13743,10900},
+{0,0,0,-10902,-22836,-4433,22107,2161,29826,-63654,-52666,-35561,35015,10167,-22178,60659,-6634,-24374,-47968,20310,10466,656,-11631,19318,-85706,134,-16,37881,-94724,-1952,95380,32643,-54036,46259,-29720,-16427,40200,47048,2170,68387,-12527,33413,49292,14617,20933,6442,13891,10837},
+{0,0,0,-9790,-22883,-4181,19239,1669,28811,-59706,-54501,-33859,33326,10799,-22324,57579,-6126,-23968,-44494,20752,9801,-662,-11716,18998,-83427,134,-19,37538,-91578,437,91990,31460,-51422,46259,-29720,-16427,38756,44322,1031,66563,-10357,31666,49244,15169,20579,4548,14073,10722},
+{0,0,0,-8677,-22927,-3928,16365,1206,27782,-55677,-56276,-32053,31637,11433,-22459,54498,-5631,-23546,-41014,21171,9120,-1980,-11797,18677,-81149,133,-22,37135,-88440,2792,88647,30195,-48860,46259,-29720,-16427,37296,41608,-131,64781,-8157,29963,49198,15722,20224,2655,14256,10609},
+{0,0,0,-7589,-22967,-3681,14239,892,27306,-53613,-57389,-31188,30843,12046,-22658,52572,-5349,-23362,-39724,21311,8859,-2321,-11881,18401,-78804,133,-25,36391,-85098,4780,85216,28763,-46325,46259,-29720,-16427,35685,38786,-1085,63014,-5894,28278,49156,16297,19854,1104,14476,10434},
+{0,0,0,-6501,-23005,-3433,12112,589,26823,-51524,-58486,-30290,30050,12660,-22852,50647,-5070,-23172,-38432,21448,8595,-2662,-11964,18124,-76459,132,-28,35618,-81768,6773,81837,27250,-43852,46259,-29720,-16427,34063,35976,-2072,61288,-3603,26635,49115,16872,19483,-446,14697,10259},
+{0,0,0,-5448,-23039,-3192,10481,367,26697,-50713,-59185,-30046,29816,13252,-23075,49444,-4915,-23131,-38482,21426,8598,-2403,-12046,17874,-74081,131,-32,34558,-78285,8407,78427,25581,-41456,46259,-29720,-16427,32329,33111,-2851,59601,-1284,25033,49079,17460,19102,-1569,14954,10012},
+{0,0,0,-4395,-23071,-2952,8850,147,26568,-49898,-59881,-29794,29583,13845,-23297,48242,-4760,-23089,-38532,21403,8602,-2144,-12128,17624,-71703,130,-35,33492,-74817,10076,75073,23835,-39130,46259,-29720,-16427,30588,30256,-3669,57951,1061,23470,49045,18049,18721,-2693,15210,9764},
+{0,0,0,-3386,-23098,-2721,7269,-63,26420,-49052,-60576,-29509,29334,14417,-23514,47076,-4611,-23047,-38553,21385,8600,-1908,-12204,17382,-69325,130,-38,32199,-71255,11403,71741,21959,-36926,46259,-29720,-16427,28778,27396,-4285,56359,3399,21966,49016,18642,18335,-3275,15504,9425},
+{0,0,0,-2377,-23124,-2490,5689,-272,26269,-48201,-61269,-29215,29085,14989,-23730,45910,-4462,-23003,-38573,21366,8597,-1673,-12281,17141,-66947,129,-41,30915,-67708,12785,68465,20013,-34795,46259,-29720,-16427,26963,24545,-4944,54800,5761,20498,48989,19235,17948,-3855,15796,9084},
+{0,0,0,-1421,-23146,-2270,4166,-470,26096,-47309,-61959,-28881,28815,15534,-23939,44792,-4321,-22961,-38567,21352,8590,-1462,-12352,16909,-64602,128,-44,29467,-64131,13850,65260,17974,-32822,46259,-29720,-16427,25123,21739,-5413,53315,8079,19103,48968,19823,17563,-4018,16102,8672},
+{0,0,0,-465,-23166,-2051,2643,-665,25920,-46410,-62646,-28538,28546,16081,-24147,43674,-4179,-22916,-38562,21337,8583,-1250,-12423,16678,-62258,127,-47,28036,-60568,14982,62108,15873,-30922,46259,-29720,-16427,23280,18940,-5927,51860,10418,17740,48950,20412,17177,-4179,16404,8256},
+{0,0,0,430,-23183,-1845,1203,-847,25734,-45512,-63314,-28175,28272,16596,-24346,42617,-4046,-22873,-38535,21325,8572,-1061,-12489,16459,-59979,125,-50,26504,-57041,15825,59073,13727,-29205,46259,-29720,-16427,21456,16233,-6267,50491,12678,16462,48936,20987,16798,-4083,16697,7798},
+{0,0,0,1326,-23198,-1640,-238,-1026,25545,-44607,-63979,-27803,27999,17111,-24543,41560,-3913,-22829,-38509,21314,8561,-873,-12554,16240,-57701,124,-52,24992,-53527,16740,56083,11530,-27558,46259,-29720,-16427,19629,13531,-6650,49147,14956,15211,48926,21562,16419,-3986,16984,7337},
+{0,0,0,2152,-23211,-1450,-1592,-1191,25343,-43688,-64624,-27404,27715,17591,-24730,40574,-3790,-22787,-38467,21305,8548,-706,-12613,16035,-55521,123,-55,23440,-50117,17396,53250,9342,-26108,46259,-29720,-16427,17862,10964,-6878,47901,17121,14055,48920,22114,16052,-3719,17249,6854},
+{0,0,0,2979,-23222,-1259,-2947,-1352,25138,-42762,-65267,-26995,27431,18072,-24915,39588,-3667,-22744,-38425,21297,8534,-540,-12673,15830,-53342,122,-58,21907,-46718,18124,50455,7113,-24722,46259,-29720,-16427,16093,8401,-7147,46675,19299,12922,48916,22667,15686,-3451,17508,6367},
+{0,0,0,3730,-23230,-1086,-4195,-1498,24930,-41858,-65874,-26578,27150,18512,-25088,38684,-3555,-22703,-38372,21291,8519,-395,-12726,15642,-51295,121,-60,20392,-43490,18626,47853,4951,-23536,46259,-29720,-16427,14424,6014,-7281,45556,21331,11891,48917,23188,15338,-3066,17737,5875},
+{0,0,0,4481,-23238,-914,-5443,-1641,24720,-40946,-66479,-26152,26869,18953,-25259,37780,-3443,-22662,-38319,21285,8503,-250,-12779,15454,-49248,119,-63,18891,-40272,19194,45280,2760,-22407,46259,-29720,-16427,12752,3630,-7452,44453,23375,10879,48920,23708,14990,-2679,17960,5381},
+{0,0,0,5150,-23243,-759,-6573,-1767,24511,-40067,-67041,-25726,26594,19350,-25415,36969,-3343,-22624,-38260,21281,8487,-126,-12826,15284,-47367,118,-65,17462,-37291,19568,42934,695,-21470,46259,-29720,-16427,11216,1460,-7513,43466,25239,9975,48927,24189,14667,-2212,18150,4897},
+{0,0,0,5819,-23248,-605,-7703,-1890,24300,-39180,-67600,-25291,26320,19746,-25570,36158,-3244,-22586,-38201,21277,8472,-2,-12872,15114,-45485,117,-67,16044,-34318,20001,40608,-1391,-20582,46259,-29720,-16427,9678,-709,-7604,42491,27111,9087,48935,24669,14343,-1744,18334,4411},
+{0,0,0,6400,-23251,-472,-8705,-1996,24093,-38339,-68109,-24864,26055,20094,-25707,35448,-3157,-22551,-38141,21275,8456,102,-12912,14965,-43803,116,-69,14745,-31647,20273,38543,-3291,-19871,46259,-29720,-16427,8308,-2629,-7609,41640,28773,8313,48945,25100,14052,-1225,18484,3952},
+{0,0,0,6980,-23253,-338,-9706,-2100,23886,-37492,-68615,-24429,25790,20442,-25843,34739,-3070,-22517,-38081,21272,8440,206,-12952,14816,-42120,115,-71,13453,-28980,20593,36489,-5205,-19199,46259,-29720,-16427,6936,-4547,-7638,40797,30442,7551,48957,25530,13760,-706,18629,3490},
+{0,0,0,7467,-23254,-226,-10558,-2185,23697,-36736,-69054,-24032,25552,20736,-25960,34141,-2997,-22487,-38025,21271,8426,291,-12985,14689,-40669,114,-73,12323,-26677,20784,34730,-6875,-18685,46259,-29720,-16427,5761,-6185,-7607,40086,31870,6909,48969,25903,13507,-166,18742,3070},
+{0,0,0,7953,-23255,-114,-11410,-2269,23507,-35976,-69491,-23629,25315,21031,-26076,33543,-2925,-22456,-37969,21270,8412,376,-13018,14562,-39218,113,-74,11196,-24377,21012,32976,-8555,-18199,46259,-29720,-16427,4584,-7822,-7593,39381,33302,6274,48983,26275,13253,375,18850,2649},
+{0,0,0,8340,-23255,-25,-12098,-2334,23344,-35331,-69851,-23280,25112,21267,-26170,33065,-2867,-22432,-37920,21269,8400,443,-13044,14460,-38032,112,-76,10268,-22496,21141,31550,-9938,-17848,46259,-29720,-16427,3630,-9146,-7543,38815,34464,5766,48996,26580,13045,902,18930,2286},
+{0,0,0,8726,-23255,65,-12787,-2399,23180,-34682,-70210,-22926,24908,21504,-26264,32587,-2809,-22407,-37871,21269,8388,509,-13070,14358,-36846,111,-77,9342,-20618,21294,30127,-11326,-17515,46259,-29720,-16427,2675,-10471,-7504,38252,35628,5264,49009,26885,12836,1430,19005,1922},
+{0,0,0,9009,-23255,130,-13296,-2445,23052,-34183,-70479,-22651,24751,21679,-26333,32236,-2767,-22389,-37833,21268,8379,557,-13088,14283,-35957,110,-78,8646,-19214,21377,29065,-12369,-17294,46259,-29720,-16427,1967,-11453,-7452,37838,36494,4893,49020,27114,12678,1900,19056,1633},
+{0,0,0,9291,-23254,195,-13806,-2491,22924,-33683,-70748,-22373,24594,21853,-26402,31886,-2724,-22370,-37796,21268,8369,604,-13107,14207,-35069,109,-79,7951,-17811,21472,28005,-13415,-17083,46259,-29720,-16427,1257,-12436,-7407,37425,37362,4526,49032,27343,12521,2370,19105,1345},
+{0,0,0,9463,-23254,234,-14122,-2518,22841,-33362,-70917,-22193,24493,21961,-26445,31671,-2699,-22359,-37772,21268,8364,633,-13118,14160,-34512,109,-80,7516,-16933,21519,27341,-14071,-16963,46259,-29720,-16427,816,-13047,-7368,37169,37902,4298,49039,27487,12422,2722,19132,1152},
+{0,0,0,9636,-23254,274,-14437,-2546,22759,-33041,-71085,-22012,24392,22069,-26488,31457,-2673,-22348,-37748,21268,8358,663,-13130,14113,-33955,108,-80,7081,-16055,21570,26678,-14727,-16847,46259,-29720,-16427,375,-13658,-7331,36914,38443,4072,49047,27631,12323,3074,19159,960},
+{0,0,0,9694,-23254,288,-14545,-2555,22730,-32929,-71143,-21948,24357,22106,-26503,31384,-2664,-22344,-37740,21268,8356,672,-13134,14097,-33761,108,-80,6931,-15752,21585,26449,-14955,-16809,46259,-29720,-16427,223,-13868,-7316,36826,38630,3994,49050,27681,12288,3218,19167,889},
+{0,0,0,9753,-23253,301,-14653,-2564,22701,-32817,-71201,-21885,24322,22143,-26518,31310,-2655,-22340,-37731,21268,8354,682,-13137,14081,-33568,108,-81,6780,-15449,21601,26219,-15182,-16772,46259,-29720,-16427,71,-14079,-7302,36739,38817,3916,49052,27731,12254,3362,19176,818},
+}
+local clip={Duration=1.2666666666666666,Loop=false,Source="Quaternius original GLB",Role="Jump_Land",Frames={}}
+for i,row in rows do
+ local pose:{[string]:CFrame}={}
+ for j,joint in joints do local k=4+(j-1)*3;pose[joint]=CFrame.Angles(row[k]/100000,row[k+1]/100000,row[k+2]/100000) end
+ clip.Frames[i]={Time=math.min((i-1)/60,clip.Duration),Pose=pose}
+end
+return clip
+]====])
+-- Source: src/client/world/clips/Jump_Loop.luau
+addModule(modules,{"world","clips","Jump_Loop"},[====[
+--!strict
+-- Quaternius CC0 original action; R15 retarget. See assets/animations/quaternius-locomotion.
+local joints={"Root","RightHip","RightKnee","RightAnkle","LeftHip","LeftKnee","LeftAnkle","Waist","LeftShoulder","LeftElbow","LeftWrist","RightShoulder","RightElbow","RightWrist","Neck"}
+local rows={
+{0,0,0,26723,-20335,11700,-100,-327,8321,-62377,-64733,-40933,-60359,37264,17609,42978,-15333,-81478,-188709,-14798,42260,39044,-33563,38183,-76754,-6294,-7192,-203,10717,-75251,33533,11748,-24940,44040,20941,-14449,-3197,-19885,80164,29856,-6424,23063,52491,15750,12576,-13287,21083,14555},
+{0,0,0,26728,-20511,11579,-279,-334,8310,-61786,-64934,-40576,-60675,37380,17741,42745,-15163,-81159,-188356,-14722,42520,38955,-33339,38162,-76770,-6371,-7156,-225,10851,-75224,33211,11985,-24957,44040,20941,-14449,-3176,-19744,80206,29905,-6458,23075,52491,15750,12576,-13376,21017,14680},
+{0,0,0,26733,-20687,11458,-458,-341,8298,-61194,-65134,-40216,-60990,37496,17874,42512,-14995,-80840,-188003,-14645,42779,38866,-33114,38140,-76786,-6448,-7120,-246,10984,-75198,32888,12223,-24975,44040,20941,-14449,-3155,-19603,80248,29954,-6491,23088,52491,15750,12576,-13466,20951,14804},
+{0,0,0,26735,-20857,11316,-604,-349,8338,-60694,-65296,-39910,-61266,37609,17999,42272,-14818,-80494,-187629,-14562,43057,38766,-32892,38105,-76802,-6531,-7081,-269,11105,-75167,32561,12467,-24992,44040,20941,-14449,-3135,-19472,80288,30044,-6507,23099,52491,15750,12576,-13560,20881,14934},
+{0,0,0,26737,-21027,11175,-750,-356,8377,-60193,-65457,-39602,-61542,37722,18124,42032,-14643,-80148,-187255,-14479,43336,38666,-32669,38070,-76819,-6614,-7041,-292,11226,-75136,32234,12712,-25008,44040,20941,-14449,-3115,-19341,80327,30135,-6523,23110,52491,15750,12576,-13654,20811,15065},
+{0,0,0,26738,-21191,11014,-864,-365,8465,-59778,-65585,-39345,-61780,37832,18241,41786,-14462,-79777,-186862,-14388,43630,38555,-32450,38021,-76835,-6702,-6998,-316,11334,-75101,31904,12961,-25024,44040,20941,-14449,-3098,-19221,80363,30265,-6522,23120,52491,15750,12576,-13753,20738,15200},
+{0,0,0,26738,-21355,10854,-979,-374,8552,-59363,-65711,-39087,-62018,37942,18359,41540,-14281,-79405,-186470,-14296,43924,38444,-32230,37973,-76852,-6791,-6955,-339,11442,-75066,31574,13210,-25039,44040,20941,-14449,-3080,-19100,80398,30394,-6520,23130,52491,15750,12576,-13852,20665,15335},
+{0,0,0,26737,-21510,10675,-1060,-383,8688,-59043,-65801,-38886,-62213,38048,18467,41290,-14096,-79012,-186061,-14198,44232,38323,-32016,37912,-76868,-6884,-6909,-364,11536,-75027,31244,13462,-25054,44040,20941,-14449,-3064,-18991,80430,30561,-6503,23139,52491,15750,12576,-13954,20589,15475},
+{0,0,0,26735,-21666,10497,-1141,-393,8824,-58723,-65891,-38684,-62410,38154,18576,41040,-13912,-78618,-185653,-14098,44540,38202,-31801,37851,-76885,-6977,-6863,-389,11630,-74989,30913,13714,-25068,44040,20941,-14449,-3048,-18882,80462,30727,-6485,23148,52491,15750,12576,-14056,20513,15614},
+{0,0,0,26731,-21813,10302,-1186,-403,9009,-58506,-65943,-38543,-62560,38256,18675,40787,-13725,-78205,-185231,-13991,44859,38071,-31593,37778,-76902,-7075,-6814,-414,11711,-74948,30584,13968,-25081,44040,20941,-14449,-3034,-18785,80489,30928,-6452,23155,52491,15750,12576,-14162,20434,15757},
+{0,0,0,26727,-21960,10107,-1231,-413,9194,-58288,-65995,-38401,-62711,38357,18774,40534,-13539,-77791,-184809,-13883,45177,37941,-31386,37705,-76918,-7172,-6765,-439,11791,-74907,30254,14222,-25094,44040,20941,-14449,-3019,-18687,80516,31128,-6418,23162,52491,15750,12576,-14267,20356,15900},
+{0,0,0,26722,-22097,9898,-1239,-424,9428,-58180,-66007,-38325,-62814,38453,18863,40274,-13347,-77357,-184367,-13764,45509,37800,-31186,37620,-76935,-7273,-6714,-464,11856,-74865,29927,14477,-25105,44040,20941,-14449,-3007,-18603,80538,31360,-6370,23169,52491,15750,12576,-14375,20275,16045},
+{0,0,0,26716,-22233,9688,-1247,-435,9661,-58073,-66019,-38249,-62917,38548,18951,40013,-13156,-76923,-183925,-13644,45839,37659,-30986,37535,-76951,-7374,-6662,-489,11922,-74822,29600,14731,-25116,44040,20941,-14449,-2995,-18518,80560,31592,-6322,23175,52491,15750,12576,-14483,20194,16190},
+{0,0,0,26709,-22358,9464,-1216,-446,9944,-58079,-65990,-38241,-62969,38637,19028,39761,-12969,-76478,-183484,-13520,46172,37511,-30797,37439,-76968,-7478,-6609,-515,11972,-74778,29278,14984,-25126,44040,20941,-14449,-2985,-18447,80576,31853,-6259,23180,52491,15750,12576,-14592,20112,16336},
+{0,0,0,26701,-22483,9241,-1185,-457,10226,-58085,-65961,-38233,-63021,38727,19105,39508,-12782,-76032,-183043,-13395,46505,37363,-30607,37343,-76984,-7582,-6555,-540,12022,-74735,28955,15237,-25135,44040,20941,-14449,-2975,-18375,80592,32114,-6197,23185,52491,15750,12576,-14701,20030,16483},
+{0,0,0,26692,-22596,9005,-1115,-468,10557,-58210,-65890,-38295,-63020,38809,19170,39258,-12596,-75575,-182597,-13264,46842,37208,-30428,37236,-77000,-7688,-6499,-565,12057,-74691,28639,15487,-25143,44040,20941,-14449,-2968,-18318,80602,32402,-6122,23189,52491,15750,12576,-14812,19946,16630},
+{0,0,0,26683,-22708,8769,-1044,-479,10887,-58334,-65819,-38357,-63020,38891,19235,39008,-12412,-75118,-182150,-13131,47178,37052,-30250,37130,-77016,-7795,-6444,-590,12091,-74647,28323,15738,-25150,44040,20941,-14449,-2960,-18261,80612,32690,-6046,23192,52491,15750,12576,-14923,19863,16778},
+{0,0,0,26672,-22806,8523,-932,-490,11265,-58577,-65705,-38490,-62965,38966,19286,38762,-12229,-74651,-181700,-12992,47516,36889,-30084,37013,-77031,-7903,-6386,-614,12109,-74604,28014,15984,-25157,44040,20941,-14449,-2954,-18218,80615,33002,-5959,23195,52491,15750,12576,-15034,19779,16925},
+{0,0,0,26660,-22905,8276,-821,-500,11642,-58820,-65590,-38621,-62911,39040,19337,38515,-12047,-74184,-181251,-12851,47854,36727,-29919,36896,-77046,-8012,-6329,-639,12127,-74560,27706,16230,-25162,44040,20941,-14449,-2949,-18176,80618,33313,-5871,23197,52491,15750,12576,-15145,19695,17072},
+{0,0,0,26648,-22988,8021,-663,-508,12069,-59198,-65426,-38832,-62795,39105,19375,38274,-11868,-73711,-180800,-12706,48191,36558,-29768,36768,-77061,-8121,-6271,-662,12129,-74518,27407,16471,-25167,44040,20941,-14449,-2946,-18148,80613,33647,-5773,23198,52491,15750,12576,-15256,19610,17218},
+{0,0,0,26635,-23071,7765,-506,-517,12497,-59574,-65261,-39041,-62680,39171,19412,38032,-11690,-73238,-180350,-12558,48528,36390,-29616,36641,-77076,-8231,-6212,-686,12130,-74477,27109,16711,-25171,44040,20941,-14449,-2943,-18121,80609,33981,-5674,23199,52491,15750,12576,-15367,19526,17364},
+{0,0,0,26621,-23137,7501,-301,-523,12974,-60088,-65044,-39330,-62502,39227,19434,37798,-11516,-72761,-179902,-12406,48862,36216,-29481,36504,-77090,-8341,-6152,-709,12113,-74437,26822,16945,-25175,44040,20941,-14449,-2943,-18110,80597,34333,-5565,23199,52491,15750,12576,-15477,19442,17508},
+{0,0,0,26606,-23204,7237,-97,-529,13451,-60600,-64826,-39617,-62323,39284,19456,37562,-11343,-72284,-179454,-12253,49196,36042,-29345,36367,-77105,-8451,-6093,-731,12097,-74397,26535,17178,-25177,44040,20941,-14449,-2943,-18099,80584,34686,-5456,23198,52491,15750,12576,-15588,19358,17653},
+{0,0,0,26590,-23253,6966,153,-532,13973,-61241,-64557,-39978,-62084,39330,19462,37336,-11175,-71807,-179009,-12095,49526,35863,-29227,36220,-77118,-8562,-6032,-752,12063,-74360,26262,17404,-25179,44040,20941,-14449,-2945,-18104,80563,35056,-5337,23197,52491,15750,12576,-15697,19274,17794},
+{0,0,0,26574,-23301,6696,403,-533,14496,-61881,-64285,-40336,-61844,39376,19467,37109,-11008,-71330,-178566,-11937,49855,35685,-29108,36074,-77132,-8672,-5972,-774,12029,-74323,25989,17629,-25181,44040,20941,-14449,-2947,-18109,80542,35426,-5219,23195,52491,15750,12576,-15806,19191,17936},
+{0,0,0,26557,-23331,6420,684,-533,15050,-62608,-63977,-40742,-61560,39411,19456,36892,-10846,-70855,-178129,-11776,50178,35503,-29008,35918,-77144,-8782,-5911,-793,11976,-74290,25731,17844,-25182,44040,20941,-14449,-2953,-18132,80511,35810,-5092,23192,52491,15750,12576,-15913,19109,18074},
+{0,0,0,26539,-23361,6144,966,-530,15605,-63332,-63665,-41145,-61275,39446,19445,36674,-10686,-70380,-177693,-11613,50501,35321,-28908,35762,-77157,-8892,-5850,-813,11923,-74257,25473,18060,-25182,44040,20941,-14449,-2958,-18154,80481,36194,-4965,23189,52491,15750,12576,-16020,19027,18212},
+{0,0,0,26520,-23371,5865,1275,-525,16186,-64135,-63318,-41589,-60948,39469,19416,36467,-10532,-69910,-177265,-11449,50815,35137,-28828,35596,-77169,-9000,-5789,-831,11851,-74228,25233,18265,-25183,44040,20941,-14449,-2966,-18195,80440,36591,-4831,23185,52491,15750,12576,-16125,18947,18346},
+{0,0,0,26501,-23380,5586,1585,-518,16768,-64934,-62968,-42029,-60621,39492,19387,36260,-10379,-69440,-176839,-11284,51129,34952,-28748,35431,-77180,-9109,-5728,-849,11779,-74199,24993,18469,-25182,44040,20941,-14449,-2975,-18235,80400,36987,-4697,23180,52491,15750,12576,-16229,18867,18480},
+{0,0,0,26480,-23370,5304,1918,-508,17368,-65792,-62589,-42497,-60260,39503,19340,36067,-10234,-68979,-176424,-11119,51435,34766,-28688,35257,-77190,-9217,-5668,-865,11689,-74175,24772,18661,-25182,44040,20941,-14449,-2986,-18293,80350,37393,-4557,23174,52491,15750,12576,-16331,18789,18609},
+{0,0,0,26459,-23359,5022,2251,-495,17968,-66644,-62206,-42960,-59899,39514,19293,35873,-10089,-68517,-176010,-10953,51739,34580,-28628,35084,-77200,-9324,-5608,-881,11599,-74150,24551,18854,-25182,44040,20941,-14449,-2997,-18350,80301,37799,-4417,23168,52491,15750,12576,-16432,18712,18737},
+{0,0,0,26438,-23332,4741,2604,-479,18585,-67555,-61794,-43451,-59506,39516,19231,35689,-9952,-68066,-175610,-10789,52032,34395,-28585,34906,-77210,-9429,-5547,-896,11493,-74128,24351,19032,-25181,44040,20941,-14449,-3011,-18422,80243,38213,-4272,23161,52491,15750,12576,-16530,18637,18860},
+{0,0,0,26416,-23305,4460,2958,-461,19203,-68460,-61378,-43935,-59112,39518,19170,35505,-9815,-67615,-175210,-10623,52325,34210,-28541,34727,-77220,-9533,-5486,-911,11387,-74106,24152,19211,-25180,44040,20941,-14449,-3024,-18493,80185,38626,-4126,23154,52491,15750,12576,-16628,18562,18983},
+{0,0,0,26394,-23262,4181,3323,-440,19825,-69391,-60944,-44429,-58699,39510,19096,35335,-9686,-67178,-174826,-10460,52605,34027,-28516,34545,-77229,-9635,-5426,-924,11267,-74087,23976,19375,-25180,44040,20941,-14449,-3040,-18579,80120,39044,-3976,23145,52491,15750,12576,-16722,18491,19100},
+{0,0,0,26372,-23219,3902,3688,-416,20448,-70317,-60506,-44917,-58285,39502,19021,35164,-9557,-66740,-174443,-10296,52885,33845,-28490,34363,-77238,-9737,-5367,-937,11147,-74067,23800,19539,-25180,44040,20941,-14449,-3056,-18664,80055,39463,-3826,23136,52491,15750,12576,-16815,18420,19216},
+{0,0,0,26349,-23161,3626,4063,-390,21072,-71265,-60052,-45410,-57854,39485,18933,35007,-9437,-66319,-174079,-10137,53152,33665,-28481,34179,-77245,-9835,-5308,-948,11013,-74050,23649,19687,-25180,44040,20941,-14449,-3075,-18761,79984,39883,-3673,23126,52491,15750,12576,-16904,18353,19325},
+{0,0,0,26326,-23102,3351,4437,-360,21696,-72207,-59595,-45898,-57423,39468,18845,34849,-9318,-65898,-173715,-9977,53417,33486,-28472,33994,-77253,-9933,-5249,-960,10880,-74032,23498,19835,-25180,44040,20941,-14449,-3093,-18859,79913,40304,-3520,23116,52491,15750,12576,-16993,18286,19434},
+{0,0,0,26303,-23029,3081,4818,-328,22316,-73159,-59126,-46384,-56980,39442,18746,34706,-9208,-65496,-173373,-9824,53669,33311,-28479,33808,-77259,-10027,-5191,-970,10734,-74015,23375,19966,-25181,44040,20941,-14449,-3113,-18967,79836,40725,-3364,23105,52491,15750,12576,-17077,18224,19534},
+{0,0,0,26279,-22957,2812,5198,-294,22935,-74105,-58654,-46864,-56538,39415,18647,34563,-9098,-65095,-173032,-9670,53919,33137,-28486,33623,-77266,-10121,-5134,-980,10589,-73999,23252,20097,-25182,44040,20941,-14449,-3133,-19076,79759,41145,-3209,23093,52491,15750,12576,-17160,18162,19635},
+{0,0,0,26255,-22871,2550,5579,-256,23546,-75051,-58176,-47338,-56088,39381,18537,34436,-8998,-64715,-172714,-9524,54153,32970,-28509,33437,-77271,-10211,-5078,-988,10433,-73983,23158,20209,-25185,44040,20941,-14449,-3155,-19194,79677,41563,-3052,23081,52491,15750,12576,-17237,18105,19727},
+{0,0,0,26231,-22784,2288,5961,-217,24156,-75991,-57694,-47805,-55638,39346,18427,34308,-8898,-64335,-172397,-9377,54387,32802,-28532,33252,-77276,-10300,-5022,-996,10277,-73967,23063,20321,-25187,44040,20941,-14449,-3178,-19312,79595,41982,-2895,23067,52491,15750,12576,-17315,18048,19819},
+{0,0,0,26206,-22686,2035,6348,-174,24758,-76941,-57201,-48272,-55176,39304,18308,34197,-8808,-63981,-172106,-9241,54604,32642,-28570,33068,-77280,-10385,-4967,-1003,10112,-73951,23000,20412,-25191,44040,20941,-14449,-3201,-19439,79509,42395,-2737,23053,52491,15750,12576,-17386,17997,19901},
+{0,0,0,26182,-22587,1782,6736,-129,25360,-77886,-56704,-48732,-54714,39261,18189,34086,-8719,-63626,-171815,-9105,54821,32483,-28608,32885,-77283,-10469,-4913,-1010,9946,-73935,22937,20504,-25194,44040,20941,-14449,-3225,-19566,79422,42808,-2579,23039,52491,15750,12576,-17457,17946,19983},
+{0,0,0,26157,-22478,1540,7116,-82,25942,-78811,-56212,-49176,-54255,39211,18061,33991,-8640,-63300,-171554,-8981,55019,32333,-28661,32704,-77286,-10547,-4861,-1016,9773,-73919,22907,20575,-25200,44040,20941,-14449,-3251,-19701,79333,43214,-2422,23024,52491,15750,12576,-17521,17902,20055},
+{0,0,0,26133,-22368,1299,7497,-33,26524,-79730,-55717,-49614,-53795,39160,17934,33897,-8561,-62974,-171292,-8856,55217,32183,-28713,32523,-77288,-10625,-4809,-1021,9599,-73903,22877,20645,-25205,44040,20941,-14449,-3276,-19836,79243,43620,-2265,23008,52491,15750,12576,-17585,17857,20126},
+{0,0,0,26108,-22247,1070,7873,17,27084,-80634,-55224,-50039,-53337,39103,17799,33821,-8493,-62679,-171062,-8745,55396,32045,-28779,32347,-77289,-10697,-4760,-1025,9419,-73885,22882,20692,-25212,44040,20941,-14449,-3303,-19977,79151,44016,-2108,22991,52491,15750,12576,-17641,17820,20187},
+{0,0,0,26083,-22127,842,8248,70,27645,-81533,-54729,-50457,-52879,39045,17665,33744,-8425,-62383,-170833,-8635,55574,31907,-28845,32171,-77290,-10769,-4710,-1029,9239,-73868,22887,20739,-25220,44040,20941,-14449,-3329,-20118,79059,44412,-1952,22974,52491,15750,12576,-17697,17783,20247},
+{0,0,0,26059,-21997,628,8616,123,28180,-82410,-54241,-50861,-52426,38982,17524,33687,-8369,-62122,-170637,-8540,55732,31781,-28925,32000,-77289,-10834,-4664,-1032,9053,-73849,22929,20762,-25229,44040,20941,-14449,-3357,-20265,78965,44796,-1798,22956,52491,15750,12576,-17745,17753,20296},
+{0,0,0,26034,-21868,414,8983,179,28715,-83282,-53750,-51258,-51972,38917,17383,33630,-8313,-61861,-170442,-8446,55890,31656,-29005,31829,-77289,-10899,-4617,-1034,8867,-73830,22971,20784,-25239,44040,20941,-14449,-3385,-20412,78871,45179,-1644,22938,52491,15750,12576,-17793,17724,20344},
+{0,0,0,26010,-21729,217,9344,235,29224,-84138,-53265,-51644,-51521,38847,17238,33592,-8269,-61637,-170283,-8369,56026,31545,-29097,31665,-77287,-10956,-4573,-1035,8678,-73810,23049,20782,-25250,44040,20941,-14449,-3414,-20563,78776,45548,-1492,22919,52491,15750,12576,-17832,17702,20380},
+{0,0,0,25986,-21591,20,9706,293,29733,-84989,-52776,-52023,-51070,38776,17093,33555,-8225,-61412,-170125,-8293,56162,31435,-29189,31502,-77285,-11013,-4529,-1036,8488,-73789,23128,20780,-25262,44040,20941,-14449,-3442,-20714,78682,45916,-1341,22899,52491,15750,12576,-17871,17681,20416},
+{0,0,0,25962,-21446,-158,10053,351,30209,-85807,-52304,-52385,-50630,38700,16943,33538,-8193,-61228,-170005,-8237,56275,31340,-29294,31346,-77281,-11062,-4489,-1035,8296,-73769,23240,20754,-25275,44040,20941,-14449,-3472,-20868,78587,46268,-1193,22879,52491,15750,12576,-17901,17669,20438},
+{0,0,0,25938,-21300,-336,10401,410,30684,-86621,-51829,-52740,-50190,38623,16794,33522,-8161,-61044,-169885,-8181,56389,31245,-29399,31191,-77278,-11110,-4448,-1035,8103,-73748,23352,20727,-25289,44040,20941,-14449,-3502,-21023,78492,46619,-1045,22858,52491,15750,12576,-17931,17657,20460},
+{0,0,0,25915,-21148,-495,10736,469,31124,-87405,-51369,-53080,-49760,38542,16642,33527,-8143,-60902,-169807,-8146,56479,31169,-29515,31045,-77273,-11150,-4412,-1033,7910,-73728,23496,20678,-25303,44040,20941,-14449,-3531,-21180,78398,46950,-902,22837,52491,15750,12576,-17951,17654,20469},
+{0,0,0,25892,-20996,-653,11071,529,31565,-88186,-50906,-53414,-49330,38459,16491,33532,-8125,-60761,-169730,-8112,56568,31092,-29631,30899,-77268,-11190,-4375,-1031,7717,-73708,23640,20629,-25318,44040,20941,-14449,-3562,-21336,78304,47281,-759,22815,52491,15750,12576,-17970,17651,20477},
+{0,0,0,25869,-20838,-789,11391,588,31967,-88934,-50462,-53732,-48912,38372,16337,33560,-8120,-60665,-169696,-8102,56633,31034,-29759,30764,-77262,-11219,-4344,-1028,7524,-73689,23813,20558,-25334,44040,20941,-14449,-3592,-21495,78213,47590,-621,22793,52491,15750,12576,-17979,17657,20471},
+{0,0,0,25847,-20681,-925,11712,647,32369,-89679,-50015,-54046,-48494,38285,16184,33589,-8115,-60570,-169662,-8091,56697,30976,-29886,30629,-77256,-11249,-4313,-1025,7330,-73670,23986,20487,-25351,44040,20941,-14449,-3622,-21654,78123,47899,-484,22770,52491,15750,12576,-17988,17663,20466},
+{0,0,0,25826,-20519,-1037,12016,705,32731,-90389,-49589,-54343,-48090,38193,16031,33641,-8125,-60523,-169675,-8107,56735,30940,-30025,30507,-77248,-11267,-4287,-1021,7138,-73653,24186,20395,-25368,44040,20941,-14449,-3652,-21814,78036,48184,-353,22747,52491,15750,12576,-17985,17678,20446},
+{0,0,0,25804,-20357,-1149,12320,764,33092,-91096,-49161,-54637,-47685,38101,15877,33693,-8135,-60476,-169688,-8122,56774,30903,-30163,30385,-77241,-11285,-4262,-1016,6946,-73635,24386,20303,-25384,44040,20941,-14449,-3683,-21974,77950,48468,-223,22724,52491,15750,12576,-17983,17693,20426},
+{0,0,0,25784,-20191,-1235,12607,820,33408,-91766,-48755,-54914,-47296,38005,15725,33769,-8160,-60479,-169748,-8163,56784,30887,-30312,30276,-77233,-11291,-4245,-1010,6756,-73619,24610,20191,-25402,44040,20941,-14449,-3713,-22134,77869,48725,-100,22701,52491,15750,12576,-17968,17717,20393},
+{0,0,0,25763,-20026,-1321,12894,877,33725,-92434,-48348,-55188,-46908,37909,15573,33845,-8184,-60483,-169808,-8204,56795,30871,-30460,30167,-77226,-11297,-4227,-1004,6566,-73603,24834,20080,-25419,44040,20941,-14449,-3743,-22294,77789,48983,23,22677,52491,15750,12576,-17953,17741,20359},
+{0,0,0,25744,-19858,-1380,13161,929,33995,-93059,-47968,-55445,-46537,37809,15422,33944,-8223,-60536,-169913,-8269,56779,30875,-30617,30072,-77217,-11290,-4218,-997,6379,-73589,25081,19949,-25436,44040,20941,-14449,-3772,-22455,77716,49211,137,22654,52491,15750,12576,-17928,17772,20313},
+{0,0,0,25725,-19690,-1440,13428,983,34265,-93682,-47587,-55698,-46167,37709,15271,34043,-8262,-60589,-170017,-8334,56763,30879,-30775,29976,-77209,-11283,-4208,-990,6192,-73575,25327,19818,-25454,44040,20941,-14449,-3802,-22615,77642,49439,251,22631,52491,15750,12576,-17902,17804,20266},
+{0,0,0,25707,-19520,-1474,13679,1034,34493,-94275,-47225,-55941,-45809,37606,15122,34163,-8315,-60689,-170164,-8422,56721,30902,-30940,29894,-77200,-11264,-4206,-981,6009,-73563,25594,19670,-25471,44040,20941,-14449,-3831,-22774,77575,49636,354,22608,52491,15750,12576,-17866,17844,20208},
+{0,0,0,25689,-19350,-1507,13931,1085,34722,-94866,-46863,-56180,-45452,37502,14974,34283,-8368,-60789,-170310,-8509,56679,30925,-31105,29813,-77191,-11246,-4204,-973,5827,-73551,25860,19521,-25487,44040,20941,-14449,-3860,-22933,77508,49832,458,22584,52491,15750,12576,-17830,17883,20149},
+{0,0,0,25673,-19179,-1516,14158,1131,34902,-95408,-46532,-56401,-45118,37397,14829,34423,-8434,-60934,-170496,-8617,56612,30965,-31277,29744,-77182,-11216,-4209,-962,5650,-73542,26143,19356,-25504,44040,20941,-14449,-3888,-23091,77447,49995,550,22562,52491,15750,12576,-17785,17930,20079},
+{0,0,0,25656,-19008,-1524,14386,1177,35083,-95948,-46200,-56620,-44783,37290,14683,34562,-8500,-61079,-170682,-8725,56545,31006,-31450,29675,-77172,-11186,-4214,-952,5473,-73533,26427,19191,-25519,44040,20941,-14449,-3916,-23248,77386,50158,642,22539,52491,15750,12576,-17739,17976,20009},
+{0,0,0,25642,-18837,-1508,14592,1218,35218,-96446,-45898,-56824,-44470,37182,14541,34720,-8578,-61267,-170905,-8852,56453,31063,-31628,29620,-77162,-11146,-4225,-941,5302,-73527,26725,19010,-25534,44040,20941,-14449,-3944,-23403,77331,50285,722,22518,52491,15750,12576,-17684,18029,19929},
+{0,0,0,25627,-18666,-1491,14798,1260,35354,-96942,-45595,-57026,-44156,37074,14399,34878,-8657,-61455,-171128,-8978,56362,31120,-31806,29564,-77153,-11105,-4237,-929,5131,-73520,27024,18829,-25549,44040,20941,-14449,-3971,-23557,77275,50411,802,22497,52491,15750,12576,-17629,18082,19848},
+{0,0,0,25614,-18495,-1450,14981,1296,35444,-97393,-45322,-57213,-43864,36965,14261,35053,-8748,-61682,-171385,-9121,56246,31192,-31989,29522,-77142,-11055,-4255,-916,4968,-73517,27335,18633,-25562,44040,20941,-14449,-3998,-23708,77225,50500,868,22477,52491,15750,12576,-17566,18141,19758},
+{0,0,0,25601,-18325,-1410,15164,1333,35535,-97843,-45049,-57398,-43573,36855,14123,35228,-8839,-61910,-171642,-9264,56131,31264,-32172,29479,-77132,-11005,-4273,-903,4805,-73514,27646,18438,-25575,44040,20941,-14449,-4024,-23859,77175,50588,934,22457,52491,15750,12576,-17502,18199,19667},
+{0,0,0,25590,-18156,-1345,15324,1363,35580,-98246,-44808,-57568,-43304,36744,13990,35418,-8942,-62175,-171931,-9421,55992,31350,-32359,29449,-77121,-10945,-4297,-889,4651,-73515,27967,18229,-25586,44040,20941,-14449,-4050,-24005,77130,50636,985,22438,52491,15750,12576,-17431,18263,19568},
+{0,0,0,25579,-17986,-1280,15483,1394,35626,-98648,-44567,-57736,-43036,36633,13857,35608,-9045,-62441,-172220,-9578,55853,31436,-32546,29420,-77110,-10886,-4321,-874,4496,-73516,28289,18020,-25596,44040,20941,-14449,-4075,-24151,77085,50683,1036,22420,52491,15750,12576,-17360,18327,19468},
+{0,0,0,25570,-17819,-1193,15618,1418,35627,-99002,-44359,-57889,-42793,36522,13728,35812,-9159,-62742,-172538,-9747,55692,31536,-32737,29403,-77099,-10818,-4350,-858,4352,-73520,28619,17798,-25604,44040,20941,-14449,-4100,-24291,77045,50688,1071,22404,52491,15750,12576,-17281,18396,19361},
+{0,0,0,25561,-17652,-1105,15753,1442,35628,-99355,-44151,-58041,-42549,36411,13600,36016,-9273,-63042,-172857,-9915,55530,31635,-32927,29387,-77088,-10751,-4379,-842,4207,-73525,28948,17577,-25612,44040,20941,-14449,-4124,-24432,77005,50693,1106,22388,52491,15750,12576,-17203,18464,19253},
+{0,0,0,25555,-17488,-994,15862,1460,35584,-99658,-43979,-58177,-42332,36300,13478,36233,-9398,-63376,-173202,-10094,55346,31745,-33119,29383,-77076,-10675,-4414,-825,4073,-73534,29283,17344,-25618,44040,20941,-14449,-4147,-24566,76969,50654,1124,22375,52491,15750,12576,-17118,18537,19138},
+{0,0,0,25548,-17324,-884,15970,1478,35540,-99960,-43806,-58312,-42115,36189,13356,36449,-9524,-63709,-173547,-10272,55162,31856,-33312,29379,-77065,-10600,-4449,-807,3939,-73543,29619,17111,-25622,44040,20941,-14449,-4170,-24700,76933,50615,1143,22361,52491,15750,12576,-17033,18609,19022},
+{0,0,0,25544,-17164,-751,16052,1489,35450,-100208,-43671,-58431,-41927,36079,13239,36676,-9659,-64073,-173916,-10458,54957,31978,-33506,29388,-77053,-10517,-4488,-788,3817,-73556,29957,16868,-25625,44040,20941,-14449,-4191,-24827,76901,50535,1147,22350,52491,15750,12576,-16942,18685,18900},
+{0,0,0,25540,-17004,-618,16134,1499,35361,-100457,-43535,-58549,-41738,35968,13123,36903,-9795,-64437,-174286,-10644,54751,32099,-33699,29397,-77041,-10434,-4527,-769,3695,-73570,30296,16626,-25626,44040,20941,-14449,-4213,-24954,76869,50455,1151,22338,52491,15750,12576,-16851,18761,18778},
+{0,0,0,25538,-16848,-465,16188,1503,35227,-100650,-43439,-58650,-41579,35860,13014,37140,-9940,-64829,-174677,-10835,54524,32229,-33893,29419,-77028,-10346,-4571,-748,3586,-73588,30637,16374,-25625,44040,20941,-14449,-4233,-25072,76840,50336,1141,22328,52491,15750,12576,-16754,18839,18650},
+{0,0,0,25536,-16693,-311,16242,1507,35094,-100843,-43342,-58751,-41420,35751,12905,37377,-10086,-65220,-175068,-11025,54297,32360,-34087,29442,-77016,-10257,-4615,-728,3477,-73606,30977,16123,-25623,44040,20941,-14449,-4253,-25191,76812,50218,1131,22318,52491,15750,12576,-16658,18918,18522},
+{0,0,0,25536,-16542,-138,16267,1504,34916,-100978,-43286,-58833,-41292,35644,12803,37622,-10240,-65636,-175478,-11219,54051,32499,-34281,29476,-77003,-10162,-4663,-706,3380,-73628,31317,15865,-25618,44040,20941,-14449,-4272,-25301,76788,50062,1108,22310,52491,15750,12576,-16557,18999,18388},
+{0,0,0,25537,-16392,36,16292,1500,34739,-101113,-43229,-58915,-41164,35537,12701,37866,-10395,-66051,-175888,-11411,53805,32638,-34474,29511,-76990,-10068,-4711,-684,3283,-73650,31657,15606,-25612,44040,20941,-14449,-4290,-25411,76764,49907,1085,22302,52491,15750,12576,-16456,19080,18255},
+{0,0,0,25540,-16249,227,16287,1490,34519,-101188,-43215,-58977,-41069,35434,12607,38117,-10557,-66487,-176314,-11606,53540,32783,-34665,29559,-76977,-9968,-4762,-662,3200,-73676,31994,15343,-25603,44040,20941,-14449,-4307,-25511,76745,49717,1051,22296,52491,15750,12576,-16351,19163,18117},
+{0,0,0,25542,-16105,418,16283,1479,34299,-101263,-43201,-59040,-40974,35330,12513,38367,-10720,-66923,-176740,-11799,53275,32929,-34857,29606,-76964,-9868,-4814,-639,3117,-73702,32332,15080,-25594,44040,20941,-14449,-4323,-25612,76726,49527,1016,22290,52491,15750,12576,-16246,19245,17979},
+{0,0,0,25547,-15969,625,16248,1462,34036,-101274,-43230,-59081,-40915,35230,12428,38623,-10890,-67376,-177179,-11992,52994,33080,-35045,29667,-76951,-9765,-4868,-615,3047,-73730,32666,14813,-25582,44040,20941,-14449,-4338,-25703,76711,49306,969,22285,52491,15750,12576,-16137,19329,17838},
+{0,0,0,25552,-15833,832,16212,1444,33774,-101286,-43259,-59123,-40855,35130,12343,38879,-11061,-67829,-177619,-12184,52712,33232,-35234,29727,-76938,-9661,-4923,-592,2977,-73759,32999,14546,-25569,44040,20941,-14449,-4353,-25795,76697,49084,923,22280,52491,15750,12576,-16029,19413,17697},
+{0,0,0,25560,-15706,1054,16144,1419,33471,-101230,-43334,-59141,-40832,35034,12267,39136,-11236,-68295,-178068,-12373,52415,33389,-35418,29800,-76925,-9553,-4980,-568,2921,-73791,33327,14278,-25553,44040,20941,-14449,-4365,-25876,76688,48832,866,22277,52491,15750,12576,-15918,19498,17553},
+{0,0,0,25568,-15580,1276,16076,1395,33168,-101175,-43410,-59159,-40809,34939,12192,39392,-11413,-68762,-178518,-12561,52117,33546,-35602,29874,-76913,-9445,-5037,-543,2864,-73822,33655,14010,-25537,44040,20941,-14449,-4378,-25957,76679,48581,810,22274,52491,15750,12576,-15806,19582,17408},
+{0,0,0,25577,-15462,1511,15980,1364,32828,-101059,-43527,-59156,-40821,34849,12126,39653,-11595,-69239,-178975,-12745,51806,33706,-35781,29959,-76900,-9334,-5097,-519,2822,-73856,33975,13742,-25518,44040,20941,-14449,-4388,-26027,76675,48302,743,22273,52491,15750,12576,-15693,19667,17262},
+{0,0,0,25586,-15344,1746,15884,1334,32487,-100942,-43644,-59153,-40834,34758,12060,39912,-11778,-69716,-179433,-12928,51494,33866,-35960,30045,-76886,-9224,-5156,-494,2780,-73889,34295,13474,-25498,44040,20941,-14449,-4399,-26097,76671,48024,676,22271,52491,15750,12576,-15580,19751,17116},
+{0,0,0,25597,-15236,1992,15764,1299,32114,-100773,-43796,-59130,-40876,34674,12004,40173,-11964,-70200,-179895,-13105,51171,34029,-36133,30142,-76873,-9111,-5218,-470,2752,-73925,34606,13208,-25475,44040,20941,-14449,-4407,-26156,76673,47720,600,22271,52491,15750,12576,-15466,19835,16969},
+{0,0,0,25608,-15129,2238,15644,1265,31742,-100603,-43949,-59108,-40919,34589,11948,40433,-12152,-70684,-180358,-13280,50847,34192,-36306,30240,-76859,-8998,-5280,-445,2724,-73960,34917,12942,-25452,44040,20941,-14449,-4415,-26215,76675,47417,524,22271,52491,15750,12576,-15351,19919,16821},
+{0,0,0,25621,-15032,2494,15501,1226,31340,-100383,-44136,-59066,-40991,34511,11903,40691,-12341,-71172,-180822,-13449,50514,34357,-36472,30350,-76846,-8884,-5344,-420,2710,-73997,35216,12681,-25428,44040,20941,-14449,-4421,-26262,76683,47090,440,22272,52491,15750,12576,-15236,20003,16674},
+{0,0,0,25634,-14936,2750,15358,1187,30939,-100162,-44323,-59023,-41064,34433,11858,40949,-12532,-71660,-181287,-13616,50179,34523,-36638,30459,-76832,-8770,-5407,-395,2697,-74034,35516,12419,-25402,44040,20941,-14449,-4426,-26310,76691,46764,355,22273,52491,15750,12576,-15120,20086,16526},
+{0,0,0,25648,-14852,3014,15193,1145,30511,-99893,-44541,-58961,-41166,34362,11825,41205,-12724,-72149,-181751,-13775,49838,34689,-36795,30581,-76819,-8654,-5472,-371,2698,-74072,35803,12163,-25374,44040,20941,-14449,-4430,-26345,76705,46418,263,22276,52491,15750,12576,-15005,20168,16379},
+{0,0,0,25662,-14768,3278,15029,1104,30083,-99623,-44760,-58899,-41268,34291,11791,41460,-12917,-72638,-182215,-13933,49495,34855,-36951,30702,-76805,-8539,-5537,-346,2699,-74109,36090,11907,-25346,44040,20941,-14449,-4433,-26379,76719,46072,171,22279,52491,15750,12576,-14890,20250,16232},
+{0,0,0,25678,-14697,3549,14844,1060,29632,-99306,-45008,-58817,-41398,34229,11770,41711,-13110,-73125,-182675,-14081,49147,35022,-37098,30835,-76792,-8424,-5603,-323,2715,-74147,36362,11658,-25317,44040,20941,-14449,-4433,-26401,76739,45708,71,22283,52491,15750,12576,-14775,20330,16086},
+{0,0,0,25694,-14627,3820,14660,1016,29181,-98989,-45257,-58734,-41528,34166,11748,41961,-13304,-73611,-183136,-14227,48798,35188,-37245,30968,-76778,-8308,-5668,-299,2731,-74186,36635,11410,-25287,44040,20941,-14449,-4434,-26423,76760,45344,-29,22287,52491,15750,12576,-14661,20410,15940},
+{0,0,0,25711,-14570,4095,14457,970,28709,-98626,-45534,-58632,-41687,34112,11739,42213,-13501,-74096,-183599,-14368,48442,35356,-37381,31113,-76765,-8194,-5735,-275,2763,-74224,36891,11171,-25256,44040,20941,-14449,-4431,-26432,76787,44965,-135,22293,52491,15750,12576,-14547,20488,15797},
+{0,0,0,25729,-14513,4371,14253,925,28237,-98262,-45810,-58528,-41845,34058,11731,42463,-13698,-74580,-184063,-14507,48085,35523,-37516,31257,-76752,-8079,-5801,-252,2794,-74262,37147,10932,-25224,44040,20941,-14449,-4429,-26440,76814,44586,-241,22298,52491,15750,12576,-14434,20566,15653},
+{0,0,0,25747,-14472,4650,14033,878,27747,-97855,-46113,-58405,-42030,34014,11735,42700,-13889,-75053,-184508,-14631,47731,35688,-37639,31412,-76739,-7965,-5867,-230,2842,-74300,37385,10705,-25192,44040,20941,-14449,-4424,-26434,76847,44195,-354,22305,52491,15750,12576,-14323,20641,15513},
+{0,0,0,25766,-14431,4929,13812,832,27258,-97447,-46416,-58279,-42216,33969,11739,42935,-14081,-75526,-184954,-14754,47376,35854,-37762,31567,-76726,-7851,-5933,-207,2889,-74338,37623,10477,-25159,44040,20941,-14449,-4419,-26428,76881,43803,-466,22311,52491,15750,12576,-14212,20716,15373},
+{0,0,0,25786,-14405,5210,13576,785,26753,-96997,-46743,-58134,-42428,33935,11757,43162,-14268,-75988,-185387,-14865,47022,36017,-37871,31732,-76713,-7739,-5999,-186,2951,-74375,37841,10263,-25127,44040,20941,-14449,-4411,-26408,76922,43401,-584,22319,52491,15750,12576,-14103,20789,15237},
+{0,0,0,25805,-14380,5491,13339,738,26248,-96545,-47070,-57987,-42640,33901,11775,43387,-14457,-76450,-185820,-14975,46668,36181,-37979,31898,-76700,-7627,-6065,-165,3014,-74413,38060,10049,-25094,44040,20941,-14449,-4403,-26387,76963,42998,-703,22327,52491,15750,12576,-13995,20861,15100},
+{0,0,0,25826,-14372,5772,13089,691,25731,-96053,-47419,-57819,-42879,33877,11807,43602,-14639,-76898,-186239,-15073,46318,36342,-38073,32073,-76688,-7518,-6131,-145,3093,-74449,38257,9850,-25061,44040,20941,-14449,-4392,-26351,77011,42589,-826,22336,52491,15750,12576,-13890,20929,14969},
+{0,0,0,25847,-14363,6053,12837,645,25213,-95560,-47768,-57650,-43117,33854,11839,43816,-14823,-77345,-186658,-15169,45967,36504,-38166,32249,-76676,-7408,-6196,-125,3172,-74485,38454,9651,-25028,44040,20941,-14449,-4381,-26316,77059,42179,-949,22345,52491,15750,12576,-13785,20998,14838},
+{0,0,0,25869,-14374,6333,12570,598,24684,-95020,-48142,-57456,-43384,33843,11887,44016,-14998,-77776,-187058,-15254,45622,36663,-38241,32434,-76664,-7302,-6260,-107,3268,-74519,38628,9469,-24997,44040,20941,-14449,-4366,-26263,77115,41763,-1077,22356,52491,15750,12576,-13684,21063,14712},
+{0,0,0,25891,-14385,6613,12303,553,24154,-94478,-48515,-57260,-43652,33832,11935,44216,-15175,-78207,-187459,-15338,45277,36822,-38316,32620,-76653,-7196,-6324,-88,3364,-74552,38802,9287,-24965,44040,20941,-14449,-4352,-26210,77171,41348,-1205,22366,52491,15750,12576,-13583,21128,14587},
+{0,0,0,25914,-14416,6891,12028,508,23621,-93910,-48901,-57048,-43939,33834,12000,44401,-15342,-78619,-187839,-15409,44941,36978,-38372,32815,-76642,-7094,-6387,-72,3478,-74584,38952,9123,-24935,44040,20941,-14449,-4334,-26140,77235,40930,-1337,22378,52491,15750,12576,-13488,21188,14468},
+{0,0,0,25937,-14447,7168,11753,465,23089,-93340,-49286,-56833,-44227,33836,12064,44585,-15510,-79030,-188220,-15480,44605,37134,-38428,33010,-76631,-6991,-6449,-56,3592,-74615,39101,8960,-24904,44040,20941,-14449,-4316,-26070,77299,40512,-1469,22389,52491,15750,12576,-13392,21249,14349},
+{0,0,0,25960,-14497,7441,11466,421,22551,-92730,-49690,-56596,-44540,33850,12143,44753,-15667,-79419,-188577,-15539,44280,37286,-38464,33213,-76621,-6894,-6510,-42,3721,-74644,39223,8817,-24876,44040,20941,-14449,-4295,-25983,77370,40093,-1605,22402,52491,15750,12576,-13301,21305,14238},
+{0,0,0,25984,-14547,7713,11179,379,22013,-92119,-50092,-56355,-44853,33864,12223,44920,-15825,-79809,-188934,-15597,43955,37438,-38500,33415,-76611,-6796,-6571,-27,3851,-74674,39346,8675,-24848,44040,20941,-14449,-4275,-25897,77442,39675,-1740,22414,52491,15750,12576,-13211,21361,14127},
+{0,0,0,26008,-14614,7979,10882,338,21475,-91473,-50510,-56094,-45188,33890,12316,45070,-15970,-80174,-189265,-15644,43645,37585,-38518,33622,-76601,-6703,-6629,-15,3995,-74702,39440,8554,-24822,44040,20941,-14449,-4251,-25796,77518,39259,-1879,22428,52491,15750,12576,-13127,21412,14025},
+{0,0,0,26032,-14681,8245,10585,298,20936,-90825,-50926,-55830,-45523,33915,12409,45219,-16117,-80539,-189597,-15689,43335,37732,-38535,33830,-76592,-6611,-6688,-3,4139,-74731,39534,8433,-24796,44040,20941,-14449,-4228,-25694,77595,38842,-2018,22441,52491,15750,12576,-13043,21463,13922},
+{0,0,0,26056,-14765,8503,10280,259,20400,-90145,-51355,-55544,-45878,33952,12514,45350,-16250,-80878,-189899,-15725,43042,37872,-38533,34039,-76584,-6524,-6743,7,4296,-74759,39598,8336,-24774,44040,20941,-14449,-4202,-25579,77677,38430,-2160,22456,52491,15750,12576,-12966,21509,13829},
+{0,0,0,26081,-14849,8760,9975,222,19864,-89462,-51782,-55255,-46234,33988,12620,45480,-16383,-81216,-190202,-15759,42749,38012,-38531,34249,-76576,-6437,-6799,18,4452,-74788,39661,8239,-24751,44040,20941,-14449,-4177,-25464,77758,38018,-2301,22470,52491,15750,12576,-12889,21555,13736},
+{0,0,0,26105,-14947,9007,9662,186,19333,-88750,-52220,-54946,-46608,34036,12736,45590,-16502,-81526,-190474,-15784,42477,38145,-38511,34459,-76569,-6357,-6852,26,4621,-74817,39693,8167,-24732,44040,20941,-14449,-4149,-25337,77843,37614,-2445,22486,52491,15750,12576,-12820,21595,13654},
+{0,0,0,26130,-15046,9254,9349,151,18802,-88034,-52655,-54633,-46983,34082,12852,45699,-16621,-81836,-190746,-15807,42205,38277,-38490,34669,-76562,-6277,-6904,34,4789,-74846,39724,8095,-24713,44040,20941,-14449,-4121,-25210,77928,37209,-2588,22501,52491,15750,12576,-12751,21635,13571},
+{0,0,0,26155,-15158,9488,9030,118,18280,-87292,-53099,-54300,-47374,34139,12978,45788,-16723,-82115,-190984,-15822,41956,38401,-38451,34876,-76556,-6204,-6953,40,4967,-74876,39721,8050,-24697,44040,20941,-14449,-4092,-25071,78015,36813,-2733,22518,52491,15750,12576,-12690,21669,13500},
+{0,0,0,26180,-15271,9723,8712,86,17757,-86545,-53541,-53963,-47765,34195,13104,45876,-16827,-82394,-191222,-15836,41707,38524,-38412,35083,-76550,-6132,-7002,45,5145,-74906,39717,8004,-24682,44040,20941,-14449,-4063,-24933,78102,36418,-2878,22534,52491,15750,12576,-12630,21703,13429},
+{0,0,0,26204,-15396,9942,8385,55,17244,-85766,-53993,-53603,-48176,34261,13239,45942,-16912,-82639,-191424,-15842,41485,38638,-38354,35285,-76546,-6067,-7047,49,5331,-74938,39679,7986,-24671,44040,20941,-14449,-4033,-24784,78190,36034,-3025,22551,52491,15750,12576,-12578,21731,13370},
+{0,0,0,26229,-15521,10162,8058,26,16730,-84983,-54442,-53238,-48586,34326,13373,46008,-16998,-82884,-191627,-15847,41262,38752,-38296,35487,-76542,-6002,-7092,53,5517,-74970,39642,7968,-24659,44040,20941,-14449,-4003,-24636,78279,35651,-3171,22567,52491,15750,12576,-12527,21759,13311},
+{0,0,0,26254,-15657,10365,7732,-1,16237,-84192,-54889,-52862,-49004,34400,13515,46050,-17066,-83094,-191790,-15845,41069,38854,-38220,35682,-76539,-5945,-7133,55,5710,-75002,39571,7975,-24652,44040,20941,-14449,-3972,-24479,78367,35281,-3317,22585,52491,15750,12576,-12485,21780,13265},
+{0,0,0,26278,-15793,10569,7407,-27,15743,-83396,-55332,-52480,-49422,34474,13656,46093,-17133,-83304,-191953,-15842,40876,38956,-38144,35876,-76536,-5889,-7174,57,5902,-75034,39501,7983,-24645,44040,20941,-14449,-3941,-24323,78455,34912,-3463,22603,52491,15750,12576,-12443,21801,13219},
+{0,0,0,26302,-15940,10754,7078,-51,15267,-82578,-55780,-52081,-49853,34555,13803,46110,-17181,-83476,-192076,-15832,40716,39046,-38049,36060,-76535,-5842,-7210,57,6100,-75065,39400,8015,-24642,44040,20941,-14449,-3909,-24159,78543,34559,-3609,22621,52491,15750,12576,-12412,21815,13188},
+{0,0,0,26326,-16086,10939,6749,-74,14790,-81755,-56224,-51676,-50284,34636,13951,46128,-17229,-83649,-192198,-15822,40555,39135,-37955,36244,-76534,-5795,-7246,56,6297,-75096,39299,8047,-24638,44040,20941,-14449,-3877,-23995,78631,34206,-3755,22639,52491,15750,12576,-12381,21829,13156},
+{0,0,0,26350,-16241,11103,6419,-95,14336,-80919,-56666,-51258,-50723,34725,14103,46119,-17256,-83781,-192277,-15806,40430,39211,-37843,36416,-76534,-5758,-7276,55,6498,-75125,39170,8102,-24639,44040,20941,-14449,-3845,-23825,78716,33872,-3900,22658,52491,15750,12576,-12362,21836,13139},
+{0,0,0,26373,-16397,11267,6090,-115,13882,-80078,-57105,-50834,-51162,34813,14255,46111,-17282,-83913,-192355,-15789,40305,39287,-37731,36588,-76535,-5721,-7307,53,6698,-75154,39041,8157,-24639,44040,20941,-14449,-3813,-23656,78802,33538,-4045,22676,52491,15750,12576,-12342,21843,13122},
+{0,0,0,26396,-16560,11409,5762,-134,13455,-79229,-57540,-50399,-51608,34908,14409,46077,-17287,-84003,-192388,-15767,40218,39348,-37601,36744,-76538,-5694,-7332,49,6900,-75181,38886,8235,-24643,44040,20941,-14449,-3782,-23482,78884,33225,-4188,22696,52491,15750,12576,-12334,21841,13122},
+{0,0,0,26419,-16722,11551,5435,-151,13027,-78374,-57972,-49958,-52053,35002,14565,46042,-17292,-84092,-192420,-15744,40131,39408,-37471,36901,-76540,-5668,-7358,46,7101,-75207,38730,8313,-24646,44040,20941,-14449,-3750,-23308,78967,32913,-4332,22714,52491,15750,12576,-12326,21840,13121},
+{0,0,0,26440,-16892,11669,5107,-167,12626,-77507,-58400,-49504,-52506,35102,14722,45980,-17274,-84138,-192406,-15716,40083,39453,-37324,37040,-76545,-5653,-7377,41,7303,-75229,38550,8411,-24653,44040,20941,-14449,-3718,-23130,79046,32623,-4472,22734,52491,15750,12576,-12331,21831,13136},
+{0,0,0,26462,-17061,11786,4779,-182,12225,-76634,-58825,-49043,-52959,35202,14879,45919,-17256,-84184,-192392,-15689,40036,39498,-37178,37179,-76549,-5638,-7396,36,7504,-75252,38370,8510,-24660,44040,20941,-14449,-3687,-22953,79124,32334,-4612,22753,52491,15750,12576,-12335,21822,13151},
+{0,0,0,26483,-17236,11878,4462,-195,11863,-75778,-59234,-48585,-53406,35308,15037,45832,-17217,-84186,-192333,-15656,40027,39528,-37016,37302,-76555,-5635,-7408,29,7704,-75270,38167,8628,-24670,44040,20941,-14449,-3656,-22774,79198,32070,-4749,22773,52491,15750,12576,-12351,21805,13181},
+{0,0,0,26504,-17410,11970,4145,-207,11500,-74917,-59639,-48122,-53852,35412,15195,45746,-17177,-84188,-192275,-15624,40019,39558,-36854,37424,-76562,-5632,-7420,23,7904,-75289,37964,8746,-24679,44040,20941,-14449,-3625,-22595,79271,31806,-4885,22792,52491,15750,12576,-12367,21789,13211},
+{0,0,0,26523,-17589,12037,3834,-219,11170,-74060,-60033,-47656,-54298,35522,15353,45636,-17118,-84149,-192174,-15588,40048,39574,-36679,37528,-76569,-5640,-7425,14,8102,-75303,37740,8883,-24692,44040,20941,-14449,-3595,-22415,79340,31569,-5016,22811,52491,15750,12576,-12394,21765,13255},
+{0,0,0,26543,-17768,12105,3524,-229,10840,-73198,-60424,-47184,-54744,35630,15511,45526,-17058,-84109,-192074,-15552,40076,39589,-36503,37633,-76577,-5648,-7430,6,8300,-75318,37517,9020,-24703,44040,20941,-14449,-3565,-22235,79408,31332,-5147,22830,52491,15750,12576,-12420,21742,13299},
+{0,0,0,26561,-17950,12147,3221,-239,10544,-72347,-60802,-46712,-55185,35743,15669,45394,-16980,-84030,-191934,-15512,40141,39590,-36316,37721,-76586,-5667,-7430,-4,8493,-75328,37274,9173,-24718,44040,20941,-14449,-3535,-22055,79473,31124,-5271,22849,52491,15750,12576,-12457,21712,13357},
+{0,0,0,26579,-18132,12190,2918,-248,10248,-71490,-61176,-46235,-55627,35855,15826,45263,-16901,-83950,-191794,-15471,40205,39591,-36128,37809,-76596,-5686,-7429,-14,8687,-75338,37031,9327,-24731,44040,20941,-14449,-3506,-21876,79537,30917,-5394,22868,52491,15750,12576,-12494,21682,13414},
+{0,0,0,26595,-18316,12208,2626,-256,9989,-70652,-61535,-45763,-56061,35971,15983,45111,-16805,-83833,-191616,-15427,40303,39578,-35931,37880,-76606,-5715,-7422,-26,8876,-75344,36772,9497,-24747,44040,20941,-14449,-3477,-21698,79598,30740,-5510,22886,52491,15750,12576,-12540,21645,13484},
+{0,0,0,26612,-18500,12226,2334,-264,9729,-69810,-61890,-45287,-56495,36085,16139,44960,-16709,-83714,-191439,-15383,40401,39565,-35733,37951,-76617,-5744,-7415,-37,9065,-75349,36512,9666,-24763,44040,20941,-14449,-3449,-21520,79658,30563,-5625,22905,52491,15750,12576,-12586,21609,13553},
+{0,0,0,26627,-18685,12220,2051,-271,9503,-68984,-62231,-44815,-56922,36203,16293,44791,-16597,-83559,-191227,-15335,40531,39539,-35526,38005,-76629,-5782,-7403,-50,9247,-75350,36237,9851,-24779,44040,20941,-14449,-3421,-21346,79715,30419,-5731,22922,52491,15750,12576,-12641,21567,13635},
+{0,0,0,26642,-18871,12214,1769,-278,9278,-68153,-62569,-44338,-57349,36319,16448,44621,-16486,-83404,-191015,-15286,40661,39512,-35320,38060,-76641,-5821,-7391,-64,9430,-75351,35962,10035,-24796,44040,20941,-14449,-3394,-21171,79772,30275,-5836,22940,52491,15750,12576,-12696,21525,13716},
+{0,0,0,26655,-19056,12185,1506,-284,9096,-67369,-62881,-43885,-57756,36438,16599,44436,-16359,-83214,-190770,-15234,40821,39473,-35107,38098,-76654,-5868,-7373,-79,9605,-75346,35674,10232,-24814,44040,20941,-14449,-3367,-21001,79825,30166,-5930,22957,52491,15750,12576,-12759,21477,13807},
+{0,0,0,26668,-19242,12155,1244,-290,8914,-66581,-63190,-43427,-58162,36556,16750,44250,-16233,-83023,-190525,-15180,40981,39433,-34893,38137,-76667,-5915,-7355,-94,9780,-75342,35385,10430,-24831,44040,20941,-14449,-3341,-20830,79878,30057,-6025,22973,52491,15750,12576,-12822,21429,13899},
+{0,0,0,26680,-19426,12102,999,-296,8772,-65833,-63476,-42989,-58551,36674,16898,44050,-16094,-82798,-190250,-15123,41169,39380,-34674,38159,-76680,-5971,-7333,-110,9947,-75332,35086,10639,-24849,44040,20941,-14449,-3315,-20666,79929,29984,-6106,22989,52491,15750,12576,-12893,21376,14000},
+{0,0,0,26691,-19611,12049,754,-302,8630,-65083,-63760,-42547,-58940,36793,17046,43850,-15955,-82573,-189974,-15064,41357,39328,-34456,38182,-76694,-6026,-7310,-127,10113,-75323,34786,10848,-24867,44040,20941,-14449,-3290,-20501,79979,29912,-6187,23005,52491,15750,12576,-12964,21323,14101},
+{0,0,0,26700,-19793,11973,529,-308,8531,-64379,-64019,-42130,-59308,36911,17189,43638,-15804,-82315,-189671,-15001,41571,39263,-34234,38190,-76709,-6090,-7283,-145,10270,-75307,34477,11068,-24886,44040,20941,-14449,-3266,-20343,80026,29878,-6254,23020,52491,15750,12576,-13042,21266,14211},
+{0,0,0,26709,-19976,11897,303,-314,8431,-63672,-64277,-41710,-59676,37030,17333,43425,-15654,-82057,-189367,-14937,41785,39198,-34011,38198,-76724,-6153,-7255,-163,10426,-75292,34167,11289,-24903,44040,20941,-14449,-3242,-20185,80074,29843,-6321,23035,52491,15750,12576,-13119,21208,14320},
+{0,0,0,26716,-20156,11798,102,-321,8376,-63026,-64506,-41323,-60017,37147,17471,43202,-15493,-81768,-189038,-14868,42023,39121,-33787,38190,-76739,-6224,-7224,-183,10572,-75272,33850,11518,-24922,44040,20941,-14449,-3219,-20035,80119,29850,-6372,23049,52491,15750,12576,-13203,21146,14438},
+{0,0,0,26723,-20335,11700,-100,-327,8321,-62377,-64733,-40933,-60359,37264,17609,42978,-15333,-81478,-188709,-14798,42260,39044,-33563,38183,-76754,-6294,-7192,-203,10717,-75251,33533,11748,-24940,44040,20941,-14449,-3197,-19885,80164,29856,-6424,23063,52491,15750,12576,-13287,21083,14555},
+}
+local clip={Duration=2.5,Loop=true,Source="Quaternius original GLB",Role="Jump_Loop",Frames={}}
+for i,row in rows do
+ local pose:{[string]:CFrame}={}
+ for j,joint in joints do local k=4+(j-1)*3;pose[joint]=CFrame.Angles(row[k]/100000,row[k+1]/100000,row[k+2]/100000) end
+ clip.Frames[i]={Time=math.min((i-1)/60,clip.Duration),Pose=pose}
+end
+return clip
+]====])
+-- Source: src/client/world/clips/Jump_Start.luau
+addModule(modules,{"world","clips","Jump_Start"},[====[
+--!strict
+-- Quaternius CC0 original action; R15 retarget. See assets/animations/quaternius-locomotion.
+local joints={"Root","RightHip","RightKnee","RightAnkle","LeftHip","LeftKnee","LeftAnkle","Waist","LeftShoulder","LeftElbow","LeftWrist","RightShoulder","RightElbow","RightWrist","Neck"}
+local rows={
+{0,0,0,-10550,-22851,-4353,69598,26900,80124,-192002,23652,-57231,105083,20165,-32508,153560,-29073,-32490,-185032,-2485,8552,43324,-14569,25473,-101214,135,5,24430,-89606,-28418,102918,63249,-74414,46259,-29720,-16427,43903,50312,19132,73445,-18126,38273,49053,27731,12254,76912,14859,5664},
+{0,0,0,-6987,-22989,-3543,55876,18131,70951,-166907,6779,-63771,92086,20811,-30039,127584,-23165,-33748,-159033,256,12939,39625,-13939,22514,-77669,123,-26,22952,-69401,-8541,78745,49549,-53724,46259,-29720,-16427,35858,27280,9111,51360,-2464,25332,49053,27731,12254,60260,15211,4333},
+{0,0,0,-3421,-23097,-2729,41567,10696,60768,-142854,-11156,-65942,79063,21139,-27503,102000,-17143,-33410,-133159,4031,16476,35949,-13201,19584,-54124,105,-54,16661,-50672,9570,59517,32422,-38320,46259,-29720,-16427,25460,5590,-2650,31223,15541,16002,49053,27731,12254,43610,15615,3018},
+{0,0,0,3601,-23229,-1116,11063,664,39491,-89984,-50064,-52505,49572,21732,-26479,62764,-8428,-29659,-79670,14737,13702,15590,-13479,17855,-32198,49,-33,-695,-24902,15006,43423,12434,-26758,46259,-29720,-16427,8860,-21867,-2951,10794,37011,14436,49053,27731,12254,26980,15755,1598},
+{0,0,0,10626,-23250,502,-20850,-2337,16198,-17001,-74279,-11557,20048,22009,-25321,23396,-1801,-22876,-24954,22494,5683,-4775,-13405,16104,-10271,0,0,-19979,-1493,24782,29775,-8997,-18563,46259,-29720,-16427,-10285,-48435,-8657,-11644,58313,17902,49053,27731,12254,10350,15955,187},
+{0,0,0,16724,-23490,2137,-29018,-2432,13063,-8903,-75306,-6082,4107,26074,-22322,25683,-2324,-25697,-44062,20638,9595,-4268,-14332,15847,-14253,46,134,-21195,1235,23256,29989,-11650,-16036,46279,-28857,-16414,-10597,-49987,-5054,-9309,61823,12728,49153,27399,12253,8992,16211,252},
+{0,0,0,22828,-23633,3784,-37185,-2271,9932,-673,-76003,-466,-12127,29620,-18655,27956,-2910,-28506,-63000,18092,13061,-3762,-15260,15595,-18236,93,276,-22379,3981,21771,30271,-14297,-13494,46300,-27994,-16402,-10849,-51530,-1418,-6688,65225,7319,49254,27067,12252,7634,16468,322},
+{0,0,0,27525,-24224,5498,-36078,-2591,11620,-14585,-74467,-9870,-34113,34340,-9305,33994,-4454,-33436,-88298,14046,16825,-11208,-17280,15641,-23347,254,523,-21214,5907,18013,33364,-16333,-8487,46335,-25677,-16364,-8342,-49001,5493,4618,66326,-7212,49511,26212,12254,4153,17113,717},
+{0,0,0,32237,-24735,7241,-34966,-2891,13312,-27998,-72009,-18735,-56773,36978,1046,39954,-6291,-38269,-113297,9202,19434,-18681,-19298,15535,-28457,415,800,-20059,7773,14198,36567,-18212,-3401,46369,-23361,-16328,-6199,-46205,12159,16046,66113,-21856,49767,25356,12258,667,17757,1147},
+{0,0,0,35805,-25542,8969,-30035,-2997,15644,-43714,-68085,-28530,-67918,37226,8368,44559,-8360,-44196,-135334,4590,20175,-26825,-23644,16346,-34305,552,1181,-17431,8671,8924,41470,-18498,2213,46368,-20001,-16260,-3586,-41108,20583,32003,60522,-38384,50111,24186,12272,-3861,18706,1973},
+{0,0,0,39393,-26288,10729,-25103,-2988,17978,-58355,-63075,-37121,-79048,36714,15671,49041,-10694,-50034,-157313,-72,19890,-35027,-28040,16796,-40151,682,1607,-14938,9384,3545,46383,-18512,7837,46365,-16641,-16193,-1749,-35623,28492,46046,53002,-53016,50454,23016,12291,-8403,19634,2871},
+{0,0,0,42050,-27174,12354,-11768,-2541,25821,-86527,-50305,-51168,-68571,37733,17151,51299,-12823,-56478,-175286,-3140,17712,-32934,-33957,19256,-46474,642,2107,-11942,9253,-2660,51449,-16832,11748,46285,-12648,-16089,-778,-30095,37610,59047,42247,-61498,50820,21741,12323,-12785,20713,4179},
+{0,0,0,44727,-28019,14008,1490,-1059,33534,-110836,-34909,-60101,-58066,38892,18514,53421,-15091,-62892,-193345,-5769,15017,-30635,-39822,21905,-52792,583,2651,-9222,8864,-8950,56431,-14960,15556,46202,-8656,-15982,-610,-24260,46307,70511,30655,-68103,51185,20466,12360,-17187,21742,5574},
+{0,0,0,46657,-28842,15393,17972,2183,42025,-134426,-18051,-65858,-45609,39305,18697,53079,-16595,-69219,-206342,-6000,11503,-20045,-45874,27128,-59394,224,3193,-6826,8098,-15563,59792,-12177,15749,46026,-4448,-15836,-1467,-20599,55602,78210,21470,-65903,51512,19295,12405,-20151,22760,7202},
+{0,0,0,48603,-29640,16798,34151,6763,49884,-156651,-374,-67454,-33132,39736,18823,52640,-18075,-75568,-219340,-5774,7989,-8780,-51373,33217,-65990,-163,3756,-4788,7091,-22216,63137,-9388,15846,45844,-240,-15682,-2832,-16800,64721,85991,12477,-63033,51840,18125,12453,-23130,23718,8896},
+{0,0,0,49969,-30237,17800,48357,11775,55766,-171418,12046,-68526,-25001,38195,18525,50370,-18510,-81033,-226932,-4209,5163,517,-56979,38308,-72697,-945,4194,-3533,6358,-28733,64915,-5898,12569,45586,3765,-15500,-4331,-16137,72939,90303,7171,-53787,52075,17269,12495,-23354,24630,10409},
+{0,0,0,51345,-30822,18813,62354,17561,60914,-186393,24488,-67732,-16926,36636,18364,48078,-18823,-86512,-234472,-2434,2466,10497,-62140,44204,-79398,-1753,4613,-2610,5469,-35257,66804,-2469,9235,45320,7770,-15307,-5937,-15444,81128,95076,2290,-44344,52310,16413,12539,-23583,25513,11942},
+{0,0,0,52298,-31012,19296,68391,20399,63233,-191456,29407,-67972,-11034,35963,17385,45152,-18257,-90110,-236708,-2093,2033,16188,-64650,46530,-86009,-2995,4755,-2463,5374,-41131,68400,1779,4247,45029,11150,-15113,-6525,-16153,86072,97989,-359,-33331,52401,16081,12557,-19758,26507,12698},
+{0,0,0,53254,-31199,19781,74397,23370,65386,-196589,34332,-67952,-5164,35236,16453,42251,-17589,-93686,-238942,-1741,1607,22061,-67047,49079,-92621,-4245,4830,-2527,5216,-46993,70208,5941,-816,44731,14529,-14908,-7082,-16851,91022,101177,-2670,-22242,52491,15750,12576,-15926,27511,13415},
+{0,0,0,53912,-31115,19920,73452,22945,65197,-196328,33852,-67651,1270,36904,14466,39726,-16621,-95352,-238434,-2890,2714,24872,-66885,49006,-98738,-5467,4584,-2990,5910,-51630,71673,10480,-6641,44488,16864,-14748,-6949,-16923,92835,102370,-3419,-11311,52491,15750,12576,-9989,28405,13528},
+{0,0,0,54569,-31030,20059,72508,22523,65003,-196065,33373,-67349,7780,38449,12354,37222,-15613,-96990,-237912,-4034,3828,27680,-66723,48927,-104862,-6671,4266,-3527,6595,-56252,73412,14927,-12566,44241,19199,-14582,-6814,-16994,94648,103639,-4033,-369,52491,15750,12576,-4037,29305,13583},
+{0,0,0,54978,-30935,20128,71075,21844,64590,-195288,32457,-67122,12950,39788,10463,35404,-14670,-97155,-237197,-4822,4650,30952,-65408,50001,-109672,-7238,3866,-3948,7514,-59076,74571,19149,-18320,44141,20070,-14516,-6695,-17690,95922,104103,-4215,10236,52491,15750,12576,650,29619,13657},
+{0,0,0,55386,-30839,20196,69642,21172,64167,-194511,31542,-66888,18174,41034,8490,33590,-13724,-97302,-236475,-5604,5477,34173,-64066,51010,-114487,-7787,3439,-4366,8438,-61894,75988,23297,-24175,44040,20941,-14449,-6567,-18385,97198,104585,-4347,20842,52491,15750,12576,5341,29939,13713},
+{0,0,0,55588,-30731,20204,67836,20319,63576,-193271,30280,-66753,22147,42090,6797,32313,-12929,-96589,-235588,-6208,6182,37251,-62004,52358,-117148,-7900,3139,-4524,9037,-63187,76500,26634,-29052,44040,20941,-14449,-6429,-19395,98251,104143,-3941,29256,52491,15750,12576,7948,29896,13764},
+{0,0,0,55790,-30623,20212,66028,19476,62971,-192035,29020,-66602,26156,43083,5052,31032,-12143,-95866,-234695,-6806,6893,40251,-59909,53610,-119809,-8006,2836,-4675,9637,-64479,77186,29943,-33993,44040,20941,-14449,-6280,-20405,99307,103668,-3574,37670,52491,15750,12576,10555,29856,13814},
+{0,0,0,55837,-30500,20174,63959,18520,62244,-190392,27491,-66562,29004,43903,3632,30063,-11531,-95133,-233640,-7470,7732,42549,-57851,54395,-121168,-8052,2601,-4769,10150,-65333,77441,32671,-38051,44040,20941,-14449,-6129,-21254,100189,102831,-3296,43304,52491,15750,12576,11934,29789,13862},
+{0,0,0,55884,-30377,20135,61886,17580,61497,-188756,25963,-66496,31875,44686,2182,29089,-10925,-94395,-232579,-8125,8578,44797,-55779,55114,-122527,-8094,2365,-4859,10663,-66186,77815,35386,-42155,44040,20941,-14449,-5971,-22102,101074,101978,-3065,48939,52491,15750,12576,13313,29723,13910},
+{0,0,0,55865,-30233,20070,59628,16575,60667,-186788,24233,-66524,33702,45322,1073,28334,-10442,-93667,-231362,-8791,9516,46265,-53908,55356,-123161,-8102,2156,-4912,11107,-66831,77935,37528,-45281,44040,20941,-14449,-5822,-22743,101771,100904,-3509,50966,52491,15750,12576,14036,29632,13954},
+{0,0,0,55846,-30089,20005,57365,15589,59816,-184828,22502,-66517,35543,45940,-51,27575,-9964,-92936,-230138,-9446,10462,47712,-52035,55564,-123794,-8107,1947,-4962,11552,-67475,78127,39665,-48437,44040,20941,-14449,-5668,-23384,102469,99839,-3975,52989,52491,15750,12576,14759,29541,13998},
+{0,0,0,55664,-29935,19895,55133,14627,58917,-182631,20665,-66637,36514,46425,-857,27085,-9632,-92236,-228804,-10091,11483,48373,-50477,55350,-123948,-8087,1749,-4977,11900,-68008,78083,41184,-50441,44040,20941,-14449,-5538,-23806,102899,98631,-4938,52862,50451,18580,17048,15066,29428,14039},
+{0,0,0,55482,-29781,19786,52895,13684,57997,-180445,18826,-66715,37492,46903,-1669,26593,-9304,-91535,-227463,-10722,12513,49032,-48920,55127,-124101,-8067,1552,-4991,12249,-68542,78071,42704,-52458,44040,20941,-14449,-5407,-24227,103330,97421,-5900,52723,48272,21317,21604,15373,29316,14081},
+{0,0,0,55096,-29624,19626,50769,12791,57026,-178059,16896,-66921,37831,47262,-2237,26376,-9120,-90881,-226048,-11324,13599,49049,-47675,54602,-123907,-8027,1358,-4974,12496,-69007,77696,43483,-53042,44040,20941,-14449,-5310,-24434,103431,96260,-6922,52623,45814,23758,26397,15390,29183,14118},
+{0,0,0,54710,-29466,19467,48637,11919,56036,-175684,14961,-67079,38173,47619,-2808,26158,-8939,-90227,-224626,-11910,14694,49073,-46430,54079,-123713,-7988,1163,-4955,12743,-69473,77325,44263,-53625,44040,20941,-14449,-5214,-24642,103533,95097,-7943,52511,43223,26080,31280,15408,29051,14156},
+{0,0,0,54210,-29297,19278,46575,11083,54997,-173142,12927,-67313,37788,47881,-3081,26118,-8851,-89624,-223139,-12439,15816,48603,-45458,53352,-123254,-7933,968,-4913,12921,-69886,76603,44495,-53270,44040,20941,-14449,-5137,-24715,103432,93905,-8946,52334,43250,26058,31229,15214,28901,14190},
+{0,0,0,53710,-29128,19089,44506,10269,53941,-170611,10887,-67494,37404,48144,-3353,26077,-8763,-89022,-221646,-12951,16946,48142,-44482,52633,-122795,-7880,772,-4870,13099,-70299,75879,44724,-52913,44040,20941,-14449,-5061,-24788,103330,92709,-9947,52145,43278,26036,31178,15020,28750,14224},
+{0,0,0,53130,-28946,18880,42493,9486,52828,-167926,8736,-67724,36110,48333,-3234,26164,-8743,-88476,-220113,-13389,18077,47331,-43734,51796,-122129,-7815,573,-4808,13222,-70669,74997,44769,-52402,44040,20941,-14449,-4988,-24802,103159,91386,-10834,51779,43357,25973,31033,14667,28584,14255},
+{0,0,0,52549,-28764,18671,40472,8725,51699,-165249,6580,-67895,34815,48521,-3112,26252,-8723,-87929,-218574,-13809,19215,46529,-42980,50968,-121461,-7751,373,-4745,13344,-71039,74115,44809,-51889,44040,20941,-14449,-4915,-24815,102988,90058,-11715,51401,43436,25910,30887,14314,28418,14285},
+{0,0,0,51908,-28569,18447,38501,7995,50507,-162427,4305,-68090,32728,48638,-2651,26434,-8754,-87442,-217027,-14149,20330,45514,-42407,50096,-120628,-7678,169,-4665,13420,-71373,73100,44682,-51249,44040,20941,-14449,-4845,-24784,102755,88619,-12485,50880,43562,25808,30655,13837,28238,14313},
+{0,0,0,51267,-28373,18224,36522,7288,49301,-159612,2026,-68221,30638,48746,-2186,26617,-8784,-86955,-215476,-14472,21451,44507,-41826,49232,-119795,-7607,-35,-4585,13496,-71708,72088,44549,-50611,44040,20941,-14449,-4774,-24752,102522,87175,-13247,50346,43688,25706,30423,13361,28057,14340},
+{0,0,0,50579,-28165,17990,34610,6617,48041,-156689,-352,-68350,27888,48782,-1441,26872,-8854,-86531,-213952,-14715,22526,43420,-41382,48388,-118827,-7530,-245,-4491,13531,-72010,70968,44262,-49871,44040,20941,-14449,-4705,-24687,102232,85638,-13901,49698,43854,25569,30114,12789,27866,14364},
+{0,0,0,49891,-27957,17758,32690,5971,46770,-153768,-2733,-68409,25138,48801,-695,27127,-8923,-86106,-212426,-14942,23605,42340,-40930,47550,-117860,-7455,-455,-4397,13567,-72312,69852,43969,-49136,44040,20941,-14449,-4636,-24622,101943,84094,-14546,49040,44021,25431,29805,12218,27673,14387},
+{0,0,0,49167,-27738,17519,30836,5361,45444,-150750,-5210,-68446,21859,48744,266,27431,-9020,-85747,-210958,-15095,24618,41312,-40574,46787,-116785,-7376,-671,-4290,13569,-72585,68653,43537,-48322,44040,20941,-14449,-4569,-24531,101601,82473,-15084,48292,44223,25260,29429,11571,27472,14409},
+{0,0,0,48443,-27517,17282,28974,4776,44107,-147728,-7687,-68409,18582,48659,1224,27734,-9117,-85387,-209489,-15233,25633,40289,-40211,46030,-115709,-7299,-886,-4184,13570,-72857,67460,43096,-47515,44040,20941,-14449,-4501,-24441,101259,80847,-15610,47534,44424,25089,29054,10925,27269,14429},
+{0,0,0,47691,-27288,17040,27179,4228,42718,-144618,-10253,-68328,14910,48500,2328,28094,-9244,-85082,-208135,-15318,26566,39430,-39894,45375,-114548,-7220,-1106,-4067,13542,-73102,66205,42530,-46650,44040,20941,-14449,-4435,-24334,100868,79158,-16033,46710,44655,24888,28620,10220,27060,14447},
+{0,0,0,46941,-27057,16801,25377,3704,41319,-141496,-12814,-68167,11243,48305,3424,28454,-9370,-84777,-206780,-15390,27500,38574,-39572,44724,-113386,-7144,-1327,-3951,13515,-73346,64959,41955,-45795,44040,20941,-14449,-4369,-24227,100478,77465,-16441,45878,44886,24687,28187,9516,26849,14464},
+{0,0,0,46171,-26820,16561,23657,3222,39884,-138320,-15431,-67945,7330,48040,4596,28854,-9518,-84505,-205543,-15429,28365,37900,-39270,44161,-112158,-7067,-1551,-3826,13462,-73563,63671,41269,-44900,44040,20941,-14449,-4304,-24110,100043,75726,-16749,44998,45141,24458,27704,8768,26634,14480},
+{0,0,0,45402,-26581,16323,21931,2765,38441,-135124,-18040,-67638,3426,47735,5753,29256,-9665,-84233,-204305,-15457,29230,37228,-38964,43600,-110929,-6994,-1775,-3701,13410,-73781,62393,40573,-44018,44040,20941,-14449,-4239,-23992,99607,73983,-17041,44113,45395,24228,27223,8020,26418,14494},
+{0,0,0,44622,-26336,16087,20289,2348,36967,-131881,-20689,-67255,-585,47374,6919,29693,-9831,-83992,-203180,-15463,30030,36719,-38677,43116,-109650,-6921,-2002,-3569,13338,-73971,61091,39781,-43112,44040,20941,-14449,-4177,-23869,99131,72209,-17235,43199,45669,23975,26702,7239,26198,14507},
+{0,0,0,43842,-26090,15854,18641,1955,35486,-128609,-23323,-66782,-4584,46971,8066,30131,-9996,-83751,-202055,-15460,30830,36212,-38388,42633,-108372,-6851,-2229,-3438,13266,-74162,59801,38978,-42220,44040,20941,-14449,-4113,-23746,98654,70433,-17414,42281,45940,23719,26182,6458,25978,14518},
+{0,0,0,43058,-25841,15624,17096,1606,33997,-125326,-25954,-66227,-8538,46532,9158,30599,-10178,-83541,-201039,-15442,31568,35851,-38116,42218,-107058,-6784,-2458,-3302,13177,-74326,58502,38093,-41318,44040,20941,-14449,-4053,-23621,98139,68641,-17497,41349,46227,23444,25631,5655,25756,14529},
+{0,0,0,42275,-25590,15396,15545,1279,32502,-122005,-28566,-65578,-12477,46055,10227,31067,-10358,-83329,-200024,-15417,32305,35491,-37843,41804,-105745,-6720,-2686,-3166,13089,-74491,57217,37197,-40432,44040,20941,-14449,-3991,-23496,97624,66848,-17565,40417,46511,23167,25082,4852,25534,14538},
+{0,0,0,41493,-25338,15175,14108,995,31015,-118701,-31137,-64846,-16227,45569,11185,31560,-10553,-83146,-199113,-15384,32982,35260,-37586,41450,-104411,-6659,-2914,-3027,12989,-74630,55938,36234,-39548,44040,20941,-14449,-3933,-23372,97074,65055,-17543,39485,46804,22873,24510,4036,25312,14546},
+{0,0,0,40713,-25085,14956,12667,732,29525,-115349,-33683,-64019,-19961,45050,12119,32054,-10746,-82962,-198202,-15344,33659,35031,-37329,41096,-103077,-6602,-3142,-2888,12888,-74770,54673,35260,-38680,44040,20941,-14449,-3875,-23248,96525,63262,-17504,38554,47096,22577,23940,3220,25090,14553},
+{0,0,0,39942,-24833,14745,11367,512,28076,-112080,-36128,-63125,-23347,44553,12893,32565,-10951,-82804,-197391,-15302,34279,34914,-37088,40795,-101737,-6548,-3368,-2747,12780,-74885,53426,34235,-37825,44040,20941,-14449,-3820,-23127,95944,61483,-17382,37636,47392,22268,23357,2399,24870,14559},
+{0,0,0,39172,-24579,14536,10065,310,26625,-108756,-38544,-62137,-26719,44033,13645,33077,-11155,-82646,-196579,-15255,34899,34798,-36847,40495,-100396,-6498,-3594,-2607,12671,-75000,52193,33200,-36986,44040,20941,-14449,-3764,-23006,95364,59706,-17244,36721,47686,21958,22776,1578,24649,14564},
+{0,0,0,38417,-24330,14337,8924,149,25244,-105575,-40808,-61110,-29710,43550,14242,33600,-11367,-82512,-195862,-15209,35465,34780,-36621,40241,-99063,-6452,-3815,-2467,12557,-75091,50991,32129,-36168,44040,20941,-14449,-3713,-22889,94756,57958,-17028,35831,47980,21638,22189,759,24433,14569},
+{0,0,0,37663,-24078,14140,7781,4,23861,-102337,-43041,-59995,-32691,43052,14822,34124,-11578,-82377,-195145,-15160,36030,34762,-36396,39988,-97728,-6410,-4037,-2327,12444,-75182,49801,31049,-35367,44040,20941,-14449,-3661,-22772,94148,56213,-16798,34945,48272,21317,21604,-59,24217,14572},
+{0,0,0,36931,-23833,13954,6800,-107,22568,-99282,-45095,-58870,-35360,42591,15294,34652,-11794,-82265,-194517,-15114,36543,34826,-36186,39777,-96414,-6373,-4252,-2189,12329,-75252,48653,29950,-34594,44040,20941,-14449,-3614,-22658,93517,54510,-16498,34094,48559,20991,21023,-867,24007,14575},
+{0,0,0,36200,-23587,13769,5818,-206,21273,-96171,-47116,-57663,-38020,42119,15750,35181,-12010,-82152,-193889,-15066,37055,34891,-35976,39566,-95099,-6339,-4468,-2051,12214,-75321,47517,28842,-33837,44040,20941,-14449,-3566,-22545,92886,52811,-16184,33248,48844,20664,20443,-1676,23797,14576},
+{0,0,0,35497,-23349,13596,4985,-278,20074,-93260,-48952,-56470,-40378,41689,16111,35707,-12227,-82061,-193345,-15024,37518,35023,-35781,39392,-93816,-6310,-4675,-1916,12100,-75370,46430,27731,-33115,44040,20941,-14449,-3524,-22435,92235,51169,-15810,32444,49121,20336,19875,-2467,23594,14578},
+{0,0,0,34794,-23110,13426,4152,-340,18875,-90295,-50757,-55205,-42729,41252,16459,36233,-12444,-81968,-192801,-14980,37980,35156,-35587,39218,-92533,-6285,-4882,-1782,11986,-75419,45356,26613,-32407,44040,20941,-14449,-3482,-22324,91585,49532,-15423,31648,49396,20008,19308,-3258,23392,14579},
+{0,0,0,34126,-22882,13268,3461,-382,17781,-87562,-52369,-53985,-44781,40861,16725,36749,-12659,-81895,-192335,-14944,38394,35341,-35408,39077,-91296,-6264,-5079,-1652,11876,-75449,44339,25509,-31739,44040,20941,-14449,-3445,-22215,90920,47964,-14986,30900,49659,19684,18761,-4025,23199,14579},
+{0,0,0,33458,-22653,13111,2769,-416,16687,-84781,-53950,-52703,-46828,40464,16982,37266,-12874,-81820,-191869,-14906,38808,35527,-35229,38936,-90058,-6246,-5275,-1523,11766,-75480,43333,24398,-31085,44040,20941,-14449,-3408,-22106,90254,46401,-14537,30159,49920,19359,18215,-4791,23007,14579},
+{0,0,0,32831,-22438,12968,2220,-435,15715,-82285,-55324,-51511,-48574,40115,17168,37765,-13084,-81763,-191476,-14877,39174,35751,-35065,38824,-88878,-6233,-5459,-1401,11662,-75493,42392,23320,-30475,44040,20941,-14449,-3377,-21997,89579,44923,-14049,29473,50166,19044,17696,-5525,22826,14579},
+{0,0,0,32205,-22222,12827,1671,-449,14743,-79749,-56673,-50268,-50316,39763,17347,38264,-13294,-81704,-191083,-14847,39541,35975,-34902,38711,-87698,-6222,-5643,-1278,11559,-75507,41461,22237,-29877,44040,20941,-14449,-3345,-21887,88904,43448,-13551,28794,50410,18728,17178,-6260,22645,14577},
+{0,0,0,31625,-22022,12699,1248,-452,13893,-77512,-57824,-49140,-51775,39458,17467,38738,-13495,-81661,-190758,-14826,39863,36225,-34755,38624,-86590,-6216,-5812,-1165,11464,-75507,40604,21203,-29327,44040,20941,-14449,-3320,-21775,88225,42071,-13026,28173,50636,18428,16694,-6954,22479,14577},
+{0,0,0,31046,-21822,12572,825,-452,13043,-75243,-58954,-47974,-53231,39151,17583,39212,-13696,-81618,-190432,-14804,40184,36474,-34608,38537,-85482,-6212,-5981,-1051,11369,-75507,39754,20165,-28788,44040,20941,-14449,-3294,-21662,87546,40699,-12492,27560,50860,18127,16211,-7648,22312,14575},
+{0,0,0,30520,-21640,12460,529,-446,12331,-73330,-59880,-46969,-54402,38891,17650,39652,-13885,-81587,-190168,-14790,40461,36734,-34477,38472,-84460,-6211,-6133,-947,11284,-75496,38985,19197,-28302,44040,20941,-14449,-3275,-21544,86870,39438,-11945,27009,51063,17848,15769,-8294,22161,14574},
+{0,0,0,29995,-21458,12349,234,-437,11619,-71393,-60789,-45936,-55571,38630,17715,40092,-14073,-81556,-189905,-14776,40737,36994,-34346,38407,-83438,-6213,-6285,-844,11199,-75485,38222,18225,-27823,44040,20941,-14449,-3255,-21426,86194,38180,-11391,26464,51265,17567,15329,-8939,22010,14572},
+{0,0,0,29529,-21297,12253,46,-426,11040,-69814,-61514,-45080,-56480,38414,17742,40491,-14245,-81535,-189697,-14769,40970,37251,-34233,38361,-82518,-6217,-6418,-752,11126,-75465,37548,17341,-27401,44040,20941,-14449,-3241,-21299,85530,37049,-10839,25983,51443,17314,14937,-9526,21876,14570},
+{0,0,0,29064,-21136,12158,-142,-413,10461,-68218,-62227,-44205,-57387,38197,17768,40889,-14417,-81514,-189490,-14762,41204,37508,-34119,38314,-81597,-6223,-6551,-660,11053,-75446,36878,16455,-26986,44040,20941,-14449,-3226,-21173,84866,35921,-10282,25509,51620,17061,14545,-10112,21743,14568},
+{0,0,0,28666,-20999,12078,-226,-400,10024,-67017,-62754,-43541,-58041,38025,17767,41237,-14568,-81502,-189333,-14762,41394,37748,-34023,38283,-80794,-6230,-6663,-582,10993,-75421,36305,15678,-26631,44040,20941,-14449,-3218,-21036,84227,34934,-9744,25101,51770,16841,14209,-10629,21630,14566},
+{0,0,0,28268,-20861,11998,-310,-387,9586,-65808,-63276,-42866,-58693,37852,17765,41585,-14719,-81490,-189176,-14761,41584,37989,-33927,38251,-79992,-6238,-6775,-503,10932,-75397,35736,14900,-26282,44040,20941,-14449,-3208,-20899,83588,33951,-9203,24698,51920,16620,13873,-11146,21516,14564},
+{0,0,0,27943,-20750,11934,-321,-375,9276,-64957,-63640,-42388,-59130,37720,17746,41873,-14845,-81484,-189065,-14765,41732,38199,-33850,38232,-79326,-6247,-6865,-440,10885,-75371,35272,14252,-25997,44040,20941,-14449,-3204,-20753,82990,33127,-8703,24365,52041,16438,13600,-11581,21425,14563},
+{0,0,0,27619,-20638,11871,-331,-363,8966,-64102,-64000,-41906,-59566,37589,17727,42162,-14971,-81478,-188953,-14769,41880,38410,-33773,38213,-78659,-6257,-6954,-376,10837,-75345,34811,13602,-25715,44040,20941,-14449,-3198,-20606,82394,32305,-8201,24036,52162,16256,13327,-12015,21333,14561},
+{0,0,0,27377,-20556,11824,-294,-353,8771,-63573,-64224,-41607,-59820,37498,17701,42381,-15068,-81477,-188881,-14775,41985,38577,-33716,38202,-78151,-6266,-7020,-329,10804,-75322,34465,13106,-25504,44040,20941,-14449,-3197,-20456,81867,31665,-7770,23781,52252,16119,13123,-12352,21265,14559},
+{0,0,0,27134,-20473,11778,-256,-344,8575,-63042,-64447,-41306,-60074,37406,17675,42600,-15165,-81475,-188809,-14781,42091,38744,-33659,38192,-77642,-6275,-7085,-282,10770,-75299,34120,12610,-25295,44040,20941,-14449,-3195,-20305,81340,31027,-7337,23528,52341,15982,12919,-12688,21197,14558},
+{0,0,0,26982,-20422,11749,-205,-337,8476,-62779,-64560,-41159,-60189,37353,17652,42740,-15227,-81476,-188770,-14787,42154,38854,-33623,38188,-77315,-6282,-7125,-253,10750,-75281,33902,12292,-25163,44040,20941,-14449,-3196,-20167,80933,30602,-7016,23359,52397,15896,12792,-12908,21155,14557},
+{0,0,0,26829,-20371,11720,-153,-331,8376,-62516,-64672,-41010,-60305,37299,17629,42879,-15289,-81477,-188732,-14792,42218,38964,-33588,38184,-76987,-6289,-7165,-223,10730,-75264,33685,11973,-25032,44040,20941,-14449,-3196,-20029,80526,30178,-6695,23192,52453,15810,12664,-13128,21112,14556},
+{0,0,0,26776,-20353,11710,-127,-329,8349,-62446,-64703,-40972,-60332,37282,17619,42929,-15311,-81478,-188720,-14795,42239,39004,-33575,38184,-76871,-6291,-7178,-213,10724,-75257,33609,11861,-24985,44040,20941,-14449,-3196,-19957,80345,30017,-6559,23127,52472,15780,12620,-13207,21098,14556},
+{0,0,0,26723,-20335,11700,-100,-327,8321,-62377,-64733,-40933,-60359,37264,17609,42978,-15333,-81478,-188709,-14798,42260,39044,-33563,38183,-76754,-6294,-7192,-203,10717,-75251,33533,11748,-24940,44040,20941,-14449,-3197,-19885,80164,29856,-6424,23063,52491,15750,12576,-13287,21083,14555},
+}
+local clip={Duration=1.3333333333333333,Loop=false,Source="Quaternius original GLB",Role="Jump_Start",Frames={}}
+for i,row in rows do
+ local pose:{[string]:CFrame}={}
+ for j,joint in joints do local k=4+(j-1)*3;pose[joint]=CFrame.Angles(row[k]/100000,row[k+1]/100000,row[k+2]/100000) end
+ clip.Frames[i]={Time=math.min((i-1)/60,clip.Duration),Pose=pose}
+end
+return clip
+]====])
 -- Source: src/client/world/clips/NinjaJump_Idle_Loop.luau
 addModule(modules,{"world","clips","NinjaJump_Idle_Loop"},[====[
 --!strict
@@ -8511,6 +9107,110 @@ for i,row in rows do
 end
 return clip
 ]====])
+-- Source: src/client/world/clips/Roll.luau
+addModule(modules,{"world","clips","Roll"},[====[
+--!strict
+-- Quaternius CC0 original action; R15 retarget. See assets/animations/quaternius-locomotion.
+local joints={"Root","RightHip","RightKnee","RightAnkle","LeftHip","LeftKnee","LeftAnkle","Waist","LeftShoulder","LeftElbow","LeftWrist","RightShoulder","RightElbow","RightWrist","Neck"}
+local rows={
+{0,0,0,-23036,-15716,-4506,79505,30987,78925,-195834,29283,-61599,108746,12586,-30261,174194,-32114,-29281,-186787,-2650,8555,38833,-19684,25513,-61541,1847,-1232,-2565,-2252,11774,72611,-23256,-9326,49451,-28625,-11577,1473,-12007,490,82092,29647,2565,49052,27731,12254,49814,17411,4387},
+{0,0,0,-25261,-15613,-4853,72495,27208,77468,-187250,22650,-62343,96382,15148,-28801,162086,-29760,-30574,-187841,-3071,9539,44512,-20194,24097,-61541,1847,-1232,7886,-17490,14540,80983,-16829,-16388,49451,-28625,-11577,15765,12078,879,91780,20114,15057,49053,27731,12254,49814,17411,4387},
+{0,0,0,-27484,-15503,-5198,65497,23536,75755,-178826,15980,-62500,83930,17512,-27026,150095,-27274,-31553,-188890,-3502,10519,50189,-20781,22711,-61540,1847,-1232,19184,-32340,19069,89718,-11016,-23904,49451,-28625,-11577,30829,35963,-2343,102449,11862,28237,49053,27731,12254,49814,17411,4387},
+{0,0,0,-32865,-15204,-6021,52592,16447,69359,-153890,-2763,-65596,48304,20678,-18916,120093,-19667,-31097,-168922,-1411,14804,47920,-21086,17631,-61541,1847,-1232,40607,-63224,13300,110104,-510,-47482,49451,-28625,-11577,39917,74822,25744,125611,1494,61202,49053,27731,12254,49814,17411,4387},
+{0,0,0,-38240,-14862,-6826,39374,10235,62157,-128958,-21689,-63960,12412,20854,-10161,90416,-12526,-28402,-149060,1487,18589,45637,-21279,12542,-61541,1847,-1232,67075,-94441,16585,132395,4751,-72714,49451,-28625,-11577,29977,114028,66916,150842,-616,95610,49053,27731,12254,49814,17411,4387},
+{0,0,0,-44835,-14384,-7787,19091,2504,43409,-75177,-57325,-45249,-35220,21078,-3879,52682,-4560,-19891,-85802,14846,15561,17526,-21342,8920,-61541,1847,-1232,51490,-115071,-29571,150553,5314,-99099,49451,-28625,-11577,-11290,113172,128012,162288,2541,114549,49052,27731,12254,49814,17411,4387},
+{0,0,0,-51419,-13845,-8714,-2258,-1182,23505,-673,-75771,-465,-82659,18465,1797,14484,-306,-9060,-20752,23750,4953,-10543,-20422,5425,-61541,1847,-1232,-1933,-127241,-112395,168221,1145,-125141,49451,-28625,-11577,-41643,103207,178461,172961,7774,133047,49052,27731,12254,49814,17411,4387},
+{0,0,0,-57683,-13449,-9333,-813,-1007,23418,-663,-73662,-447,-89574,19935,2573,9900,-66,-6115,-10659,24333,2567,-14784,-19881,4574,-61559,1847,-1232,-30698,-112295,-160663,176793,2143,-138830,49085,-30574,-11100,-39602,105358,173980,171493,7340,130194,49727,28286,13529,49801,17367,4366},
+{0,0,0,-63941,-13015,-9926,632,-834,23330,-654,-71553,-431,-96521,21349,3455,5310,39,-3163,-542,24680,131,-19016,-19306,3748,-61578,1847,-1232,-38848,-94643,-189083,185422,1959,-152556,48726,-32525,-10628,-37282,107458,169232,170014,6947,127335,50395,28850,14801,49788,17322,4345},
+{0,0,0,-69833,-12900,-10097,-73,-898,22854,-631,-66280,-390,-98239,22250,1793,4694,36,-2347,-542,24697,131,-26314,-18867,3184,-61710,1849,-1229,-35283,-80318,-198212,192175,7333,-159828,47829,-37447,-9609,-28845,111409,154665,166202,6140,120032,52018,30390,17947,49674,17204,4321},
+{0,0,0,-75725,-12774,-10261,-779,-958,22379,-613,-61008,-353,-99944,23179,144,4078,28,-1532,-542,24713,131,-33602,-18389,2654,-61841,1850,-1227,-30508,-66251,-206883,199337,12188,-167485,46968,-42376,-8618,-18439,114715,138180,162342,5613,112706,53598,31978,21081,49559,17086,4296},
+{0,0,0,-81549,-12875,-10176,-3338,-1212,21759,-592,-54154,-307,-97458,23452,-2670,1112,26,-777,-542,24727,131,-42766,-18654,2461,-62199,1855,-1220,-26369,-57371,-210775,205901,20362,-171921,45776,-48868,-7703,-1827,115146,113768,157245,5352,103084,55532,34311,25078,49229,16918,4324},
+{0,0,0,-87374,-12980,-10098,-5899,-1450,21134,-575,-47300,-264,-94963,23656,-5491,-1854,1,-23,-542,24742,131,-51934,-18901,2243,-62556,1859,-1214,-22051,-48633,-214883,212967,28218,-176994,44608,-55370,-6845,14409,113930,89725,152145,5581,93462,57382,36714,29060,48899,16750,4352},
+{0,0,0,-93417,-13184,-9894,-9081,-1741,20571,-560,-40445,-222,-90593,22669,-7796,-6581,-67,937,-542,24759,131,-59180,-20080,1826,-63252,1867,-1201,-19501,-43972,-216679,219073,36821,-180612,43135,-61983,-6669,25960,108613,70862,147214,6275,84096,59070,39400,32959,48240,16554,4485},
+{0,0,0,-99461,-13400,-9704,-12264,-2014,19998,-549,-33590,-183,-86258,21585,-10048,-11307,-181,1893,-542,24777,131,-66448,-21226,1322,-63948,1876,-1188,-16913,-39354,-218567,225749,45188,-184942,41601,-68598,-6610,34313,102499,55092,142365,7425,74769,60661,42145,36853,47582,16356,4617},
+{0,0,0,-106005,-13578,-9462,-3748,-1256,21751,-20370,-26737,-4819,-74656,19572,-10269,-14517,-289,2582,-542,24791,131,-70808,-22542,423,-65095,1889,-1166,-15758,-37446,-219055,230575,51788,-188090,39668,-73834,-7806,36773,96161,47505,138896,8548,67985,61755,44434,39799,46482,16147,4906},
+{0,0,0,-112549,-13771,-9233,4752,-352,23432,-39517,-19156,-7916,-63102,17547,-10251,-17727,-418,3266,-542,24804,131,-75194,-23817,-538,-66243,1902,-1144,-14602,-35544,-219564,235844,58240,-191744,37548,-79050,-9207,38255,89744,40791,135508,9902,61237,62786,46751,42750,45384,15933,5192},
+{0,0,0,-119871,-13798,-8972,12218,506,22525,-45575,-16705,-8047,-64105,15640,-7153,-14529,-313,2795,-541,24795,131,-77290,-24289,-1100,-67954,1922,-1112,-14332,-35147,-219521,237895,60831,-193221,35156,-81376,-12231,38159,86938,38973,134234,10481,58662,63163,47719,43920,43732,15710,5690},
+{0,0,0,-127193,-13845,-8714,19692,1294,21557,-51607,-14249,-8027,-65046,13703,-4084,-11330,-222,2321,-541,24786,131,-79392,-24748,-1672,-69666,1941,-1079,-14063,-34750,-219479,240031,63395,-194791,32599,-83651,-15413,37989,84134,37210,132975,11091,56093,63529,48690,45092,42082,15476,6181},
+{0,0,0,-135546,-13643,-8058,25372,1748,19716,-49876,-14803,-8000,-70195,11949,-567,-4349,-13,215,-541,24746,131,-78745,-24022,-2344,-73150,1977,-1010,-16201,-38919,-216513,238259,62706,-191608,33711,-88871,-29514,37989,84133,37210,133491,11692,55938,63009,47333,43445,33540,14954,8753},
+{0,0,0,-143898,-13496,-7388,31060,2096,17853,-48142,-15357,-7963,-75269,10019,2846,2636,49,-1900,-541,24705,130,-78095,-23300,-3019,-76634,2011,-941,-18241,-43145,-213592,236524,61971,-188456,33643,-94141,-44512,37989,84133,37209,134008,12292,55780,62468,45983,41801,25019,14266,11279},
+{0,0,0,-153649,-13407,-6364,31470,1819,15235,-39037,-16548,-6732,-77891,8813,4389,8709,-24,-4917,-541,24646,130,-74830,-21401,-4279,-82005,2058,-831,-21980,-52403,-206312,228536,55003,-180199,22269,-105475,-74710,37989,84133,37209,135247,13719,55390,61021,42952,37833,7728,11254,16095},
+{0,0,0,-163401,-13416,-5335,31873,1532,12618,-29900,-17624,-5393,-80492,7567,5899,14777,-279,-7924,-541,24586,130,-71555,-19542,-5597,-87376,2100,-720,-25115,-61878,-199009,221537,47540,-172919,1045,-114050,-114256,37989,84133,37209,136493,15140,54981,59463,39975,33871,-9376,7734,20508},
+{0,0,0,-175008,-13721,-4646,30239,1087,9620,-15237,-18550,-2805,-82883,7396,6719,21641,-768,-11028,-541,24524,130,-67190,-16570,-6606,-93106,2138,-598,-26368,-71466,-188507,206843,21545,-164086,-13928,-114063,-137913,37989,84133,37209,137993,16831,54468,57355,36796,29032,-28633,1119,23609},
+{0,0,0,-186619,-14103,-3997,28592,692,6614,-533,-19094,-103,-85273,7205,7534,28487,-1469,-14092,-542,24462,129,-62816,-13644,-7741,-98835,2169,-475,-26277,-81105,-177166,194775,-5317,-159290,-28277,-112628,-160962,37989,84133,37209,139506,18513,53929,55110,33716,24179,-47709,-5793,25894},
+{0,0,0,-200541,-14557,-4414,36764,823,5630,-534,-19116,-103,-80545,8045,8210,37556,-2484,-16508,-541,24411,129,-58723,-10180,-8054,-103393,2188,-376,-23425,-89464,-163351,181690,-37907,-158831,-31684,-111910,-168863,37989,84133,37210,140785,19917,53455,53060,31478,20011,-63384,-12525,25197},
+{0,0,0,-214474,-14950,-4891,44936,873,4638,-534,-19137,-103,-75818,8917,8845,46601,-3714,-18823,-541,24359,129,-54631,-6733,-8508,-107952,2203,-276,-18222,-97457,-147499,165938,-70232,-163752,-34900,-111078,-176581,37989,84133,37210,142074,21314,52962,50928,29324,15825,-79214,-19143,23850},
+{0,0,0,-231136,-14555,-6850,66006,1992,6643,-19069,-19093,-3687,-64223,10375,9514,70519,-7174,-22021,-24151,23279,5630,-40711,-4096,-7631,-109811,2208,-235,-10335,-103632,-129919,155025,-86823,-169334,-39971,-111168,-186746,37989,84133,37210,142618,21898,52749,49996,28519,14041,-85928,-21860,22480},
+{0,0,0,-247774,-13845,-8714,87056,3506,8369,-37579,-18401,-7198,-52617,11901,10009,94400,-11291,-24314,-47576,20982,10702,-26824,-1364,-7129,-111670,2212,-193,593,-108899,-109450,139559,-102765,-179779,-45034,-111030,-196904,37988,84133,37210,143164,22481,52532,49053,27731,12254,-92706,-24517,20989},
+{0,0,0,-267604,-11401,-9848,118085,7535,12233,-70316,-15698,-13330,-35729,12636,9043,125589,-17713,-26415,-78742,17011,16955,-10182,-1492,-5772,-110670,2210,-216,13922,-105205,-85338,136265,-105265,-174954,-26545,-111918,-191754,37989,84133,37210,143164,22481,52532,49053,27731,12254,-90383,-22819,21186},
+{0,0,0,-287354,-8783,-10473,149082,12548,14691,-102670,-11204,-18235,-18820,13200,7965,157083,-24464,-26413,-109390,11361,21644,6461,-1394,-4412,-109670,2207,-238,24350,-100167,-64000,133075,-107842,-170078,-7715,-112371,-186244,37989,84133,37209,143164,22481,52532,49053,27731,12254,-88065,-21120,21380},
+{0,0,0,-308215,-6639,-8506,171064,17307,16264,-125571,-6682,-20039,-2812,12669,3807,181665,-31603,-26748,-132888,6023,24339,22307,-3073,-2507,-107169,2201,-293,28841,-92315,-50095,131178,-109077,-167136,7866,-110164,-179547,37989,84133,37210,143164,22481,52532,49053,27731,12254,-82181,-17003,21140},
+{0,0,0,299229,-4947,-6138,193185,22290,16752,-148342,-1871,-20767,13143,11489,-209,206870,-38602,-25207,-156194,208,25715,38192,-4430,-359,-104668,2193,-348,31248,-84197,-38018,129316,-110338,-164174,22402,-107539,-173947,37989,84133,37209,143164,22481,52532,49053,27731,12254,-76293,-12883,20885},
+{0,0,0,288549,-4919,-4613,198671,23840,16922,-164302,812,-16429,27021,11336,-4528,214829,-41821,-25043,-173629,-3967,23946,51831,-6091,2091,-101416,2180,-419,32845,-81860,-32081,135087,-110130,-156868,27101,-103742,-167744,37989,84133,37210,143164,22481,52532,49053,27731,12254,-68285,-8131,19100},
+{0,0,0,277870,-5053,-3094,204176,25395,17005,-180369,2768,-11719,40874,10592,-8781,222913,-45018,-24594,-191175,-7771,21474,65520,-7404,4746,-98165,2165,-489,34203,-79465,-26344,140775,-109734,-149642,31073,-99816,-162252,37989,84133,37210,143164,22481,52532,49053,27731,12254,-60200,-3388,17280},
+{0,0,0,266887,-5561,-1663,199799,24946,17501,-186216,2103,-7506,52148,9283,-12545,218921,-45536,-26072,-199969,-8771,19068,77514,-7941,6372,-94914,2148,-560,33555,-77627,-25695,149097,-107136,-140517,37564,-95431,-151893,37989,84133,37209,143164,22481,52532,49053,27731,12254,-51260,218,14043},
+{0,0,0,255908,-6223,-296,195430,24476,17977,-192030,1194,-3340,63351,7561,-16133,214910,-46001,-27577,-208793,-9557,16581,89520,-8280,8051,-91662,2129,-629,32902,-75793,-25042,156521,-104210,-132284,42904,-90711,-142630,37989,84133,37209,143164,22481,52532,49053,27731,12254,-42206,3771,10738},
+{0,0,0,233998,-8415,1188,192052,23540,17903,-176834,1176,-7583,60458,6586,-14268,206515,-46394,-30509,-195314,-8327,20937,87196,-6082,5139,-89162,2113,-682,31013,-74451,-28048,163281,-98965,-125091,48518,-85360,-130992,37989,84133,37209,143164,22481,52532,49052,27731,12254,-33737,5436,7417},
+{0,0,0,212073,-10877,2160,188681,22607,17797,-161653,517,-11775,57585,5558,-12434,198098,-46565,-33473,-181916,-6528,25083,84939,-3818,2282,-86661,2095,-735,29202,-73069,-30982,168891,-93496,-119041,52883,-79646,-120477,37989,84133,37209,143164,22481,52532,49053,27731,12254,-25214,7007,4043},
+{0,0,0,190249,-12332,1625,193449,21334,15986,-137715,-3379,-14817,35651,6918,-8626,196025,-45724,-33570,-153595,1674,29880,54047,-1183,-1082,-85660,2087,-756,26751,-72096,-36273,172226,-86107,-115397,56300,-73589,-109160,37989,84133,37209,143164,22481,52532,49052,27731,12254,-18847,7331,2374},
+{0,0,0,168377,-13638,783,198180,19978,14245,-113847,-7883,-16853,13667,7417,-4610,193961,-44880,-33647,-125538,10886,32210,23253,2348,-3487,-84660,2080,-777,24394,-71028,-41483,174922,-78654,-112384,58648,-67299,-98692,37989,84133,37209,143164,22481,52532,49053,27731,12254,-12475,7587,692},
+{0,0,0,149350,-13556,334,219707,27652,15571,-134034,-4870,-22139,13038,9000,-4805,210317,-49254,-31122,-138423,6277,31592,6970,4657,3151,-85418,2189,-740,22266,-71144,-47523,175000,-69866,-111928,59672,-61248,-88282,38104,81646,35073,142495,22560,51056,49053,27731,12254,-7689,7613,818},
+{0,0,0,130326,-13392,-90,241677,35423,15154,-154015,-864,-26708,12411,10584,-4990,227182,-53195,-27746,-151312,1785,30388,-9445,5854,10081,-86175,2297,-702,20132,-71162,-53567,175025,-61077,-111510,59913,-55145,-78353,38141,79158,32994,141827,22649,49581,49053,27731,12254,-2902,7644,946},
+{0,0,0,113924,-13378,334,250948,53570,20265,-174736,9767,-41101,17843,14530,-2126,236447,-50612,-23443,-171510,-2113,20964,-16315,-2190,18457,-88070,2566,-598,18691,-72890,-59094,173150,-51561,-112404,59154,-49945,-68867,37599,72687,28453,139970,22818,45881,49053,27731,12254,1668,7740,1825},
+{0,0,0,97522,-13434,755,260307,72065,23858,-194111,23047,-53239,23195,18624,536,245443,-47699,-19490,-192000,-4025,10941,-22522,-10763,26305,-89965,2833,-489,17101,-74556,-64740,171457,-42032,-113060,57871,-44830,-59585,36713,66239,24105,138120,23053,42184,49052,27731,12254,6235,7871,2705},
+{0,0,0,83713,-14050,1631,238787,85228,39543,-199398,37930,-66720,32719,22349,9948,224449,-45250,-24276,-191646,-3787,10406,-27153,-20787,22346,-92430,3173,-325,16268,-77444,-68851,168488,-32402,-113868,56161,-41002,-51181,34463,57385,19604,135254,23317,37337,49052,27731,12254,10273,8067,3993},
+{0,0,0,69896,-14781,2414,210644,95287,62106,-202728,53356,-80321,41938,26920,19049,203883,-41971,-28338,-191290,-3551,9869,-32318,-30607,17801,-94897,3508,-153,15241,-80304,-73117,165678,-22754,-114360,54137,-37318,-42836,31880,48621,15105,132401,23716,32497,49053,27731,12254,14306,8304,5282},
+{0,0,0,58687,-15987,3140,182683,84831,72167,-195583,52158,-89098,41438,25848,33200,186498,-39142,-31604,-174412,-1979,11876,-30419,-30153,15784,-97365,3835,44,15277,-83815,-74784,161886,-13703,-114334,52261,-34943,-35980,28256,39261,11636,128650,24103,27540,49053,27731,12254,17513,8542,6643},
+{0,0,0,47464,-17266,3726,159198,73137,76977,-188643,50428,-97684,41100,24719,47305,169429,-35841,-34260,-157571,-92,13589,-28513,-29736,13761,-99834,4156,249,15223,-87327,-76518,158124,-4659,-113965,50233,-32694,-29133,24414,30025,7929,124920,24669,22595,49053,27731,12254,20715,8812,8005},
+{0,0,0,38894,-18605,3894,142185,70191,86234,-207840,61251,-81352,53327,22658,38056,177610,-36335,-32043,-174192,-108,4807,-17419,-31449,19449,-101735,4395,422,16775,-90761,-74582,153635,3131,-112683,48815,-31512,-24488,20642,22148,5612,120408,25069,18566,49052,27731,12254,22819,9020,9107},
+{0,0,0,30305,-19952,3946,126062,66134,94473,-230428,68968,-61493,65240,19530,29182,185814,-36659,-29787,-190751,1327,-3858,-6188,-32547,25328,-103637,4632,601,18512,-94174,-72465,149021,10855,-111044,47346,-30394,-19843,16741,14363,3031,115910,25644,14555,49052,27731,12254,24920,9245,10210},
+{0,0,0,24434,-20842,3399,97147,48516,95306,-237089,48991,-42036,91142,26040,-4898,179658,-35070,-30299,-203302,4963,-9079,11828,-33221,31691,-104398,4724,676,22381,-96579,-65849,144066,16830,-108270,46805,-30052,-18135,14374,9930,1758,110797,25617,12487,49052,27731,12254,25670,9377,10716},
+{0,0,0,18547,-21699,2798,70448,31379,90794,-239120,28353,-25534,117904,23598,-39703,173546,-33456,-30704,-215681,9219,-13816,29860,-32804,38081,-105159,4816,751,26665,-98827,-58838,138883,22658,-105163,46259,-29720,-16427,11959,5529,385,105684,25692,10420,49052,27731,12254,26420,9511,11222},
+{0,0,0,15075,-22045,2055,66898,28818,88885,-228145,28393,-31815,114868,23199,-38536,164830,-32870,-32869,-210949,6049,-9874,35075,-29179,36773,-104636,4786,721,32395,-98662,-47937,133012,26708,-100652,46259,-29720,-16427,10894,3620,-301,99729,25242,9754,49052,27731,12254,25803,9615,11301},
+{0,0,0,11597,-22366,1301,63323,26323,86897,-217199,27772,-38058,111840,22767,-37383,156149,-32110,-34968,-206101,3070,-5791,40287,-25624,35285,-104113,4755,691,38030,-98157,-37126,126887,30489,-95848,46259,-29720,-16427,9817,1718,-1006,93777,24832,9062,49052,27731,12254,25187,9718,11381},
+{0,0,0,9809,-22519,888,56275,22300,84959,-205746,23839,-42176,110209,21919,-39733,145402,-30098,-36465,-201986,1339,-2656,47518,-22830,34017,-102649,4669,609,42389,-94559,-25743,119497,32531,-89700,46259,-29720,-16427,8890,124,-1495,86905,24611,8666,49053,27731,12254,23497,9858,11432},
+{0,0,0,8021,-22664,472,49207,18419,82754,-194571,19482,-45771,108560,21109,-42094,134754,-27945,-37720,-197819,-260,547,54741,-20131,32554,-101185,4581,529,45849,-90710,-15174,111941,34131,-83369,46259,-29720,-16427,7955,-1466,-1998,80036,24416,8256,49053,27731,12254,21807,9998,11486},
+{0,0,0,7361,-22716,298,41964,14652,80334,-183380,14244,-48862,105624,20371,-43900,124242,-25308,-38157,-192054,-1111,3213,59701,-18299,30871,-98938,4444,414,46351,-84378,-6558,103588,33901,-76273,46259,-29720,-16427,7175,-2769,-2323,72726,24512,8207,49053,27731,12254,19256,10175,11511},
+{0,0,0,6702,-22767,124,34667,11068,77658,-172425,8702,-51328,102680,19685,-45724,113809,-22641,-38304,-186267,-1806,5923,64676,-16551,29103,-96691,4304,301,46053,-78041,1456,95289,33115,-69234,46259,-29720,-16427,6391,-4069,-2658,65415,24612,8165,49052,27731,12254,16704,10351,11541},
+{0,0,0,6607,-22780,71,30096,8801,74790,-163519,3701,-53622,98359,19627,-45317,106532,-20561,-37862,-178791,-1726,8053,64516,-15804,27352,-93817,4121,172,43021,-70195,6883,86879,30687,-62149,46259,-29720,-16427,5758,-5104,-2855,58164,25012,8496,49053,27731,12254,13502,10563,11542},
+{0,0,0,6513,-22794,18,25469,6668,71826,-154734,-1482,-55461,94039,19551,-44913,99275,-18518,-37269,-171318,-1487,10171,64369,-15054,25604,-90944,3935,48,39648,-62481,12280,78736,27711,-55359,46259,-29720,-16427,5123,-6137,-3058,50904,25387,8855,49053,27731,12254,10300,10776,11550},
+{0,0,0,6615,-22811,4,23331,5610,68995,-148242,-5790,-56975,89409,19956,-43115,94738,-17144,-36574,-163359,-706,11726,60849,-14874,24129,-87602,3713,-75,34627,-54239,15345,71117,23612,-49129,46259,-29720,-16427,4632,-6931,-3159,44215,26022,9503,49053,27731,12254,6659,11022,11527},
+{0,0,0,6717,-22828,-9,21165,4613,66143,-141793,-10187,-58211,84769,20280,-41298,90202,-15802,-35819,-155412,197,13215,57334,-14642,22663,-84260,3487,-192,29546,-46136,18732,63843,19076,-43293,46259,-29720,-16427,4139,-7725,-3264,37510,26613,10194,49052,27731,12254,3017,11270,11514},
+{0,0,0,6986,-22853,14,19163,3752,63444,-135955,-14454,-58853,80431,20646,-39689,86136,-14611,-35049,-147787,1355,14247,53529,-14550,21499,-80606,3238,-293,24031,-38414,20276,57525,14184,-38364,46259,-29720,-16427,3775,-8307,-3302,31889,27421,10981,49052,27731,12254,-851,11551,11468},
+{0,0,0,7255,-22879,37,17139,2945,60729,-130102,-18751,-59246,76085,20944,-38065,82068,-13452,-34232,-140173,2588,15188,49726,-14414,20340,-76953,2984,-385,18541,-30781,22222,51492,9002,-33783,46259,-29720,-16427,3411,-8890,-3342,26250,28185,11816,49053,27731,12254,-4721,11834,11434},
+{0,0,0,7635,-22910,85,15236,2243,58171,-124711,-22827,-59186,72038,21268,-36624,78319,-12415,-33440,-132881,3932,15764,45825,-14366,19412,-73144,2719,-453,13686,-24371,22873,46675,4341,-30227,46259,-29720,-16427,3158,-9294,-3341,22209,29158,12463,49053,27731,12254,-8606,12148,11363},
+{0,0,0,8015,-22941,133,13316,1590,55601,-119262,-26894,-58899,67985,21535,-35171,74567,-11409,-32611,-125592,5315,16241,41925,-14282,18486,-69335,2452,-511,8854,-17998,23831,42030,-482,-26904,46259,-29720,-16427,2905,-9697,-3342,18149,30106,13152,49053,27731,12254,-12492,12463,11304},
+{0,0,0,8451,-22974,196,11498,1022,53198,-114184,-30684,-58268,64241,21812,-33899,71051,-10503,-31826,-118626,6716,16431,38065,-14254,17747,-65528,2187,-539,5494,-13633,24039,38790,-3925,-24609,46259,-29720,-16427,2743,-9955,-3325,16206,31296,13314,49052,27731,12254,-15696,12860,11142},
+{0,0,0,8887,-23007,260,9667,498,50786,-109017,-34438,-57426,60492,22043,-32617,67530,-9625,-31010,-111655,8127,16522,34207,-14198,17009,-61720,1921,-558,2142,-9277,24393,35623,-7439,-22422,46259,-29720,-16427,2581,-10212,-3308,14252,32483,13500,49052,27731,12254,-18901,13260,10990},
+{0,0,0,9323,-23038,328,7916,42,48544,-104147,-37899,-56324,57057,22270,-31530,64216,-8837,-30251,-105047,9489,16393,30515,-14180,16430,-58070,1671,-549,901,-7667,24440,34053,-8799,-21258,46259,-29720,-16427,2491,-10356,-3288,13976,33658,13210,49052,27731,12254,-20914,13759,10675},
+{0,0,0,9759,-23069,396,6156,-375,46295,-99167,-41305,-55025,53618,22459,-30434,60899,-8075,-29467,-98429,10840,16174,26823,-14140,15852,-54420,1421,-530,-339,-6057,24508,32497,-10177,-20114,46259,-29720,-16427,2400,-10501,-3267,13703,34835,12922,49052,27731,12254,-22926,14259,10363},
+{0,0,0,10139,-23095,458,4453,-740,44214,-94420,-44426,-53527,50498,22631,-29555,57782,-7394,-28750,-92226,12096,15798,23414,-14123,15415,-51084,1199,-491,-310,-6093,24448,31927,-10156,-19598,46259,-29720,-16427,2359,-10565,-3252,14226,35695,12467,49053,27731,12254,-23816,14806,9904},
+{0,0,0,10520,-23120,521,2744,-1070,42127,-89549,-47478,-51842,47374,22776,-28671,54662,-6736,-28012,-86009,13327,15343,20004,-14092,14979,-47747,978,-445,-281,-6129,24388,31357,-10138,-19083,46259,-29720,-16427,2319,-10630,-3237,14754,36553,12005,49052,27731,12254,-24703,15350,9442},
+{0,0,0,10789,-23138,566,1058,-1363,40198,-84834,-50280,-49993,44562,22890,-28034,51794,-6161,-27359,-80355,14419,14801,17026,-14074,14677,-44880,794,-389,-203,-6225,24227,30960,-9911,-18818,46259,-29720,-16427,2309,-10646,-3229,15937,37066,11428,49052,27731,12254,-24539,15889,8858},
+{0,0,0,11058,-23156,612,-633,-1624,38263,-79986,-53000,-47964,41749,22986,-27394,48923,-5605,-26689,-74686,15479,14198,14047,-14047,14375,-42013,613,-327,-124,-6322,24066,30563,-9686,-18553,46259,-29720,-16427,2298,-10662,-3221,17126,37573,10843,49053,27731,12254,-24370,16419,8265},
+{0,0,0,11160,-23162,629,-2358,-1864,36452,-75159,-55538,-45754,39214,23037,-27038,46392,-5140,-26126,-69803,16359,13590,11680,-14024,14204,-39771,475,-268,-12,-6462,23831,30244,-9213,-18598,46259,-29720,-16427,2299,-10661,-3219,18822,37713,10221,49052,27731,12254,-23224,16900,7590},
+{0,0,0,11262,-23169,647,-4086,-2072,34636,-70190,-57980,-43366,36678,23079,-26681,43859,-4689,-25552,-64908,17210,12938,9313,-13997,14034,-37530,339,-207,100,-6601,23597,29925,-8741,-18642,46259,-29720,-16427,2300,-10660,-3217,20518,37842,9597,49053,27731,12254,-22073,17366,6902},
+{0,0,0,11262,-23169,647,-5787,-2253,32943,-65318,-60206,-40871,34378,23093,-26506,41703,-4321,-25077,-60796,17897,12336,7447,-13974,13943,-36070,253,-162,232,-6767,23317,29589,-8029,-18948,46259,-29720,-16427,2300,-10660,-3217,22469,37780,8982,49053,27731,12254,-20021,17748,6185},
+{0,0,0,11262,-23169,647,-7490,-2405,31247,-60304,-62328,-38207,32077,23104,-26331,39545,-3963,-24593,-56675,18560,11704,5581,-13949,13852,-34611,168,-116,364,-6933,23037,29256,-7317,-19250,46259,-29720,-16427,2300,-10660,-3217,24418,37707,8368,49053,27731,12254,-17964,18110,5455},
+{0,0,0,11262,-23169,647,-9018,-2517,29737,-55717,-64127,-35656,30040,23114,-26204,37724,-3669,-24182,-53163,19104,11130,3980,-13933,13786,-34090,138,-98,502,-7107,22740,28900,-6473,-19669,46259,-29720,-16427,2300,-10660,-3217,26365,37633,7781,49053,27731,12254,-15086,18367,4757},
+{0,0,0,11262,-23169,647,-10549,-2606,28225,-51011,-65829,-32970,28002,23122,-26076,35901,-3383,-23766,-49644,19628,10537,2379,-13915,13720,-33568,108,-81,639,-7282,22442,28549,-5627,-20085,46259,-29720,-16427,2300,-10660,-3217,28312,37549,7196,49053,27731,12254,-12204,18603,4050},
+{0,0,0,11262,-23169,647,-11851,-2665,26947,-46939,-67190,-30568,26288,23129,-25988,34461,-3163,-23435,-46841,20030,10042,1097,-13904,13674,-33568,108,-81,768,-7448,22157,28214,-4765,-20536,46259,-29720,-16427,2300,-10660,-3217,30098,37473,6681,49053,27731,12254,-9152,18758,3423},
+{0,0,0,11262,-23169,647,-13154,-2707,25669,-42782,-68473,-28071,24573,23134,-25900,33020,-2948,-23101,-44033,20419,9536,-185,-13892,13629,-33568,108,-81,897,-7614,21873,27883,-3901,-20984,46259,-29720,-16427,2300,-10660,-3217,31884,37389,6168,49053,27731,12254,-6098,18895,2791},
+{0,0,0,11262,-23169,647,-14151,-2728,24695,-39558,-69397,-26090,23271,23139,-25844,32008,-2799,-22866,-42051,20685,9167,-1094,-13884,13600,-33568,108,-81,1006,-7754,21630,27603,-3137,-21393,46259,-29720,-16427,2300,-10660,-3217,33353,37320,5762,49052,27731,12254,-3627,18988,2278},
+{0,0,0,11262,-23169,647,-15149,-2740,23721,-36286,-70271,-24057,21968,23142,-25789,30995,-2654,-22629,-40067,20944,8793,-2003,-13877,13572,-33568,108,-81,1113,-7894,21388,27328,-2373,-21800,46259,-29720,-16427,2300,-10660,-3217,34822,37246,5357,49052,27731,12254,-1155,19068,1762},
+{0,0,0,11262,-23169,647,-15762,-2743,23124,-34259,-70781,-22780,21173,23144,-25760,30415,-2571,-22493,-38925,21089,8573,-2527,-13873,13557,-33568,108,-81,1187,-7990,21220,27137,-1827,-22096,46259,-29720,-16427,2300,-10660,-3217,35817,37197,5091,49053,27731,12254,499,19113,1416},
+{0,0,0,11262,-23169,647,-16374,-2742,22528,-32214,-71271,-21484,20378,23146,-25731,29835,-2489,-22357,-37783,21232,8352,-3051,-13869,13542,-33568,108,-81,1261,-8087,21052,26949,-1280,-22390,46259,-29720,-16427,2300,-10660,-3217,36812,37146,4825,49052,27731,12254,2154,19152,1070},
+{0,0,0,11262,-23169,647,-16570,-2741,22338,-31559,-71423,-21066,20125,23147,-25722,29661,-2465,-22316,-37440,21275,8286,-3209,-13868,13537,-33568,108,-81,1289,-8123,20989,26879,-1072,-22504,46259,-29720,-16427,2300,-10660,-3217,37179,37127,4729,49052,27731,12254,2758,19164,944},
+{0,0,0,11262,-23169,647,-16766,-2739,22148,-30903,-71573,-20646,19872,23147,-25714,29487,-2441,-22275,-37097,21317,8218,-3366,-13867,13533,-33568,108,-81,1316,-8159,20926,26809,-863,-22618,46259,-29720,-16427,2300,-10660,-3217,37545,37108,4633,49053,27731,12254,3361,19176,818},
+}
+local clip={Duration=1.4666666666666666,Loop=false,Source="Quaternius original GLB",Role="Roll",Frames={}}
+for i,row in rows do
+ local pose:{[string]:CFrame}={}
+ for j,joint in joints do local k=4+(j-1)*3;pose[joint]=CFrame.Angles(row[k]/100000,row[k+1]/100000,row[k+2]/100000) end
+ clip.Frames[i]={Time=math.min((i-1)/60,clip.Duration),Pose=pose}
+end
+return clip
+]====])
 -- Source: src/client/world/clips/Walk_Carry_Loop.luau
 addModule(modules,{"world","clips","Walk_Carry_Loop"},[====[
 --!strict
@@ -8642,6 +9342,102 @@ local rows={
 local clip={Duration=2.0,Loop=true,Source="Quaternius original GLB",Role="Walk_Carry_Loop",Frames={}}
 for i,row in rows do
  local pose:{[string]:CFrame}={};for j,name in joints do local k=4+(j-1)*3;local c=CFrame.Angles(row[k]/100000,row[k+1]/100000,row[k+2]/100000);pose[name]=if name=="Root"then CFrame.new(row[1]/100000,row[2]/100000,row[3]/100000)*c else c end
+ clip.Frames[i]={Time=math.min((i-1)/60,clip.Duration),Pose=pose}
+end
+return clip
+]====])
+-- Source: src/client/world/clips/Walk_Loop.luau
+addModule(modules,{"world","clips","Walk_Loop"},[====[
+--!strict
+-- Quaternius CC0 original action; R15 retarget. See assets/animations/quaternius-locomotion.
+local joints={"Root","RightHip","RightKnee","RightAnkle","LeftHip","LeftKnee","LeftAnkle","Waist","LeftShoulder","LeftElbow","LeftWrist","RightShoulder","RightElbow","RightWrist","Neck"}
+local rows={
+{0,0,0,3,3122,4498,-26387,1138,-6599,-32064,-650,-209,3296,-1649,-4898,54259,-1107,-4674,-24290,-401,-95,23493,-3498,2401,-29181,6978,4139,2231,6264,28408,31735,-860,-10733,43835,-31571,-19669,30230,44340,-14266,68313,-30583,20609,55377,33168,16869,5593,-5887,-7709},
+{0,0,0,3,3106,4465,-30181,1219,-6349,-26659,-554,-149,3116,-1752,-4763,57600,-1122,-4407,-34555,-487,-174,28036,-3529,2120,-29403,7556,4376,2136,6354,28437,31513,-933,-10871,42471,-31365,-19994,30670,45188,-13733,69449,-31231,21045,56755,33340,16523,5667,-6495,-7844},
+{0,0,0,3,3089,4433,-33975,1291,-6096,-21253,-455,-94,2937,-1855,-4627,60941,-1128,-4139,-44820,-566,-262,32580,-3572,1841,-29627,8134,4615,2041,6444,28466,31291,-1007,-11010,41108,-31154,-20315,31107,46038,-13201,70590,-31875,21490,58134,33507,16175,5741,-7103,-7978},
+{0,0,0,3,3042,4339,-35045,1269,-5840,-19589,-414,-79,5171,-2138,-4002,61566,-1060,-3844,-50059,-564,-297,31522,-3596,1406,-30001,8451,4741,2011,6393,28471,31161,-1021,-11118,39834,-30954,-20614,31237,46190,-12981,71109,-32041,21553,59425,33660,15848,5810,-7454,-7964},
+{0,0,0,3,2994,4245,-36114,1245,-5584,-17924,-372,-65,7407,-2407,-3371,62191,-991,-3549,-55298,-560,-331,30464,-3616,972,-30377,8767,4869,1981,6341,28475,31031,-1035,-11227,38562,-30751,-20910,31366,46343,-12760,71629,-32208,21617,60718,33810,15519,5879,-7805,-7950},
+{0,0,0,3,2918,4098,-34278,1121,-5254,-21436,-392,-82,11083,-2471,-2631,61396,-886,-3222,-57982,-519,-324,27175,-3548,489,-30848,8819,4877,2120,6021,28423,31059,-873,-11344,37406,-30564,-21177,31182,45773,-12886,71545,-31939,21316,61894,33943,15218,5960,-7899,-7785},
+{0,0,0,2,2842,3950,-32441,1003,-4923,-24948,-410,-100,14760,-2508,-1889,60601,-783,-2894,-60666,-479,-317,23885,-3464,9,-31319,8871,4885,2260,5700,28372,31088,-711,-11462,36252,-30374,-21442,30999,45203,-13014,71462,-31670,21015,63070,34074,14916,6041,-7993,-7619},
+{0,0,0,2,2741,3755,-27022,784,-4461,-35027,-455,-162,18344,-2274,-1459,58811,-660,-2530,-61550,-419,-280,20887,-3291,-419,-31831,8722,4791,2639,5026,28245,31323,-292,-11619,35244,-30206,-21673,30464,43856,-13512,70718,-30899,20298,64100,34185,14651,6143,-7897,-7321},
+{0,0,0,2,2640,3559,-21602,589,-3988,-45105,-494,-228,21928,-2025,-1038,57022,-544,-2164,-62433,-360,-243,17890,-3106,-841,-32342,8574,4697,3018,4350,28120,31558,126,-11776,34236,-30035,-21902,29928,42510,-14017,69981,-30124,19588,65130,34295,14385,6245,-7801,-7022},
+{0,0,0,2,2516,3323,-13709,363,-3369,-58986,-468,-299,21519,-1684,-1190,54472,-419,-1759,-61899,-290,-190,17525,-2897,-1143,-32837,8239,4497,3588,3386,27930,32065,716,-11930,33403,-29893,-22090,29018,40421,-14818,68609,-28831,18489,65983,34384,14164,6380,-7531,-6592},
+{0,0,0,1,2392,3087,-5816,186,-2735,-72866,-432,-365,21111,-1342,-1341,51923,-303,-1351,-61365,-220,-139,17161,-2687,-1444,-33333,7904,4296,4157,2420,27747,32572,1305,-12087,32570,-29750,-22277,28104,38338,-15638,67257,-27524,17412,66837,34471,13942,6515,-7261,-6162},
+{0,0,0,1,2249,2817,2280,55,-2015,-85681,-319,-331,16159,-919,-1780,48737,-188,-904,-59593,-146,-85,18572,-2495,-1673,-33757,7459,4017,4878,1217,27504,33331,2028,-12223,31940,-29640,-22419,26865,35704,-16571,65471,-25852,16133,67484,34536,13774,6689,-6895,-5628},
+{0,0,0,0,2106,2547,10376,-17,-1288,-98495,-211,-283,11209,-476,-2197,45550,-87,-454,-57821,-71,-32,19983,-2307,-1906,-34182,7014,3737,5596,13,27272,34091,2749,-12364,31310,-29530,-22559,25621,33079,-17537,63715,-24160,14891,68131,34600,13605,6861,-6528,-5094},
+{0,0,0,0,1946,2250,17462,-27,-551,-108303,-91,-104,5054,102,-2495,41780,6,32,-54868,-1,12,20800,-2119,-2136,-34480,6525,3407,6435,-1384,26983,35021,3598,-12497,30912,-29459,-22648,24186,30198,-18440,61796,-22358,13690,68541,34641,13498,7082,-6132,-4484},
+{0,0,0,0,1786,1952,24547,16,185,-118111,11,85,-1100,697,-2758,38010,79,521,-51916,72,54,21617,-1933,-2367,-34780,6037,3076,7270,-2782,26708,35953,4446,-12639,30513,-29389,-22736,22746,27327,-19387,59907,-20534,12529,68951,34680,13390,7301,-5735,-3875},
+{0,0,0,0,1612,1634,31168,105,892,-125692,86,376,-7443,1356,-2883,33620,135,1040,-47687,131,77,21779,-1754,-2592,-34899,5530,2709,8196,-4335,26377,37015,5401,-12782,30374,-29364,-22767,21269,24458,-20183,58032,-18793,11556,69095,34694,13353,7472,-5326,-3213},
+{0,0,0,0,1438,1316,37788,241,1591,-133273,139,671,-13787,2022,-2965,29231,168,1561,-43459,191,99,21942,-1575,-2817,-35020,5022,2343,9120,-5890,26064,38079,6355,-12936,30234,-29339,-22798,19787,21600,-21025,56180,-17035,10620,69238,34708,13315,7640,-4916,-2552},
+{0,0,0,0,1254,985,44106,409,2224,-138699,157,1027,-19628,2666,-2935,24795,180,2101,-38931,231,103,21233,-1362,-2993,-34942,4505,1953,10110,-7563,25695,39245,7396,-13100,30374,-29364,-22767,18377,18898,-21701,54418,-15451,9918,69094,34694,13353,7650,-4496,-1863},
+{0,0,0,0,1069,653,50423,616,2844,-144126,156,1383,-25471,3308,-2868,20360,167,2641,-34403,272,105,20525,-1148,-3167,-34865,3988,1564,11097,-9240,25346,40414,8435,-13276,30513,-29389,-22736,16961,16205,-22420,52672,-13855,9246,68951,34680,13390,7657,-4076,-1175},
+{0,0,0,0,876,314,56399,835,3366,-147183,143,1742,-30207,3845,-2755,16814,144,3182,-31321,301,104,19283,-864,-3245,-34631,3465,1166,12128,-11003,24941,41665,9540,-13468,30912,-29459,-22648,15671,13735,-22989,51040,-12458,8798,68541,34641,13498,7540,-3651,-473},
+{0,0,0,0,684,-25,62374,1085,3873,-150240,120,2101,-34944,4376,-2618,13269,103,3721,-28239,330,102,18040,-579,-3320,-34398,2941,768,13157,-12770,24557,42919,10643,-13674,31310,-29530,-22559,14376,11273,-23597,49418,-11055,8373,68131,34600,13605,7421,-3226,228},
+{0,0,0,0,486,-365,67779,1320,4266,-150738,127,2402,-36536,4702,-2592,11107,71,4238,-27627,369,110,17012,-246,-3286,-34047,2414,372,14210,-14594,24117,44238,11792,-13901,31940,-29640,-22419,13226,9054,-24078,47921,-9847,8140,67484,34536,13774,7210,-2795,928},
+{0,0,0,0,288,-704,73182,1577,4645,-151236,134,2702,-38129,5027,-2561,8945,29,4755,-27015,408,118,15984,87,-3249,-33696,1885,-23,15260,-16421,23699,45560,12939,-14144,32570,-29750,-22277,12072,6840,-24591,46429,-8636,7925,66837,34471,13942,6996,-2366,1628},
+{0,0,0,1,88,-1037,77550,1792,4922,-149325,202,2892,-35700,5108,-2729,8256,13,5226,-29103,475,149,15531,437,-3092,-33263,1355,-408,16316,-18275,23226,46930,14112,-14411,33403,-29893,-22090,11065,4869,-25002,45070,-7605,7860,65983,34384,14164,6721,-1932,2312},
+{0,0,0,1,-112,-1370,81918,2018,5190,-147413,274,3080,-33270,5184,-2898,7567,-5,5698,-31191,542,181,15076,786,-2932,-32832,823,-791,17370,-20134,22774,48306,15281,-14695,34236,-30035,-21902,10054,2902,-25438,43713,-6573,7810,65130,34295,14385,6444,-1499,2997},
+{0,0,0,1,-312,-1691,84791,2182,5381,-143288,410,3120,-27988,5035,-3177,7774,1,6099,-34927,632,240,14937,1113,-2642,-32356,293,-1159,18412,-21992,22268,49712,16459,-15004,35244,-30206,-21673,9183,1168,-25790,42494,-5702,7869,64100,34185,14651,6138,-1060,3650},
+{0,0,0,1,-511,-2011,87663,2352,5568,-139164,547,3155,-22706,4872,-3448,7980,8,6501,-38663,719,301,14796,1439,-2352,-31882,-239,-1524,19451,-23855,21784,51125,17632,-15331,36252,-30374,-21442,8309,-563,-26162,41276,-4832,7938,63070,34074,14916,5829,-623,4304},
+{0,0,0,2,-707,-2311,88734,2448,5710,-133029,718,3036,-15883,4555,-3709,8370,21,6815,-42717,809,381,14571,1703,-1940,-31402,-766,-1868,20463,-25688,21248,52552,18795,-15683,37407,-30564,-21177,7565,-2070,-26464,40199,-4105,8081,61894,33943,15218,5525,-180,4912},
+{0,0,0,2,-903,-2612,89805,2545,5851,-126893,881,2907,-9062,4221,-3947,8760,36,7129,-46771,896,464,14345,1967,-1527,-30923,-1295,-2210,21472,-27525,20732,53985,19952,-16053,38562,-30751,-20910,6817,-3575,-26782,39123,-3379,8231,60718,33810,15519,5217,261,5521},
+{0,0,0,3,-1093,-2886,88998,2570,5974,-119042,1032,2661,-2146,3859,-4101,8920,43,7358,-50395,970,549,13917,2141,-1029,-30477,-1813,-2528,22437,-29305,20169,55414,21081,-16444,39834,-30955,-20614,6190,-4864,-27040,38188,-2780,8423,59425,33660,15848,4947,707,6069},
+{0,0,0,3,-1282,-3160,88190,2594,6097,-111191,1164,2404,4768,3487,-4230,9079,51,7586,-54019,1041,638,13487,2313,-531,-30033,-2333,-2844,23399,-31089,19624,56850,22204,-16853,41108,-31154,-20315,5560,-6153,-27309,37252,-2182,8622,58134,33507,16175,4674,1151,6619},
+{0,0,0,4,-1463,-3400,85655,2548,6204,-101944,1244,2083,10382,3194,-4261,8803,41,7731,-56867,1092,714,12934,2385,10,-29660,-2837,-3134,24301,-32785,19040,58260,23279,-17276,42471,-31365,-19994,5040,-7232,-27526,36454,-1697,8838,56755,33340,16523,4471,1597,7100},
+{0,0,0,4,-1643,-3641,83121,2498,6311,-92697,1295,1756,15995,2900,-4275,8527,31,7875,-59714,1140,791,12380,2454,551,-29288,-3342,-3422,25201,-34486,18472,59678,24349,-17716,43835,-31571,-19669,4518,-8311,-27751,35656,-1213,9058,55377,33168,16869,4266,2041,7583},
+{0,0,0,4,-1811,-3842,79295,2387,6382,-82321,1277,1423,19575,2725,-4224,7657,-4,7940,-61535,1165,841,11828,2431,1090,-29028,-3824,-3683,26025,-36065,17877,61043,25351,-18160,45259,-31783,-19329,4097,-9186,-27930,34989,-829,9278,53943,32985,17228,4165,2480,7994},
+{0,0,0,5,-1979,-4043,75470,2272,6450,-71946,1224,1093,23156,2553,-4166,6788,-38,8004,-63356,1190,891,11277,2405,1629,-28768,-4307,-3943,26847,-37649,17294,62416,26347,-18619,46685,-31990,-18985,3675,-10059,-28113,34322,-446,9500,52509,32798,17583,4062,2919,8404},
+{0,0,0,5,-2132,-4197,70720,2105,6462,-60692,1108,804,24276,2504,-4067,5178,-103,7994,-63908,1191,902,10852,2314,2121,-28659,-4757,-4176,27576,-39075,16703,63706,27254,-19065,48141,-32198,-18633,3345,-10731,-28255,33779,-152,9711,51048,32603,17944,4098,3347,8735},
+{0,0,0,5,-2285,-4352,65970,1938,6466,-49439,961,530,25397,2456,-3968,3568,-167,7983,-64460,1193,914,10428,2221,2613,-28552,-5207,-4408,28303,-40505,16121,65003,28155,-19525,49599,-32401,-18277,3014,-11403,-28399,33235,141,9923,49589,32403,18302,4132,3775,9066},
+{0,0,0,5,-2421,-4453,60830,1738,6392,-38106,782,337,24008,2522,-3831,1023,-266,7904,-63394,1170,878,10194,2104,3021,-28622,-5615,-4613,28921,-41732,15557,66177,28941,-19948,51059,-32601,-17919,2769,-11873,-28504,32807,354,10114,48131,32200,18658,4328,4184,9308},
+{0,0,0,5,-2556,-4554,55689,1542,6307,-26774,583,165,22619,2586,-3693,-1523,-363,7823,-62329,1148,842,9961,1985,3428,-28693,-6022,-4818,29536,-42962,14999,67357,29722,-20381,52520,-32795,-17558,2523,-12343,-28610,32379,566,10306,46674,31991,19011,4522,4594,9548},
+{0,0,0,5,-2670,-4595,53961,1431,6081,-22736,500,122,21979,2741,-3498,-5359,-504,7678,-58952,1096,750,9799,1890,3719,-28920,-6377,-4990,30022,-43932,14498,68362,30354,-20743,53953,-32982,-17202,2355,-12610,-28679,32058,706,10472,45249,31784,19354,4849,4975,9689},
+{0,0,0,5,-2784,-4636,52232,1324,5852,-18699,414,81,21340,2895,-3303,-9196,-639,7527,-55575,1041,660,9637,1795,4011,-29147,-6731,-5164,30505,-44904,14000,69372,30983,-21113,55388,-33165,-16844,2187,-12877,-28748,31737,845,10639,43825,31572,19694,5176,5356,9829},
+{0,0,0,4,-2875,-4612,56474,1375,5532,-30953,561,197,26904,3038,-3055,-9698,-642,7341,-55429,1014,641,10281,2012,3930,-29494,-7019,-5296,30830,-45537,13617,70135,31414,-21358,56766,-33336,-16498,2091,-12943,-28782,31516,919,10777,42461,31365,20019,5597,5694,9860},
+{0,0,0,4,-2965,-4588,60716,1413,5210,-43207,693,329,32467,3194,-2816,-10200,-644,7156,-55283,986,623,10925,2229,3847,-29842,-7307,-5430,31154,-46172,13236,70899,31843,-21607,58144,-33503,-16150,1996,-13009,-28816,31294,993,10915,41098,31154,20340,6018,6032,9890},
+{0,0,0,4,-3028,-4504,61487,1347,4890,-48996,705,389,31645,3372,-2413,-12386,-705,6976,-52700,937,560,10551,2592,3275,-30273,-7508,-5513,31271,-46347,13060,71306,31993,-21647,59436,-33656,-15823,1966,-12889,-28817,31164,1007,11023,39824,30954,20639,6493,6301,9811},
+{0,0,0,3,-3090,-4420,62257,1278,4571,-54785,714,449,30821,3546,-2009,-14571,-762,6795,-50116,887,498,10180,2956,2704,-30705,-7708,-5597,31387,-46523,12884,71713,32143,-21687,60729,-33806,-15494,1937,-12769,-28819,31033,1021,11131,38552,30750,20935,6968,6569,9730},
+{0,0,0,3,-3121,-4281,61464,1164,4230,-57760,677,455,27615,3642,-1526,-16478,-794,6518,-48656,837,455,9108,3069,2021,-31182,-7787,-5614,31229,-46088,13021,71622,31904,-21410,61905,-33939,-15193,2043,-12386,-28763,31037,900,11236,37396,30563,21202,7457,6728,9538},
+{0,0,0,2,-3153,-4142,60669,1053,3887,-60734,640,460,24407,3723,-1039,-18386,-820,6241,-47196,786,413,8038,3189,1339,-31659,-7866,-5631,31071,-45652,13158,71532,31666,-21133,63081,-34069,-14891,2149,-12004,-28709,31040,779,11341,36242,30372,21467,7947,6886,9346},
+{0,0,0,2,-3134,-3954,58813,919,3519,-61793,579,428,21476,3677,-585,-17299,-732,5814,-51545,767,447,6944,2966,961,-32142,-7805,-5569,30587,-44521,13647,70841,30954,-20467,64111,-34180,-14626,2443,-11304,-28579,31209,466,11463,35234,30204,21698,8255,6896,9055},
+{0,0,0,1,-3115,-3766,56955,791,3148,-62852,519,394,18545,3617,-132,-16213,-649,5386,-55895,747,481,5850,2747,582,-32624,-7745,-5507,30102,-43392,14141,70157,30238,-19808,65141,-34289,-14360,2736,-10603,-28453,31378,154,11585,34226,30033,21927,8563,6906,8764},
+{0,0,0,1,-3035,-3534,54290,651,2748,-62412,448,339,18314,3460,187,-11240,-457,4798,-66347,706,571,2843,2390,766,-33073,-7587,-5378,29250,-41560,14935,68859,29010,-18752,65994,-34378,-14139,3187,-9629,-28261,31750,-300,11707,33393,29891,22115,8567,6803,8402},
+{0,0,0,0,-2956,-3301,51624,523,2344,-61972,376,285,18084,3303,506,-6267,-295,4201,-76799,656,656,-164,2028,939,-33522,-7428,-5248,28393,-39733,15743,67580,27768,-17718,66848,-34465,-13917,3637,-8654,-28076,32122,-753,11831,32561,29747,22302,8571,6701,8040},
+{0,0,0,0,-2824,-3032,48276,392,1907,-60211,300,223,19665,3110,737,410,-128,3484,-88044,537,673,-5499,1594,1367,-33896,-7199,-5062,27193,-37346,16689,65853,26129,-16435,67495,-34530,-13749,4221,-7443,-27834,32688,-1323,11947,31930,29637,22444,8340,6522,7615},
+{0,0,0,0,-2691,-2763,44928,276,1465,-58451,223,162,21247,2921,970,7088,-9,2758,-99289,417,676,-10831,1138,1772,-34271,-6969,-4874,25986,-34968,17661,64156,24468,-15187,68142,-34594,-13580,4803,-6231,-27602,33255,-1893,12066,31301,29527,22584,8108,6345,7189},
+{0,0,0,0,-2515,-2464,40946,166,990,-55412,147,107,22186,2706,1200,13951,62,1985,-108794,275,551,-15917,572,2028,-34532,-6685,-4636,24555,-32302,18589,62272,22656,-13934,68552,-34634,-13473,5498,-4818,-27317,33969,-2577,12181,30902,29457,22673,7711,6116,6706},
+{0,0,0,-1,-2339,-2165,36964,75,511,-52374,70,53,23126,2493,1432,20814,79,1209,-118299,145,414,-21002,-5,2255,-34793,-6402,-4398,23117,-29648,19555,60418,20822,-12721,68962,-34674,-13366,6190,-3403,-27046,34684,-3260,12301,30503,29386,22761,7313,5891,6221},
+{0,0,0,0,-2126,-1844,32289,0,2,-47910,4,15,23336,2267,1658,27924,45,441,-126083,38,160,-25866,-628,2336,-34900,-6075,-4115,21617,-26977,20372,58566,19049,-11676,69105,-34688,-13328,6977,-1818,-26726,35521,-4046,12420,30364,29361,22792,6821,5631,5687},
+{0,0,0,-1,-1912,-1523,27614,-51,-509,-43446,-64,-20,23546,2040,1884,35033,-44,-321,-133867,-48,-102,-30729,-1254,2386,-35009,-5749,-3832,20109,-24317,21230,56738,17258,-10669,69249,-34702,-13291,7760,-231,-26422,36359,-4832,12546,30225,29336,22823,6327,5375,5151},
+{0,0,0,0,-1671,-1186,22752,-78,-1041,-38404,-111,-35,22748,1770,2063,42220,-177,-1016,-139649,-92,-442,-35466,-1862,2310,-34943,-5385,-3513,18664,-21814,21915,54990,15638,-9898,69192,-34696,-13306,8622,1497,-26072,37305,-5711,12674,30280,29346,22811,5830,5090,4576},
+{0,0,0,-1,-1429,-850,17890,-80,-1574,-33362,-159,-48,21951,1499,2239,49405,-359,-1699,-145430,-116,-783,-40204,-2466,2206,-34879,-5022,-3195,17212,-19320,22638,53258,14004,-9158,69135,-34691,-13321,9480,3228,-25740,38251,-6588,12810,30335,29356,22798,5332,4810,4000},
+{0,0,0,0,-1167,-505,13690,-63,-2110,-29325,-188,-50,20406,1157,2320,56282,-560,-2264,-148824,-113,-1143,-44796,-2988,2013,-34670,-4624,-2850,15887,-17057,23203,51625,12577,-8659,68949,-34673,-13369,10402,5072,-25362,39294,-7546,12953,30515,29388,22758,4969,4499,3407},
+{0,0,0,0,-904,-160,9490,-23,-2645,-25288,-217,-51,18861,815,2396,63157,-800,-2813,-152217,-97,-1503,-49390,-3500,1797,-34461,-4225,-2507,14557,-14802,23801,50002,11142,-8185,68764,-34655,-13418,11321,6919,-25006,40338,-8502,13106,30696,29420,22718,4605,4190,2813},
+{0,0,0,0,-629,186,6528,19,-3161,-23441,-243,-54,17397,426,2360,69119,-1023,-3228,-152887,-99,-1810,-50731,-3832,1660,-34142,-3793,-2147,13378,-12798,24267,48483,9911,-7926,68421,-34622,-13507,12290,8852,-24602,41469,-9528,13269,31029,29479,22644,4396,3847,2209},
+{0,0,0,0,-354,532,3566,77,-3676,-21594,-269,-55,15932,38,2319,75081,-1270,-3628,-153557,-99,-2118,-52072,-4163,1517,-33823,-3359,-1789,12195,-10799,24760,46970,8677,-7686,68079,-34588,-13597,13256,10789,-24221,42603,-10552,13444,31362,29538,22570,4185,3505,1604},
+{0,0,0,1,-74,872,2311,113,-4152,-22904,-318,-70,15264,-361,2153,79629,-1470,-3911,-151647,-152,-2316,-48228,-4290,1595,-33428,-2893,-1422,11166,-9046,25146,45570,7631,-7622,67546,-34535,-13736,14259,12786,-23791,43816,-11634,13635,31881,29629,22455,4050,3197,798},
+{0,0,0,1,206,1212,1056,155,-4628,-24213,-367,-86,14596,-759,1985,84176,-1682,-4185,-149737,-209,-2514,-44384,-4415,1678,-33034,-2426,-1057,10133,-7296,25553,44172,6585,-7573,67012,-34482,-13875,15261,14787,-23385,45033,-12714,13840,32401,29719,22338,3913,2889,-8},
+{0,0,0,1,483,1539,946,172,-5046,-27654,-444,-122,14478,-1126,1686,86999,-1831,-4376,-145594,-323,-2572,-37013,-4372,1906,-32598,-1927,-692,9247,-5777,25875,42901,5705,-7654,66247,-34404,-14073,16286,16821,-22927,46321,-13839,14065,33147,29849,22171,3849,2520,-753},
+{0,0,0,1,760,1865,836,189,-5464,-31096,-519,-160,14359,-1493,1387,89822,-1985,-4563,-141452,-438,-2626,-29642,-4312,2131,-32163,-1427,-328,8358,-4261,26213,41631,4827,-7745,65482,-34325,-14272,17310,18859,-22495,47614,-14961,14306,33893,29977,22002,3783,2150,-1497},
+{0,0,0,2,1025,2172,921,198,-5807,-34881,-601,-213,14169,-1788,968,90756,-2070,-4698,-135368,-583,-2540,-20607,-4144,2386,-31721,-897,31,7605,-2958,26481,40502,4095,-7921,64443,-34216,-14540,18345,20905,-22006,48971,-16117,14574,34909,30149,21772,3784,1707,-2133},
+{0,0,0,2,1291,2478,1007,207,-6149,-38666,-681,-269,13979,-2082,549,91691,-2156,-4832,-129283,-722,-2445,-11573,-3955,2625,-31280,-366,387,6850,-1658,26762,39372,3366,-8104,63405,-34104,-14808,19379,22955,-21542,50334,-17269,14858,35925,30319,21540,3782,1263,-2769},
+{0,0,0,2,1538,2757,827,222,-6408,-41947,-752,-327,13547,-2275,44,90734,-2175,-4936,-121525,-851,-2244,-2916,-3755,2807,-30868,193,735,6218,-557,26985,38391,2765,-8332,62066,-33957,-15152,20409,24985,-21020,51753,-18442,15177,37237,30537,21239,3845,768,-3348},
+{0,0,0,2,1784,3036,647,237,-6667,-45227,-820,-388,13114,-2465,-461,89778,-2192,-5041,-113766,-964,-2033,5740,-3540,2972,-30457,753,1080,5585,543,27217,37409,2166,-8565,60729,-33806,-15494,21439,27019,-20521,53178,-19611,15513,38552,30750,20935,3905,271,-3925},
+{0,0,0,3,2004,3280,-45,267,-6840,-47572,-870,-438,12473,-2541,-1008,87107,-2147,-5123,-104589,-1035,-1764,12174,-3400,3050,-30110,1338,1414,5064,1456,27401,36577,1680,-8811,59111,-33618,-15906,22450,29003,-19960,54650,-20786,15889,40145,31005,20564,4026,-269,-4450},
+{0,0,0,3,2224,3524,-736,298,-7012,-49917,-918,-488,11831,-2614,-1554,84435,-2099,-5203,-95411,-1080,-1490,18607,-3255,3119,-29765,1924,1745,4542,2368,27590,35743,1196,-9062,57494,-33425,-16314,23460,30992,-19421,56130,-21956,16284,41740,31254,20189,4144,-811,-4973},
+{0,0,0,3,2408,3726,-2111,350,-7098,-51034,-942,-515,11081,-2581,-2092,80507,-1999,-5248,-85114,-1069,-1210,22283,-3201,3124,-29520,2532,2065,4123,3103,27739,35053,811,-9305,55695,-33204,-16767,24432,32898,-18819,57642,-23117,16724,43520,31526,19767,4320,-1392,-5440},
+{0,0,0,3,2593,3929,-3485,404,-7183,-52150,-965,-541,10331,-2543,-2630,76579,-1896,-5289,-74817,-1028,-933,25959,-3146,3128,-29277,3139,2383,3703,3838,27891,34362,429,-9550,53898,-32975,-17216,25403,34809,-18236,59164,-24271,17183,45303,31792,19341,4494,-1973,-5905},
+{0,0,0,3,2735,4082,-5748,486,-7183,-51676,-959,-532,9532,-2425,-3113,71810,-1752,-5280,-63751,-937,-692,26823,-3166,3077,-29172,3764,2689,3376,4404,28006,33806,135,-9774,52075,-32737,-17669,26315,36597,-17593,60700,-25398,17690,47117,32056,18904,4725,-2590,-6303},
+{0,0,0,3,2877,4236,-8010,567,-7180,-51202,-954,-523,8733,-2304,-3595,67041,-1608,-5264,-52685,-820,-464,27687,-3185,3027,-29067,4389,2995,3048,4970,28124,33248,-157,-10000,50254,-32491,-18116,27225,38390,-16965,62247,-26518,18216,48934,32312,18462,4954,-3208,-6699},
+{0,0,0,3,2967,4333,-11509,685,-7090,-48475,-912,-469,7791,-2141,-3983,62147,-1445,-5179,-41993,-683,-307,26176,-3256,2913,-29057,5030,3288,2805,5373,28209,32814,-369,-10198,48550,-32256,-18533,28046,40005,-16288,63781,-27586,18784,50638,32547,18045,5157,-3864,-6996},
+{0,0,0,3,3058,4430,-15008,800,-6995,-45749,-868,-417,6850,-1976,-4370,57254,-1286,-5086,-31301,-530,-165,24665,-3325,2798,-29048,5670,3582,2562,5776,28295,32380,-581,-10397,46848,-32014,-18946,28864,41625,-15623,65327,-28646,19371,52345,32776,17624,5358,-4520,-7292},
+{0,0,0,3,3090,4464,-20697,974,-6802,-38906,-763,-309,5073,-1814,-4636,55756,-1195,-4880,-27796,-466,-129,24079,-3412,2600,-29114,6324,3860,2396,6020,28352,32058,-721,-10565,45341,-31795,-19309,29549,42980,-14941,66815,-29619,19982,53860,32975,17248,5476,-5203,-7501},
+{0,0,0,3,3122,4498,-26387,1138,-6599,-32064,-650,-209,3296,-1649,-4898,54259,-1107,-4674,-24290,-401,-95,23493,-3498,2401,-29181,6978,4139,2231,6264,28408,31735,-860,-10733,43835,-31571,-19669,30230,44340,-14266,68313,-30583,20609,55377,33168,16869,5593,-5887,-7709},
+}
+local clip={Duration=1.3333333333333333,Loop=true,Source="Quaternius original GLB",Role="Walk_Loop",Frames={}}
+for i,row in rows do
+ local pose:{[string]:CFrame}={}
+ for j,joint in joints do local k=4+(j-1)*3;pose[joint]=CFrame.Angles(row[k]/100000,row[k+1]/100000,row[k+2]/100000) end
  clip.Frames[i]={Time=math.min((i-1)/60,clip.Duration),Pose=pose}
 end
 return clip

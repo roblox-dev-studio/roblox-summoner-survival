@@ -56,5 +56,6 @@
       "originalConversionValidation": true,
       "runtimeStatus": "solo Studio keyboard transitions verified; six leg joints only; visual polish pending"
     }
-  ]
+  ],
+  "currentUse": "Legacy reference clips; runtime replaced by quaternius-locomotion/manifest.json"
 }

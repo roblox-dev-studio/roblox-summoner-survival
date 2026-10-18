@@ -14,6 +14,7 @@ local clock = {elapsed = 0, roundLength = script:GetAttribute("BossSpawnAt") or 
 local actors = require(modules.shared.Actors)({world = world})
 if RunService:IsStudio()then require(modules.world.EnemyGallery)({create=require(modules.shared.EnemyModels)({block=actors.Block}),parent=RS})end
 local players = require(modules.shared.PlayerState)({states = states})
+local airJump = require(modules.combat.AirJump)({runtime=world,paused=players.Paused,effect=net.Effect})
 local movement = require(modules.combat.Movement)({
     world = world, rootOf = players.RootOf, paused = players.Paused, effect = net.Effect,
 })
@@ -76,6 +77,10 @@ net.Action.OnServerEvent:Connect(function(player,kind,id,activeId)
     if kind == "startBossTest" then if RunService:IsStudio()then session.StartBossTest(s,id,activeId)end;return end
     if kind == "startRound" then session.StartRound(s,id,activeId); return end
     if kind == "cancelReady" then session.CancelReady(s); return end
+    if kind == "airJump" then
+        if id==nil and activeId==nil then airJump.Request(s)end
+        return
+    end
     if s.lobby then return end
     if kind == "restart" then if s.over then session.Restart() end; return end
     if s.over then return end
@@ -100,6 +105,7 @@ RunService.Heartbeat:Connect(function(dt)
     dt = math.min(tickClock,.15)
     tickClock = 0
     session.StepLobby()
+    for _,s in pairs(states) do airJump.Step(s,dt) end
     local alive = players.LiveCount()
     if alive > 0 and not players.Paused() then
         clock.elapsed += dt

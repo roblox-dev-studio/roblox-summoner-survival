@@ -1,5 +1,41 @@
 # 개발 중 플레이 점검 기록
 
+## 2026-10-19 · Quaternius 이동/점프와 서버 승인 이단점프
+
+- 기반 main `a7c2bbe`, 브랜치 `feat/player-locomotion`. 게임 소스 SHA-256
+  `77cbfad2f51b126a6d028d5570fbc429087011ce09a28fffb1455275011db8bd`
+  (정렬한 client/server/arena + src 파일 경로 NUL·내용 NUL).
+- 원작자 OpenGameArt의 Standard ZIP을 새로 다운로드. GLB·CC0·해시·R15 변환기 포함.
+  원본 여섯 클립을 60Hz로 변환. Roll은 전용 double-jump 원본이 아닌 0.55초 공중 회전 재활용.
+- 기존 코드가 Motor6D만 찾는데 현재 R15는 AnimationConstraint 15개/기존 Motor6D 0개였음.
+  모션 상태값만 바뀌고 실제 포즈가 적용되지 않는 문제를 발견해 두 관절 방식을 지원하도록 수정.
+  AvatarJointUpgrade 설정이나 RigAttachment는 변경하지 않음.
+- 소스 검사 PASS: Python17, Luau190, 기존 성장/증강/적/점수 회귀. 설치기·스킬 카탈로그 일치.
+- 대상: 소유된 로컬 `AugmentReview.rbxlx`, Studio `434a088f-5ad4-4b16-86ab-0273ee1fd09f`, placeId0.
+  Edit에서 이번 모듈/진입점13개를 동기화하고 Play를 새로 시작. 기존 PR10 도감 시안도 남아 있는
+  테스트 place이므로 새 Baseplate에 전체 설치한 검사로 간주하지 않음.
+- Server `studio_air_jump` PASS: 지면 충전, 서버 거절·연타·3차 점프 차단, 수평 속도 보존,
+  착지 재충전, 짧은 접촉의 재충전 방지, 사망/카드/대시/미리보기/퇴각/대기열/리스폰.
+  접촉/시계는 fixture 주입이며 실제 조작·네트워크 검사는 아래 항목으로 구분.
+- Client `studio_locomotion` PASS: 원본 데이터 변화, 이륙과 낙하 구분, 공중 회전의 역전 프레임,
+  회전 1회 종료, 조기 착지/사망 취소, 루트 이동 없음.
+- Client `studio_jump_input` PASS: 해제/재입력, 누름 유지 방지, 메뉴/입력창/카드/미리보기 차단,
+  승인 상승 속도·중복/늦은 승인 억제. 입력 신호와 네트워크는 독립 fixture.
+- Client `studio_character_motion` PASS: 실제 R15 새 관절15개, 전신 관절 변화,
+  PreAnimation 이전 자세 복구, idle/캐릭터 제거 후 잔류 변형 없음.
+- Client `studio_player_jump_flow` PASS: 실제 플레이어 Humanoid 첫 점프 및 Action 의도 전송,
+  서버 승인·상승·실제 Root 관절 역전·회전→착지→idle. 시작 높이 대비 최고 **12.33스터드**,
+  추가 승인 시퀀스 정확히1 증가, 세 번째 요청 거절. 키보드 입력 대신 스크립트로 Jump/Remote를 구동.
+- 실제 로비 캐릭터 Move 검증: 약11.40스터드 이동, 팔/다리 Transform 변화,
+  motion=move→idle, Root UpVector.Y 최저0.9916, 관절15개. 주관적인 걸음새/발 접지 품질 합격은 아님.
+- 초기 fixture 오류(단순 Humanoid 상태 전환 대기/물리 이후 속도 비교)는 실제 R15와 기준 속도 비교로 교정.
+  초기 빠른 이단점프 의도 거절은 서버의 불필요한 공중 최소 대기 조건을 제거해 수정.
+- **시각 검수 미완료**: macOS 잠금으로 CUA 접근 불가, 최신 Play에서도 PreRender=0.
+  실제 플레이 사진/영상, 새 Baseplate 전체 설치, Studio 파일 저장, 실제 패드/터치 입력,
+  두 실제 플레이어의 원격 포즈·고지연, 낮은 천장/경사면 체감과 모바일 성능은 미검증.
+  기존 이미지/목업을 이번 적용 사진으로 사용하지 않음. 테스트 후 Play 종료, Edit 소스 유지.
+
+
 ## 2026-10-16 모듈 분리 검증
 
 단일 서버·클라이언트 코드를 서버 7개, 클라이언트 5개 ModuleScript로 분리했습니다.
