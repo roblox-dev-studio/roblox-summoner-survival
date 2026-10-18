@@ -15,5 +15,5 @@ function Visuals.pose(rig,origin,time,mode)rig.renderer.pose(rig,origin,time,mod
 function Visuals.place(rig,origin)rig.renderer.place(rig,origin)end
 function Visuals.duration(rig,mode)return rig.renderer.duration and rig.renderer.duration(rig,mode)or .8 end
 function Visuals.destroy(rig)if rig then rig.renderer.destroy(rig)end end
-function Visuals.releaseUnused()skeleton.releaseUnused()end
+function Visuals.releaseUnused()skeleton.releaseUnused();mount.releaseUnused()end
 return Visuals

@@ -25,7 +25,7 @@ return function(deps)
  local footer=label(panel,'Q / 패드 R2 선택한 스킬 · E / 패드 B 대시 · 골렘은 기본 동행  |  선택한 마법은 1단계로 시작하고 레벨업으로 강화됩니다.',UDim2.fromOffset(904,26),UDim2.fromOffset(28,730),nil,palette.muted);footer.TextSize=12
  local activeLabel=label(panel,'Q 사용 스킬',UDim2.fromOffset(900,20),UDim2.fromOffset(28,90),Enum.Font.GothamBold,palette.gold);activeLabel.TextSize=13;activeLabel.TextXAlignment=Enum.TextXAlignment.Left
  local selected,options,buttons={},{},{}
- local activeSkill='fire';local activeButtons={}
+ local activeSkill='iceRush';local activeButtons={}
  local queued=false;local inLobby=nil;local pending=false
  local function refresh()
   local names={};for _,id in ipairs(selected)do for _,v in ipairs(options)do if v.id==id then table.insert(names,v.name)end end end
@@ -84,7 +84,7 @@ return function(deps)
  end)
  net.State.OnClientEvent:Connect(function(s)
   local visible=s.lobby==true
-  if visible and inLobby~=true then selected=table.clone(s.loadout or {});activeSkill=s.activeSkill or 'fire';input.SetSuspended(true);hud.Enabled=false end
+  if visible and inLobby~=true then selected=table.clone(s.loadout or {});activeSkill=s.activeSkill or 'iceRush';input.SetSuspended(true);hud.Enabled=false end
   if not visible and inLobby~=false then
    input.SetSuspended(false);hud.Enabled=true
    local c=player.Character;local root=c and c:FindFirstChild('HumanoidRootPart')

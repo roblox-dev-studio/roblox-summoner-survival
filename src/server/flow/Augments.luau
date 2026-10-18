@@ -24,7 +24,7 @@ local definitions = {
  {id="aether_execute",active="aetherLance",rarity="rare",name="성운 처형",desc="체력 50% 이하 적에게 Q 성운창 피해 +50%."},
  {id="iceRush_wide",active="iceRush",rarity="rare",name="빙하 대로",desc="Q 빙하 쇄도 폭 +50%. 기둥 연출과 판정 함께 확대."},
  {id="quick_cast",rarity="common",name="신속 시전",desc="자동 마법 재사용 주기 -8%p. 최대 3회, Q·골렘·비행 시간 제외.",max=3},
- {id="active_focus",rarity="common",name="집중된 주문",desc="Q 재사용 주기 -15%p. 최대 2회, 7초 → 최저 4.9초.",max=2},
+ {id="active_focus",rarity="common",name="집중된 주문",desc="Q 재사용 주기 -15%p. 최대 2회, 4초 → 최저 2.8초.",max=2},
  {id="lucky_charm",rarity="common",name="행운의 부적",desc="행운 +20. 다음 무작위 카드의 희귀·영웅 등급 가중치 증가.",max=3},
 }
 local byId={}
@@ -50,7 +50,7 @@ function A.Impact(effect,s,kind,pos,radius,phase,empowered)
 end
 function A.Luck(s) return math.min(60,A.Count(s,"lucky_charm")*20) end
 function A.Cooldown(s,base) return base*(1-.08*math.min(3,A.Count(s,"quick_cast"))) end
-function A.ActiveCooldown(s) return 7*(1-.15*math.min(2,A.Count(s,"active_focus"))) end
+function A.ActiveCooldown(s) return 4*(1-.15*math.min(2,A.Count(s,"active_focus"))) end
 function A.Damage(s,kind,base,e,returning)
  if kind=="lightning" and A.Has(s,"lightning_frozen") and ((e.frozen or 0)>0 or (e.slow or 0)>0)then base*=1.6 end
  if kind=="missile" and A.Has(s,"missile_hunter") and (e.elite or e.isBoss or e.isFieldBoss)then base*=1.5 end

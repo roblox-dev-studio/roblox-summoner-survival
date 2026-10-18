@@ -44,7 +44,7 @@ return function(deps)
    local target,nearest=nil,math.huge
    for _,e in ipairs(deps.enemies)do
     local along=(e.pos-previous):Dot(cast.direction)
-    if e.hp>0 and along>=-2.4 and along<=(pos-previous).Magnitude and segmentDistance(e.pos,previous,pos)<=2.4 and along<nearest then target=e;nearest=along end
+    if e.hp>0 and along>=-4 and along<=(pos-previous).Magnitude and segmentDistance(e.pos,previous,pos,.6)<=2.4 and along<nearest then target=e;nearest=along end
    end
    if target then pos=previous+cast.direction*math.clamp(nearest,0,(pos-previous).Magnitude)end
    cast.travelled+=(pos-previous).Magnitude;cast.anchor.CFrame=CFrame.lookAt(pos,pos+cast.direction)
@@ -67,7 +67,7 @@ return function(deps)
    local wall=travel>.001 and workspace:Raycast(previous,pos-previous,params)or nil
    if wall then pos=wall.Position end
    for _,e in ipairs(deps.enemies)do
-    if e.hp>0 and not cast.hits[e] and segmentDistance(e.pos,previous,pos,cast.kind=='aetherLance'and .5 or nil)<=2.4 then
+    if e.hp>0 and not cast.hits[e] and segmentDistance(e.pos,previous,pos,cast.kind=='aetherLance'and .375 or nil)<=2.4 then
      cast.hits[e]=true;local empowered=A.Damage(s,cast.kind,1,e)>1;local amount=A.Damage(s,cast.kind,72+(s.lightning or 0)*8,e);deps.damage(e,amount,s);deps.effect:FireAllClients(cast.kind=='thunder'and'thunderHit'or'aetherHit',e.pos);A.Impact(deps.effect,s,cast.kind,e.pos,3,'hit',empowered)
      if cast.kind=='thunder'and A.Has(s,'thunder_chain')then
       cast.chainHits=cast.chainHits or {};cast.chainCount=cast.chainCount or 0

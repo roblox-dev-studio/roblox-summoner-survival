@@ -19,9 +19,9 @@ return function(deps)
   local currents={};local tipSparks;local age=0
   if spear then
    -- Thin luminous lance, formed inside soft blue/violet ribbons.
-   local shaft=part(model,'SpearShaft',Vector3.new(17,.085,.085),CFrame.new(0,0,2)*CFrame.Angles(0,math.pi/2,0),cyan,Enum.PartType.Cylinder);shaft.Transparency=.2
-   part(model,'SpearSpine',Vector3.new(20,.035,.035),CFrame.new(0,0,.7)*CFrame.Angles(0,math.pi/2,0),white,Enum.PartType.Cylinder)
-   local aura=part(model,'SpearAura',Vector3.new(19,.2,.2),CFrame.new(0,0,1)*CFrame.Angles(0,math.pi/2,0),cyan,Enum.PartType.Cylinder);aura.Transparency=.78
+   local shaft=part(model,'SpearShaft',Vector3.new(17,.14,.14),CFrame.new(0,0,2)*CFrame.Angles(0,math.pi/2,0),cyan,Enum.PartType.Cylinder);shaft.Transparency=.2
+   part(model,'SpearSpine',Vector3.new(20,.055,.055),CFrame.new(0,0,.7)*CFrame.Angles(0,math.pi/2,0),white,Enum.PartType.Cylinder)
+   local aura=part(model,'SpearAura',Vector3.new(19,.36,.36),CFrame.new(0,0,1)*CFrame.Angles(0,math.pi/2,0),cyan,Enum.PartType.Cylinder);aura.Transparency=.78
    local function face(a,b,c,color)
     local ab,ac,bc=b-a,c-a,c-b
     local abd,acd,bcd=ab:Dot(ab),ac:Dot(ac),bc:Dot(bc)
@@ -35,7 +35,7 @@ return function(deps)
     half(b,right,math.abs(ab:Dot(back)));half(c,-right,math.abs(ac:Dot(back)))
    end
    local tip=Vector3.new(0,0,-13);local tail=Vector3.new(0,0,-6.8)
-   local ring={Vector3.new(.17,0,-8.5),Vector3.new(0,.17,-8.5),Vector3.new(-.17,0,-8.5),Vector3.new(0,-.17,-8.5)}
+   local ring={Vector3.new(.34,0,-8.5),Vector3.new(0,.34,-8.5),Vector3.new(-.34,0,-8.5),Vector3.new(0,-.34,-8.5)}
    for i=1,4 do local a,b=ring[i],ring[i%4+1];face(tip,a,b,i%2==0 and white or cyan);face(tail,b,a,cyan)end
    for strand=1,3 do
     for i=1,8 do
@@ -43,7 +43,7 @@ return function(deps)
      local beam=Instance.new('Beam');beam.Name='WaveringLanceRibbon';beam.Attachment0=a;beam.Attachment1=b;beam.FaceCamera=true;beam.Segments=8;beam.LightEmission=1;beam.LightInfluence=0
      beam.Color=ColorSequence.new(strand==3 and Color3.fromRGB(128,116,255)or cyan,white)
      if strand>1 then beam.Texture='rbxasset://textures/particles/smoke_main.dds';beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=.35 end
-     beam.Transparency=NumberSequence.new(strand==1 and .28 or .72);beam.Width0=strand==1 and .055 or 1.1;beam.Width1=beam.Width0;beam.Parent=pivot
+     beam.Transparency=NumberSequence.new(strand==1 and .28 or .72);beam.Width0=strand==1 and .09 or 1.6;beam.Width1=beam.Width0;beam.Parent=pivot
      table.insert(currents,{a=a,b=b,beam=beam,index=i,strand=strand})
     end
    end
@@ -53,8 +53,8 @@ return function(deps)
    local mist=Instance.new('ParticleEmitter');mist.Name='LanceHaze';mist.Texture='rbxasset://textures/particles/smoke_main.dds';mist.Rate=22;mist.Lifetime=NumberRange.new(.25,.55);mist.Speed=NumberRange.new(.5,2);mist.SpreadAngle=Vector2.new(25,25);mist.Size=NumberSequence.new(1.8,0);mist.Color=ColorSequence.new(cyan,Color3.fromRGB(118,99,255));mist.Transparency=NumberSequence.new(.9,1);mist.LightEmission=.65;mist.Parent=host
 
   end
-  local a=Instance.new('Attachment');a.Position=Vector3.new(-.3,0,spear and 9.5 or .3);a.Parent=pivot
-  local b=Instance.new('Attachment');b.Position=Vector3.new(.3,0,spear and 9.5 or .3);b.Parent=pivot
+  local a=Instance.new('Attachment');a.Position=Vector3.new(-.5,0,spear and 9.5 or .3);a.Parent=pivot
+  local b=Instance.new('Attachment');b.Position=Vector3.new(.5,0,spear and 9.5 or .3);b.Parent=pivot
   local trail=Instance.new('Trail');trail.Attachment0=a;trail.Attachment1=b;trail.Lifetime=spear and .3 or .2;trail.Color=ColorSequence.new(white,color);trail.Transparency=NumberSequence.new(.2,1);trail.WidthScale=NumberSequence.new(1,0);trail.LightEmission=1;trail.Parent=pivot
   local light=Instance.new('PointLight');light.Color=color;light.Range=spear and 12 or 6;light.Brightness=1.5;light.Parent=pivot
   local current=anchor.CFrame;local bodyParts={};if spear then for _,p in ipairs(model:GetChildren())do if p:IsA('BasePart')and p~=pivot then table.insert(bodyParts,{part=p,alpha=p.Transparency})end end end;local hasLaunched=false;local conn,destroyConn
@@ -76,7 +76,7 @@ return function(deps)
     for _,v in ipairs(currents)do
      local function point(index)
       local z=-8+index*2.5;local phase=age*5+index*.9+v.strand*2.1
-      local width=(launched and 1.25 or 1.7)*(v.strand==1 and .75 or 1)
+      local width=(launched and 2.1 or 2.3)*(v.strand==1 and .75 or 1)
       return Vector3.new(math.sin(phase)*width,math.cos(phase*.85)*width*.7,z)
      end
      v.a.Position=point(v.index-1);v.b.Position=point(v.index)

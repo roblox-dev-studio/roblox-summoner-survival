@@ -55,7 +55,7 @@ local ok,result=xpcall(function()
  near(target.hp,1000-34-34*1.75,'Outbound and stronger return exactly once');rings.Clear(s)
  local active=require(modules.combat.ActiveSpells)(deps)
  reset();s=state({fire_blast=1,active_focus=2});s.activeSkill='fire';target=enemy(0,-16);local wide=enemy(6,-16);local outside=enemy(8,-16)
- active.Request(s,root.Position,Vector3.new(0,0,-1));near(s.cooldown,4.9,'Q cooldown');for _=1,12 do active.Step(s,.05)end
+ active.Request(s,root.Position,Vector3.new(0,0,-1));near(s.cooldown,2.8,'Q cooldown');for _=1,12 do active.Step(s,.05)end
  assert(target.hp==925 and wide.hp==925 and outside.hp==1000,'Fire expanded radius');assert(events.augmentFireHit[1][2]==7,'Fire visual radius matches')
  reset();s=state({thunder_chain=1});s.activeSkill='thunder';s.lightning=1;target=enemy(0,-15);local extra1=enemy(6,-15);local extra2=enemy(-6,-15);outside=enemy(9,-15)
  active.Request(s,root.Position,Vector3.new(0,0,-1));for _=1,40 do active.Step(s,.05)end
