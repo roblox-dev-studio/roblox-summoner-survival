@@ -6,31 +6,31 @@ return function(parent)
   tween:Create(p,TweenInfo.new(life),{Transparency=1,Size=Vector3.new(.02,.02,p.Size.Z)}):Play();debris:AddItem(p,life+.05)
  end
  return function(kind,pos,direction)
-  local teal=Color3.fromRGB(114,225,209);local gold=Color3.fromRGB(255,195,113)
+  local teal=Color3.fromRGB(127,149,186);local steel=Color3.fromRGB(218,226,240)
   local frame=CFrame.lookAt(pos,pos+(direction or Vector3.new(0,0,-1)))
   if kind=='cleave'then
    for i=1,24 do
-    local a=math.rad(-75+(i-1)*150/24);local b=math.rad(-75+i*150/24)
-    local p=frame:PointToWorldSpace(Vector3.new(math.sin(a)*13,1.2,-math.cos(a)*13));local q=frame:PointToWorldSpace(Vector3.new(math.sin(b)*13,1.2,-math.cos(b)*13))
-    task.delay((i-1)*.008,function()if parent.Parent then line(p,q,.26,gold,.24)end end)
+    local a=math.rad(-85+(i-1)*170/24);local b=math.rad(-85+i*170/24)
+    local p=frame:PointToWorldSpace(Vector3.new(math.sin(a)*19.5,1.2,-math.cos(a)*19.5));local q=frame:PointToWorldSpace(Vector3.new(math.sin(b)*19.5,1.2,-math.cos(b)*19.5))
+    task.delay((i-1)*.008,function()if parent.Parent then line(p,q,.26,steel,.24)end end)
    end
   elseif kind=='slam'then
-   task.delay(.23,function()
+   task.delay(.18,function()
     if not parent.Parent then return end
     local center=Vector3.new(pos.X,.28,pos.Z)
     for i=1,32 do local a=i*math.pi*2/32;local dir=Vector3.new(math.cos(a),0,math.sin(a))
-     line(center+dir*1.5,center+dir*7,.16,gold,.42)
-     if i%4==0 then line(center+dir,center+dir*4+Vector3.new(0,1.2,0),.14,gold,.3)end
+     line(center+dir*1.5,center+dir*10,.16,steel,.42)
+     if i%4==0 then line(center+dir,center+dir*4+Vector3.new(0,1.2,0),.14,steel,.3)end
     end
     local host=Instance.new('Part');host.Name='CommanderImpactDust';host.Size=Vector3.one*.1;host.Transparency=1;host.Anchored=true;host.CanCollide=false;host.CanTouch=false;host.CanQuery=false;host.Position=center;host.Parent=parent;debris:AddItem(host,1)
     local dust=Instance.new('ParticleEmitter');dust.Texture='rbxasset://textures/particles/smoke_main.dds';dust.Rate=0;dust.Speed=NumberRange.new(7,13);dust.Lifetime=NumberRange.new(.2,.45);dust.SpreadAngle=Vector2.new(80,80);dust.Size=NumberSequence.new(1,3);dust.Transparency=NumberSequence.new(.65,1);dust.Color=ColorSequence.new(Color3.fromRGB(152,128,96));dust.Parent=host;dust:Emit(14)
    end)
   elseif kind=='thrust'then
-   task.delay(.16,function()if not parent.Parent then return end
-    for _,side in ipairs({-1,1})do line(pos+frame.RightVector*side*.65+Vector3.new(0,.6,0),pos+direction*24+frame.RightVector*side*.65+Vector3.new(0,.6,0),.12,gold,.24)end
+   task.delay(.12,function()if not parent.Parent then return end
+    for _,side in ipairs({-1,1})do line(pos+frame.RightVector*side*.65+Vector3.new(0,.6,0),pos+direction*30+frame.RightVector*side*.65+Vector3.new(0,.6,0),.12,steel,.24)end
    end)
   elseif kind=='charge'then
-   for _,side in ipairs({-1,1})do line(pos+frame.RightVector*side*2,pos+direction*30+frame.RightVector*side*2,.18,teal,.35)end
+   for _,side in ipairs({-1,1})do line(pos+frame.RightVector*side*4,pos+direction*42+frame.RightVector*side*4,.18,teal,.35)end
   else
    local radius=kind=='defeat'and 7 or 4
    for i=1,18 do local a=i*math.pi*2/18;local b=(i+1)*math.pi*2/18
