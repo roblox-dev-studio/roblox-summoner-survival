@@ -44,7 +44,7 @@ return function(deps)
   local camera=workspace.CurrentCamera;if camera then viewportConnection=camera:GetPropertyChangedSignal('ViewportSize'):Connect(resize)end;resize()
  end
  local function menuBlocked()
-  for _,name in ipairs({'SummonerLobbyUI','DragonPreview','SkillPreview','EnemyPreview'})do
+  for _,name in ipairs({'SummonerLobbyUI','DragonPreview','SkillPreview','EnemyPreview','SummonerRunRecap'})do
    local other=playerGui:FindFirstChild(name)
    if other and(other:GetAttribute('Open')==true or other:GetAttribute('LoadoutOpen')==true)then return true end
   end
@@ -110,7 +110,7 @@ return function(deps)
   if currentWorld and prompt:IsDescendantOf(currentWorld)and promptStates[prompt]~=nil then open(prompt:GetAttribute('LobbyHubAction'))end
  end)
  local function watchMenu(other)
-  if not table.find({'SummonerLobbyUI','DragonPreview','SkillPreview','EnemyPreview'},other.Name)or menuConnections[other]then return end
+  if not table.find({'SummonerLobbyUI','DragonPreview','SkillPreview','EnemyPreview','SummonerRunRecap'},other.Name)or menuConnections[other]then return end
   menuConnections[other]={other:GetAttributeChangedSignal('Open'):Connect(syncVisibility),other:GetAttributeChangedSignal('LoadoutOpen'):Connect(syncVisibility)};syncVisibility()
  end
  for _,other in ipairs(playerGui:GetChildren())do watchMenu(other)end

@@ -12,7 +12,7 @@
   },
   "sourceHashes": {
     "src/server/flow/Loadout.luau": "8b5bfb5a02342c90fe7bdd8c5944d694e6021ee2b8daf9927103a48eee5a1fd3",
-    "src/server/flow/Augments.luau": "1aa17517bfc67b8479e739101db9489709004c083a780ff9ff0b80808bb72e96",
+    "src/server/flow/Augments.luau": "8e25886c6cce2dc67b3f91faf9e8858c9d19034350543964ad522a0c10e85d44",
     "src/server/combat/Weapons.luau": "0b06b6e9ca0cf125f4459e75735b366c6f8b68131c8ef986e6613527b8a23860",
     "src/client/combat/AugmentStyles.luau": "c47f1c9e36fe34a9da0ffdacb2f48103a390ab36ff67dae13e2df4cf93d62087",
     "src/client/flow/SkillPreview.luau": "4ae3956c57489dbb06f80d5213da2d6badfcf32da7ae431b3590ea0de5f90f66",

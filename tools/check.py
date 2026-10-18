@@ -47,6 +47,7 @@ def main():
     subprocess.run([str(tool_dir / ("luau" + suffix)), "tests/augments.spec.luau"], cwd=ROOT, check=True)
     subprocess.run([str(tool_dir / ("luau" + suffix)), "tests/enemy_catalog.spec.luau"], cwd=ROOT, check=True)
     subprocess.run([str(tool_dir / ("luau" + suffix)), "tests/lobby_scores.spec.luau"], cwd=ROOT, check=True)
+    subprocess.run([str(tool_dir / ("luau" + suffix)), "tests/run_summary.spec.luau"], cwd=ROOT, check=True)
     print(f"PASS: {len(sources)} Luau files compile; no unexpected globals. Studio playtest still required.")
 
 

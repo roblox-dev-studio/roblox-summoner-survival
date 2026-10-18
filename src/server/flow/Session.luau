@@ -5,6 +5,8 @@ return function(deps)
 	local creature, finishDash, clearIceShots, sync = deps.creature, deps.finishDash, deps.clearIceShots, deps.sync
 	local clock, resetSpawn = deps.clock, deps.resetSpawn
 	local loadouts=require(script.Parent.Loadout)
+	local results=require(script.Parent.RunSummary)({loadouts=loadouts,augments=require(script.Parent.Augments)})
+	local lastResults={}
 	local saved={}
 	local savedActive={}
 	local starting = false
@@ -12,7 +14,9 @@ return function(deps)
 	local function endPlayer(s,result)
 		if states[s.player]~=s or s.over then return end
 		s.over=true; s.result=result; s.offers=nil
-		if deps.scoreRecord then deps.scoreRecord(s,result)end
+		local newBest=deps.scoreRecord and deps.scoreRecord(s,result)
+		s.runResult=results.Capture(s,clock,deps.scoreBest and deps.scoreBest(s.player),newBest)
+		lastResults[s.player]=s.runResult
 		finishDash(s)
 		clearIceShots(s)
 		local c=s.player.Character; local h=c and c:FindFirstChildOfClass("Humanoid")
@@ -22,6 +26,7 @@ return function(deps)
 	local function addPlayer(player)
 		local s={player=player,level=1,xp=0,kills=0,fire=0,lightning=0,ice=0,meteor=0,blades=0,frost=0,ward=0,missile=0,skyLances=0,lightRing=0,weaponId="starlightWand",golem=1,vitality=0,agility=0,magnet=0,cooldown=0,fireClock=0,lightningClock=0,iceClock=0,golemClock=0,over=false}
 		s.augments={};s.rerolls=2;s.offerRevision=0
+		s.lastRun=lastResults[player]
 		s.activeSkill=savedActive[player] or 'iceRush';s.activeName=loadouts.ActiveNames[s.activeSkill]
 		s.lobby=true;s.loadout=table.clone(saved[player] or loadouts.Defaults)
 		states[player]=s
@@ -73,6 +78,7 @@ return function(deps)
   end
   if bossTest then clock.elapsed=clock.roundLength elseif fieldTest then clock.elapsed=60 end
   for p,state in pairs(states)do
+   state.runStartedAt=clock.elapsed
    state.bossTest=bossTest;state.bossTestQueued=nil;state.fieldBossTest=fieldTest;state.fieldBossTestQueued=nil
    state.lobby=false;state.queued=false;state.lobbyMessage=nil
    for _,id in ipairs(state.loadout)do state[id]=bossTest and 5 or(fieldTest and 3 or 1) end
@@ -110,6 +116,7 @@ return function(deps)
   s.returning=true
   saved[s.player]=table.clone(s.loadout);savedActive[s.player]=s.activeSkill
   endPlayer(s,'retreat')
+  s.lastRun=s.runResult or s.lastRun
   s.lobby=true;s.queued=false;s.loaded=false;s.over=false;s.result=nil;s.offers=nil;s.previewSkills=nil;s.previewDragon=nil
   sync(s)
   -- A teammate's active run continues; only the departing player's objects are cleared.
@@ -121,7 +128,7 @@ return function(deps)
   task.spawn(addPlayer,player)
  end
  local function removePlayer(p)
-		saved[p]=nil;savedActive[p]=nil
+		saved[p]=nil;savedActive[p]=nil;lastResults[p]=nil
 		if deps.scoreRemove then deps.scoreRemove(p)end
 		local s=states[p]; if s and s.pet then s.pet:Destroy() end; states[p]=nil
 		if s then clearIceShots(s) end

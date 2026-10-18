@@ -146,7 +146,7 @@ function A.Apply(s,id)
 end
 function A.Summary(s)
  local result={}
- for _,d in ipairs(definitions)do if A.Count(s,d.id)>0 then table.insert(result,{name=d.name,count=A.Count(s,d.id),desc=d.desc,rarity=d.rarity})end end
+ for _,d in ipairs(definitions)do if A.Count(s,d.id)>0 then table.insert(result,{id=d.id,name=d.name,count=A.Count(s,d.id),desc=d.desc,rarity=d.rarity})end end
  return result
 end
 return A

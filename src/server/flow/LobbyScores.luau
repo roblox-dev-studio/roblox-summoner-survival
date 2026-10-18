@@ -38,5 +38,6 @@ return function()
   end
   local result={};for i,entry in ipairs(cached)do result[i]={userId=entry.userId,name=entry.name,bestScore=entry.bestScore}end;return result
  end
- return {Add=add,Record=record,Remove=remove,Snapshot=snapshot}
+ return {Add=add,Record=record,Remove=remove,Snapshot=snapshot,
+  Best=function(player)local entry=entries[player];return entry and entry.bestScore end}
 end
