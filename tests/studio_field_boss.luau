@@ -11,21 +11,33 @@ local ok,result=xpcall(function()
  local awards=0
  local create=require(modules.shared.EnemyModels)({block=function(parent,name,size,pos,color,material)local p=Instance.new('Part');p.Name=name;p.Size=size;p.Position=pos;p.Color=color;p.Material=material or Enum.Material.SmoothPlastic;p.Anchored=true;p.CanCollide=false;p.Parent=parent;return p end})
  local boss=require(modules.world.FieldBoss)({world=folder,enemies=enemies,states=states,clock=clock,rootOf=rootOf,creature=function(name,_,_,kind)return create(name,kind,folder)end,reward=function()awards+=1 end})
- boss.Step(.05);assert(not clock.fieldBoss,'Not before 60s')
- clock.elapsed=60;boss.Step(.05);local b=clock.fieldBoss;assert(b and b.isFieldBoss and not b.isBoss and #enemies==1,'Separate miniboss classification')
- assert((root.Position-b.pos).Magnitude>24,'Spawn separated from player')
  local function advance(seconds)for _=1,math.ceil(seconds/.05)do boss.Step(.05)end end
- root.Position=b.pos+b.direction*10;advance(1.35);advance(.7)
- assert(b.action=='cleaveWindup','First nearby attack is cleave')
- local locked=b.direction;local warning=folder:FindFirstChild('FieldBossTelegraphs');assert(warning and #warning:GetChildren()>20,'Sector warning')
- root.Position=b.pos-locked*8;advance(.4);assert(b.direction:Dot(locked)>.999,'Windup direction stays locked')
- root.Position=b.pos+locked*8;local before=h.Health;advance(1)
+ boss.Step(.05);assert(not clock.fieldBoss,'Not before 60s')
+ clock.elapsed=60;boss.Step(.05);local b=clock.fieldBoss
+ local function untilAction(name,limit)
+  for _=1,math.ceil(limit/.05)do if b.action==name then return end;boss.Step(.05)end
+  error('Missing action: '..name..' current '..b.action)
+ end
+ assert(b and b.maxHp==1560 and b.isFieldBoss and not b.isBoss and #enemies==1,'Separate miniboss classification')
+ assert((root.Position-b.pos).Magnitude>24,'Spawn separated from player')
+ root.Position=b.pos+b.direction*10;untilAction('cleaveWindup',2)
+ local locked=b.direction;assert(folder.FieldBossTelegraphs:FindFirstChild('CleaveSector'),'Sector warning')
+ root.Position=b.pos-locked*8;advance(.3);assert(b.direction:Dot(locked)>.999,'Cleave direction stays locked')
+ root.Position=b.pos+locked*8;local before=h.Health;untilAction('recover',2)
  assert(h.Health==before-18,'Cleave damages once')
- advance(1.5);local count=0
- for _=1,100 do boss.Step(.05);if b.action=='chargeWindup'then count+=1;break end end
- assert(count==1,'Second attack is mounted charge')
- local start=b.pos;local dir=b.direction;root.Position=start+dir*16;s.invulnerable=1
- advance(1.65);assert(h.Health==before-18,'Dash immunity applies to swept charge');assert((b.pos-start).Magnitude>15,'Actual server movement')
+ untilAction('slamWindup',3);local impact=b.impactPoint
+ assert(folder.FieldBossTelegraphs:FindFirstChild('SlamArea'),'Slam circular warning')
+ root.Position=b.pos-b.direction*10;advance(.35);assert(b.impactPoint==impact,'Slam landing point stays locked')
+ root.Position=impact;before=h.Health;untilAction('recover',2)
+ assert(h.Health==before-26,'Overhead slam damages once')
+ untilAction('thrustWindup',3);locked=b.direction
+ assert(folder.FieldBossTelegraphs:FindFirstChild('ThrustLane'),'Thrust narrow lane')
+ root.Position=b.pos-locked*7;advance(.25);assert(b.direction:Dot(locked)>.999,'Thrust aim locked')
+ root.Position=b.strikeOrigin+locked*18;before=h.Health;untilAction('recover',2)
+ assert(h.Health==before-22,'Thrust damages once');assert((b.pos-b.strikeOrigin).Magnitude>4,'Thrust includes short lunge')
+ root.Position=b.pos+b.direction*45;untilAction('chargeWindup',4)
+ local start=b.pos;root.Position=start+b.direction*16;s.invulnerable=1;before=h.Health
+ untilAction('recover',2);assert(h.Health==before,'Dash immunity applies to swept charge');assert((b.pos-start).Magnitude>28,'Charge travels 30 studs')
  s.invulnerable=0;b.hp=0;boss.Resolve();boss.Resolve()
  assert(awards==1 and not clock.fieldBoss and #enemies==0 and clock.phase=='survival','Reward once, no final victory')
  boss.Reset();clock.elapsed=60;boss.Step(.05);assert(clock.fieldBoss,'Reset permits next round')
@@ -33,9 +45,16 @@ local ok,result=xpcall(function()
  boss.Reset();s.bossTest=true;clock.elapsed=60;boss.Step(.05);assert(not clock.fieldBoss,'Dragon-only test excludes miniboss')
  s.bossTest=nil;boss.Reset();boss.Step(.05);clock.phase='boss';boss.Step(.05);assert(not clock.fieldBoss and not folder:FindFirstChild('FieldBossTelegraphs'),'Final boss clears miniboss and warnings')
  clock.phase='survival';boss.Reset();states[2]={player={Character=character}};clock.elapsed=60;boss.Step(.05)
- local coop=clock.fieldBoss;assert(coop.maxHp==1980,'Two-player HP scales on spawn');coop.hp=990;states[2].over=true;boss.Step(.05)
- assert(coop.maxHp==1200 and math.abs(coop.hp-600)<.01,'Departed participant scales remaining HP proportionally')
+ local coop=clock.fieldBoss;assert(coop.maxHp==2574,'Two-player HP scales on spawn');coop.hp=1287;states[2].over=true;boss.Step(.05)
+ assert(coop.maxHp==1560 and math.abs(coop.hp-780)<.01,'Departed participant scales remaining HP proportionally')
  states[2].over=false;coop.hp=0;boss.Resolve();assert(awards==3,'Both live participants receive defeat reward')
- return {coopScaling=true,sharedReward=true,spawn=true,lockedTelegraph=true,oneHit=true,dashImmunity=true,mountedCharge=true,rewardOnce=true,retreat=true,reset=true,dragonOnly=true}
+ states[2]=nil;boss.Reset();boss.Step(.05);b=clock.fieldBoss
+ root.Position=b.pos+b.direction*45;untilAction('approach',2);local begin=b.pos;advance(.25)
+ assert((b.pos-begin).Magnitude>3.3,'Fast approach')
+ b.lastAttack='charge';untilAction('thrustWindup',3)
+ local tangent=Vector3.new(-b.direction.Z,0,b.direction.X)
+ root.Position=b.strikeOrigin+b.direction*15+tangent*4;before=h.Health;untilAction('recover',2)
+ assert(h.Health==before,'Sideways movement escapes thrust lane')
+ return {cleave=true,slam=true,thrust=true,mountedCharge=true,lockedTelegraphs=true,oneHit=true,dashImmunity=true,sideDodge=true,sharedReward=true,retreat=true,reset=true,coopScaling=true,fastApproach=true}
 end,debug.traceback)
 folder:Destroy();if not ok then error(result)end;return result

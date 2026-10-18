@@ -10,8 +10,9 @@ return function()
    local ok,rig=pcall(mesh.create,model);creating[model]=nil
    if not ok then warn('[EnemyPresentation] '..tostring(rig));return end
    if not rig then return end
-   if not model.Parent then mesh.destroy(rig);return end
-   rig.root=model.PrimaryPart;rig.previous=rig.root.Position;rig.motion=motion.create(model.Name..':'..model:GetAttribute('EnemyKind'),mesh.duration(rig,'walk'));rig.attack=0;rig.attackTime=10;rig.prepareTime=0;rig.modelScale=model:GetScale();rig.wasElite=model:GetAttribute('Elite');rig.frame=rig.root.CFrame;rigs[model]=rig
+   local root=model.PrimaryPart
+   if not model.Parent or not root or not root.Parent then mesh.destroy(rig);return end
+   rig.root=root;rig.previous=rig.root.Position;rig.motion=motion.create(model.Name..':'..model:GetAttribute('EnemyKind'),mesh.duration(rig,'walk'));rig.attack=0;rig.attackTime=10;rig.prepareTime=0;rig.modelScale=model:GetScale();rig.wasElite=model:GetAttribute('Elite');rig.frame=rig.root.CFrame;rigs[model]=rig
   end)
  end
  for _,v in ipairs(world:GetChildren())do attach(v)end
@@ -39,13 +40,7 @@ return function()
      if frozen then mode=rig.mode or'idle'end;rig.mode=mode
      local visualFrame=motion.frame(rig.motion,rig.frame,delta,mode=='walk',frozen)
      if model:GetAttribute('EnemyKind')=='commander'then
-      local action=model:GetAttribute('FieldAction');local progress=model:GetAttribute('FieldProgress')or 0
-      local pose='guard';local clock=rig.motion.time
-      if action=='approach'or action=='charge'then pose='walk';clock=rig.motion.gait
-      elseif action=='cleaveWindup'then pose='sweep';clock=mesh.duration(rig,'sweep')*.28*progress
-      elseif action=='cleave'then pose='sweep';clock=mesh.duration(rig,'sweep')*(.28+.72*progress)
-      elseif action=='chargeWindup'then pose='guard';clock=progress*mesh.duration(rig,'guard')end
-      mesh.pose(rig,visualFrame,clock,pose)
+      mesh.pose(rig,visualFrame,rig.motion.gait,model:GetAttribute('FieldAction')or'idle')
      else
      mesh.pose(rig,visualFrame,mode=='prepare'and rig.prepareTime or(mode=='attack'and rig.attackTime or(mode=='walk'and rig.motion.gait or rig.motion.time)),mode)
      end
