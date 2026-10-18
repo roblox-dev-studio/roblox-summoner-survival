@@ -351,7 +351,7 @@ local session = require(modules.flow.Session)({
     creature = actors.Create, finishDash = movement.FinishDash,
     clearIceShots = combat.ClearProjectiles, sync = progression.Sync,
     allowBossTest=RunService:IsStudio(),
-    scoreAdd=lobbyScores.Add,scoreRecord=lobbyScores.Record,scoreRemove=lobbyScores.Remove,
+    scoreAdd=lobbyScores.Add,scoreRecord=lobbyScores.Record,scoreRemove=lobbyScores.Remove,scoreBest=lobbyScores.Best,
     lobbyCenter=Vector3.new(0,0,178),lobbyRadius=58,
     clock = clock, lobbySpawn=lobbySpawn, resetSpawn = waves.ResetSpawn, resetBoss = function() if boss then boss.Reset() end;if fieldBoss then fieldBoss.Reset()end end,
 })
@@ -1532,7 +1532,7 @@ function A.Apply(s,id)
 end
 function A.Summary(s)
  local result={}
- for _,d in ipairs(definitions)do if A.Count(s,d.id)>0 then table.insert(result,{name=d.name,count=A.Count(s,d.id),desc=d.desc,rarity=d.rarity})end end
+ for _,d in ipairs(definitions)do if A.Count(s,d.id)>0 then table.insert(result,{id=d.id,name=d.name,count=A.Count(s,d.id),desc=d.desc,rarity=d.rarity})end end
  return result
 end
 return A
@@ -1616,7 +1616,8 @@ return function()
   end
   local result={};for i,entry in ipairs(cached)do result[i]={userId=entry.userId,name=entry.name,bestScore=entry.bestScore}end;return result
  end
- return {Add=add,Record=record,Remove=remove,Snapshot=snapshot}
+ return {Add=add,Record=record,Remove=remove,Snapshot=snapshot,
+  Best=function(player)local entry=entries[player];return entry and entry.bestScore end}
 end
 ]====])
 -- Source: src/server/flow/Progression.luau
@@ -1643,7 +1644,7 @@ return function(deps)
         local remaining=clock.phase=="boss" and math.floor(clock.bossElapsed) or clock.roundLength-math.floor(clock.elapsed)
         local b=clock.boss;local f=clock.fieldBoss
 		update:FireClient(s.player,{time=math.max(0,remaining),phase=clock.phase,lobby=s.lobby==true,lobbyScores=s.lobby and deps.lobbyScores and deps.lobbyScores()or nil,queued=s.queued==true,bossTestQueued=s.bossTestQueued==true,bossTest=s.bossTest==true,fieldBossTestQueued=s.fieldBossTestQueued==true,fieldBossTest=s.fieldBossTest==true,fieldBoss=f and {name=f.name,hp=math.max(0,f.hp),maxHp=f.maxHp,action=f.action}or nil,loadout=s.loadout,spellOptions=s.lobby and spellOptions or nil,activeOptions=s.lobby and deps.activeOptions or nil,activeSkill=s.activeSkill or "iceRush",activeName=s.activeName or "빙하 쇄도",lobbyMessage=s.lobbyMessage,shield=s.shield or 0,boss=b and {name=b.name,hp=math.max(0,b.hp),maxHp=b.maxHp,stage=b.phase,airborne=b.airborne} or nil,level=s.level,xp=s.xp,need=need(s),hp=h and math.ceil(h.Health) or 0,maxHp=h and h.MaxHealth or 100,
-			kills=s.kills,fire=s.fire,lightning=s.lightning,ice=s.ice,meteor=s.meteor or 0,blades=s.blades or 0,frost=s.frost or 0,ward=s.ward or 0,missile=s.missile or 0,skyLances=s.skyLances or 0,lightRing=s.lightRing or 0,golem=s.golem,offers=s.offers,offerRevision=s.offerRevision,luck=augments.Luck(s),offerOdds=s.offerOdds,augmentWeights=augments.Weights(s),augments=augments.Summary(s),rerolls=s.rerolls==nil and 2 or s.rerolls,over=s.over,result=s.result,cooldown=math.max(0,math.ceil(s.cooldown)),dashCooldown=math.ceil((s.dashCooldown or 0)*10)/10,golemCooldown=math.max(0,math.ceil(s.petHeavyCooldown or 0)),paused=paused()})
+			runResult=s.over and s.runResult or nil,lastRun=s.lobby and s.lastRun or nil,kills=s.kills,fire=s.fire,lightning=s.lightning,ice=s.ice,meteor=s.meteor or 0,blades=s.blades or 0,frost=s.frost or 0,ward=s.ward or 0,missile=s.missile or 0,skyLances=s.skyLances or 0,lightRing=s.lightRing or 0,golem=s.golem,offers=s.offers,offerRevision=s.offerRevision,luck=augments.Luck(s),offerOdds=s.offerOdds,augmentWeights=augments.Weights(s),augments=augments.Summary(s),rerolls=s.rerolls==nil and 2 or s.rerolls,over=s.over,result=s.result,cooldown=math.max(0,math.ceil(s.cooldown)),dashCooldown=math.ceil((s.dashCooldown or 0)*10)/10,golemCooldown=math.max(0,math.ceil(s.petHeavyCooldown or 0)),paused=paused()})
 	end
 	local function levelCheck(s)
 		if s.over or s.offers or s.lobby then return end
@@ -1735,6 +1736,35 @@ return function(deps)
 	}
 end
 ]====])
+-- Source: src/server/flow/RunSummary.luau
+addModule(modules,{"flow","RunSummary"},[====[
+-- Capture detached, server-owned results once. No rewards or persistent storage.
+return function(deps)
+ local augments,loadouts=deps.augments,deps.loadouts
+ local revision=0
+ local function capture(s,clock,bestScore,newBest)
+  revision+=1
+  local spells={}
+  for _,id in ipairs(s.loadout or {})do
+   table.insert(spells,{id=id,name=augments.Labels[id]or id,level=s[id]or 1})
+  end
+  local stacks=augments.Summary(s)
+  local count=0;for _,entry in ipairs(stacks)do count+=entry.count end
+  local test=s.bossTest==true or s.fieldBossTest==true
+  return {
+   revision=revision,result=s.result,seconds=math.max(0,math.floor((clock.elapsed or 0)-(s.runStartedAt or 0))),
+   level=s.level,kills=s.kills,spells=spells,activeSkill=s.activeSkill,
+   activeName=loadouts.ActiveNames[s.activeSkill]or s.activeName or '사용 스킬',golem=s.golem,
+   augments=stacks,augmentCount=count,luck=augments.Luck(s),
+   rerollsUsed=math.clamp(2-(s.rerolls or 2),0,2),
+   vitality=s.vitality or 0,agility=s.agility or 0,magnet=s.magnet or 0,
+   fieldBossRewarded=s.fieldBossRewarded==true,testMode=test,
+   bestScore=not test and bestScore or nil,newBest=not test and newBest==true,
+  }
+ end
+ return {Capture=capture}
+end
+]====])
 -- Source: src/server/flow/Session.luau
 addModule(modules,{"flow","Session"},[====[
 -- Join, death, victory and full-round restart.
@@ -1744,6 +1774,8 @@ return function(deps)
 	local creature, finishDash, clearIceShots, sync = deps.creature, deps.finishDash, deps.clearIceShots, deps.sync
 	local clock, resetSpawn = deps.clock, deps.resetSpawn
 	local loadouts=require(script.Parent.Loadout)
+	local results=require(script.Parent.RunSummary)({loadouts=loadouts,augments=require(script.Parent.Augments)})
+	local lastResults={}
 	local saved={}
 	local savedActive={}
 	local starting = false
@@ -1751,7 +1783,9 @@ return function(deps)
 	local function endPlayer(s,result)
 		if states[s.player]~=s or s.over then return end
 		s.over=true; s.result=result; s.offers=nil
-		if deps.scoreRecord then deps.scoreRecord(s,result)end
+		local newBest=deps.scoreRecord and deps.scoreRecord(s,result)
+		s.runResult=results.Capture(s,clock,deps.scoreBest and deps.scoreBest(s.player),newBest)
+		lastResults[s.player]=s.runResult
 		finishDash(s)
 		clearIceShots(s)
 		local c=s.player.Character; local h=c and c:FindFirstChildOfClass("Humanoid")
@@ -1761,6 +1795,7 @@ return function(deps)
 	local function addPlayer(player)
 		local s={player=player,level=1,xp=0,kills=0,fire=0,lightning=0,ice=0,meteor=0,blades=0,frost=0,ward=0,missile=0,skyLances=0,lightRing=0,weaponId="starlightWand",golem=1,vitality=0,agility=0,magnet=0,cooldown=0,fireClock=0,lightningClock=0,iceClock=0,golemClock=0,over=false}
 		s.augments={};s.rerolls=2;s.offerRevision=0
+		s.lastRun=lastResults[player]
 		s.activeSkill=savedActive[player] or 'iceRush';s.activeName=loadouts.ActiveNames[s.activeSkill]
 		s.lobby=true;s.loadout=table.clone(saved[player] or loadouts.Defaults)
 		states[player]=s
@@ -1812,6 +1847,7 @@ return function(deps)
   end
   if bossTest then clock.elapsed=clock.roundLength elseif fieldTest then clock.elapsed=60 end
   for p,state in pairs(states)do
+   state.runStartedAt=clock.elapsed
    state.bossTest=bossTest;state.bossTestQueued=nil;state.fieldBossTest=fieldTest;state.fieldBossTestQueued=nil
    state.lobby=false;state.queued=false;state.lobbyMessage=nil
    for _,id in ipairs(state.loadout)do state[id]=bossTest and 5 or(fieldTest and 3 or 1) end
@@ -1849,6 +1885,7 @@ return function(deps)
   s.returning=true
   saved[s.player]=table.clone(s.loadout);savedActive[s.player]=s.activeSkill
   endPlayer(s,'retreat')
+  s.lastRun=s.runResult or s.lastRun
   s.lobby=true;s.queued=false;s.loaded=false;s.over=false;s.result=nil;s.offers=nil;s.previewSkills=nil;s.previewDragon=nil
   sync(s)
   -- A teammate's active run continues; only the departing player's objects are cleared.
@@ -1860,7 +1897,7 @@ return function(deps)
   task.spawn(addPlayer,player)
  end
  local function removePlayer(p)
-		saved[p]=nil;savedActive[p]=nil
+		saved[p]=nil;savedActive[p]=nil;lastResults[p]=nil
 		if deps.scoreRemove then deps.scoreRemove(p)end
 		local s=states[p]; if s and s.pet then s.pet:Destroy() end; states[p]=nil
 		if s then clearIceShots(s) end
@@ -2935,17 +2972,20 @@ local cameraController=require(world:WaitForChild("Camera"))({player=player})
 require(world:WaitForChild("CharacterMotion"))()
 require(world:WaitForChild("DragonPresentation"))()
 require(world:WaitForChild("EnemyPresentation"))()
-local skillPreview,enemyPreview,lobby,lobbyHub
+local skillPreview,enemyPreview,lobby,lobbyHub,recap
 local function menuMovement(open)
  local module=player.PlayerScripts:FindFirstChild('PlayerModule')
  if module then local ok,controls=pcall(function()return require(module):GetControls()end);if ok then if open then controls:Disable()else controls:Enable()end end end
 end
-local function closeLobbyMenus()if lobbyHub then lobbyHub.Close()end;if lobby then lobby.Close()end end
+local function closeLobbyMenus()if recap then recap.Close()end;if lobbyHub then lobbyHub.Close()end;if lobby then lobby.Close()end end
 local dragonPreview=require(world:WaitForChild("DragonPreview"))({player=player,net=net,input=input,hud=hud.Gui,beforeOpen=function()closeLobbyMenus();if skillPreview then skillPreview.Close()end;if enemyPreview then enemyPreview.Close()end end})
 lobby=require(flow:WaitForChild("Lobby"))({player=player,net=net,input=input,hud=hud.Gui,camera=cameraController,onPanelChanged=menuMovement,beforeOpen=function()
- if lobbyHub then lobbyHub.Close()end;if skillPreview then skillPreview.Close()end;if enemyPreview then enemyPreview.Close()end;if dragonPreview then dragonPreview.Close()end
+ if recap then recap.Close()end;if lobbyHub then lobbyHub.Close()end;if skillPreview then skillPreview.Close()end;if enemyPreview then enemyPreview.Close()end;if dragonPreview then dragonPreview.Close()end
 end})
 lobbyHub=require(flow:WaitForChild('LobbyHub'))({player=player,net=net,onLoadout=function()lobby.Open()end,onPanelChanged=menuMovement})
+recap=require(flow:WaitForChild('RunRecap'))({player=player,net=net,onPanelChanged=menuMovement,beforeOpen=function()
+ closeLobbyMenus();if skillPreview then skillPreview.Close()end;if enemyPreview then enemyPreview.Close()end;if dragonPreview then dragonPreview.Close()end
+end})
 skillPreview=require(flow:WaitForChild("SkillPreview"))({player=player,net=net,input=input,hud=hud.Gui,dragon=dragonPreview,camera=cameraController,beforeOpen=function()closeLobbyMenus();if enemyPreview then enemyPreview.Close()end end})
 enemyPreview=require(world:WaitForChild('EnemyPreview'))({player=player,net=net,input=input,hud=hud.Gui,camera=cameraController,beforeOpen=function()closeLobbyMenus();if skillPreview then skillPreview.Close()end;if dragonPreview then dragonPreview.Close()end end})
 net.Action:FireServer("ready")
@@ -5920,11 +5960,6 @@ return function(deps)
 		buttons[i]={button=b,tag=tag,name=name,desc=desc,image=image,fallback=fallback,border=b:FindFirstChildOfClass("UIStroke")}
 		b.Activated:Connect(function() if b:GetAttribute("ChoiceId") and not waiting then waiting=true; net.Action:FireServer("choose",b:GetAttribute("ChoiceId"),offerRevision) end end)
 	end
-	local ending=make("Frame",gui,{Name="Ending",Size=UDim2.fromScale(1,1),BackgroundColor3=palette.bg,BackgroundTransparency=.08,Visible=false,ZIndex=20})
-	local resultTitle=label(ending,"생존 성공!",UDim2.new(.9,0,0,70),UDim2.fromScale(.5,.32),Enum.Font.GothamBold,palette.mint); resultTitle.AnchorPoint=Vector2.new(.5,.5); resultTitle.TextSize=38; resultTitle.ZIndex=21
-	local resultInfo=label(ending,"",UDim2.new(.9,0,0,60),UDim2.fromScale(.5,.48),nil,palette.text); resultInfo.AnchorPoint=Vector2.new(.5,.5); resultInfo.TextSize=19; resultInfo.ZIndex=21
-	local again=make("TextButton",ending,{Name="Restart",Size=UDim2.fromOffset(220,58),Position=UDim2.fromScale(.5,.65),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.mint,TextColor3=palette.bg,Text="로비로 돌아가기",Font=Enum.Font.GothamBold,TextSize=20,ZIndex=21}); round(again)
-	again.Activated:Connect(function() net.Action:FireServer("returnToLobby") end)
 	pulse.Activated:Connect(deps.input.FireWave)
 	dashButton.Activated:Connect(deps.input.Dash)
 	local lastChoice=""
@@ -5965,7 +6000,7 @@ return function(deps)
 		golemStatus.Text=(s.golemCooldown or 0)>0 and "대지 강타 · 자동 · "..s.golemCooldown.."초" or "대지 강타 · 자동 · 적 탐색 중"
 		if (s.shield or 0)>0 then golemStatus.Text="수호 결계 "..math.ceil(s.shield).." · "..golemStatus.Text end
 		pulse.BackgroundColor3=s.cooldown>0 and Color3.fromRGB(101,131,139) or palette.mint
-		ending.Visible=s.over==true; overlay.Visible=s.offers~=nil and not s.over
+		overlay.Visible=s.offers~=nil and not s.over
 		if s.offers then
 			local ids={}; for _,v in ipairs(s.offers) do table.insert(ids,v.id..v.level) end
 			local key=tostring(s.offerRevision or s.level)..table.concat(ids)
@@ -5980,7 +6015,6 @@ return function(deps)
 				if offer then v.button:SetAttribute("ChoiceId",offer.id); v.tag.Text=(rarityNames[offer.rarity]or"일반").." · "..offer.tag.."  /  "..offer.level..(offer.kind=="level"and"단계"or"회");v.tag.TextColor3=rarityColors[offer.rarity]or palette.mint;if v.border then v.border.Color=v.tag.TextColor3;v.border.Thickness=offer.rarity=="epic"and 2 or 1 end; v.name.Text=offer.title; v.desc.Text=offer.desc;icons.Apply(v.image,offer.id,v.fallback);v.fallback.TextColor3=v.tag.TextColor3 end
 			end
 		else waiting=false; lastChoice="" end
-		if s.over then resultTitle.Text=s.result=="victory" and "드래곤 격파!" or "다시 도전!"; resultInfo.Text=string.format("레벨 %d  ·  처치 %d  ·  증강 %d  ·  행운 +%d\n이번 판 증강은 로비 복귀 시 초기화됩니다.",s.level,s.kills,ranks,s.luck or 0) end
 	end)
 
 	gui.Destroying:Connect(function()resizeConnection:Disconnect();stateConnection:Disconnect()end)
@@ -6176,7 +6210,7 @@ return function(deps)
   local camera=workspace.CurrentCamera;if camera then viewportConnection=camera:GetPropertyChangedSignal('ViewportSize'):Connect(resize)end;resize()
  end
  local function menuBlocked()
-  for _,name in ipairs({'SummonerLobbyUI','DragonPreview','SkillPreview','EnemyPreview'})do
+  for _,name in ipairs({'SummonerLobbyUI','DragonPreview','SkillPreview','EnemyPreview','SummonerRunRecap'})do
    local other=playerGui:FindFirstChild(name)
    if other and(other:GetAttribute('Open')==true or other:GetAttribute('LoadoutOpen')==true)then return true end
   end
@@ -6242,7 +6276,7 @@ return function(deps)
   if currentWorld and prompt:IsDescendantOf(currentWorld)and promptStates[prompt]~=nil then open(prompt:GetAttribute('LobbyHubAction'))end
  end)
  local function watchMenu(other)
-  if not table.find({'SummonerLobbyUI','DragonPreview','SkillPreview','EnemyPreview'},other.Name)or menuConnections[other]then return end
+  if not table.find({'SummonerLobbyUI','DragonPreview','SkillPreview','EnemyPreview','SummonerRunRecap'},other.Name)or menuConnections[other]then return end
   menuConnections[other]={other:GetAttributeChangedSignal('Open'):Connect(syncVisibility),other:GetAttributeChangedSignal('LoadoutOpen'):Connect(syncVisibility)};syncVisibility()
  end
  for _,other in ipairs(playerGui:GetChildren())do watchMenu(other)end
@@ -6279,6 +6313,153 @@ return function(deps)
  end
  gui.Destroying:Connect(destroy);gui:SetAttribute('Open',false);gui:SetAttribute('InLobby',false);syncVisibility()
  return {Gui=gui,Open=open,Close=function()closePanel();syncVisibility()end,Destroy=destroy}
+end
+]====])
+-- Source: src/client/flow/RunRecap.luau
+addModule(modules,{"flow","RunRecap"},[====[
+-- Read-only result screen. The server freezes the record when this player's run ends.
+return function(deps)
+ local player,net=deps.player,deps.net
+ local playerGui=player:WaitForChild('PlayerGui')
+ local theme=require(script.Parent.Parent.Theme)
+ local make,label,round,stroke=theme.Make,theme.Label,theme.Round,theme.Stroke
+ local palette=theme.Palette
+ local icons=require(script.Parent.SkillIcons)
+ local UIS=game:GetService('UserInputService');local GuiService=game:GetService('GuiService')
+ local gui=make('ScreenGui',playerGui,{Name='SummonerRunRecap',ResetOnSpawn=false,IgnoreGuiInset=false,DisplayOrder=40,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+ local history=make('TextButton',gui,{Name='LastRun',Size=UDim2.fromOffset(148,34),Position=UDim2.new(1,-16,0,14),AnchorPoint=Vector2.new(1,0),BackgroundColor3=palette.bg,TextColor3=palette.gold,Text='직전 전투 기록',Font=Enum.Font.GothamBold,TextSize=13,Visible=false});round(history,8);stroke(history,palette.gold)
+ local veil=make('Frame',gui,{Name='Veil',Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(4,10,17),BackgroundTransparency=.12,Active=true,Visible=false})
+ local panel=make('Frame',veil,{Name='Panel',Size=UDim2.fromOffset(760,690),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg});round(panel,18);stroke(panel,palette.gold)
+ local scale=make('UIScale',panel,{Scale=1})
+ local function text(parent,name,value,size,pos,font,color)
+  local item=label(parent,value,size,pos,font,color);item.Name=name;item.TextXAlignment=Enum.TextXAlignment.Left;return item
+ end
+ text(panel,'Eyebrow','EXPEDITION / 이번 판의 기록',UDim2.fromOffset(650,22),UDim2.fromOffset(28,18),Enum.Font.GothamBold,palette.gold).TextSize=12
+ local heading=text(panel,'Outcome','전투 종료',UDim2.fromOffset(560,44),UDim2.fromOffset(28,44),Enum.Font.GothamBold,palette.text);heading.TextSize=30
+ local record=text(panel,'Record','',UDim2.fromOffset(704,24),UDim2.fromOffset(28,94),nil,palette.mint);record.TextSize=14
+ local close=make('TextButton',panel,{Name='Close',Size=UDim2.fromOffset(74,34),Position=UDim2.new(1,-102,0,34),BackgroundColor3=palette.card,TextColor3=palette.text,Text='닫기',Font=Enum.Font.GothamBold,TextSize=14});round(close,8)
+ local metrics={}
+ for i,name in ipairs({'전투 시간','처치','도달 레벨'})do
+  local tile=make('Frame',panel,{Name='Metric'..i,Size=UDim2.fromOffset(226,76),Position=UDim2.fromOffset(28+(i-1)*239,130),BackgroundColor3=palette.card});round(tile,10)
+  text(tile,'Label',name,UDim2.fromOffset(194,20),UDim2.fromOffset(16,9),nil,palette.muted).TextSize=12
+  metrics[i]=text(tile,'Value','',UDim2.fromOffset(194,36),UDim2.fromOffset(16,31),Enum.Font.GothamBold,palette.text);metrics[i].TextSize=26
+ end
+ local scroll=make('ScrollingFrame',panel,{Name='Build',Size=UDim2.fromOffset(712,368),Position=UDim2.fromOffset(28,222),BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4})
+ make('UIListLayout',scroll,{Padding=UDim.new(0,9),SortOrder=Enum.SortOrder.LayoutOrder})
+ local footer=text(panel,'Scope','전투 시간은 일시 정지를 제외합니다. 기록은 이번 접속 동안만 유지됩니다.',UDim2.fromOffset(704,30),UDim2.fromOffset(28,596),nil,palette.muted);footer.TextSize=12
+ local back=make('TextButton',panel,{Name='ReturnToLobby',Size=UDim2.fromOffset(704,44),Position=UDim2.fromOffset(28,632),BackgroundColor3=palette.mint,TextColor3=palette.bg,Text='로비로 돌아가기',Font=Enum.Font.GothamBold,TextSize=18});round(back,10)
+ local connections,menuConnections={},{}
+ local viewportConnection,savedSelection
+ local inLobby,over,opened,returning,destroyed=false,false,false,false,false
+ local data,renderedRevision
+ local menuNames={'SummonerLobbyUI','SummonerLobbyHub','DragonPreview','SkillPreview','EnemyPreview'}
+ local function connect(signal,callback)local c=signal:Connect(callback);table.insert(connections,c);return c end
+ local function blocked()
+  for _,name in ipairs(menuNames)do
+   local other=playerGui:FindFirstChild(name)
+   if other and(other:GetAttribute('Open')==true or other:GetAttribute('LoadoutOpen')==true)then return true end
+  end
+  return false
+ end
+ local function refreshHistory()history.Visible=inLobby and data~=nil and not opened and not blocked()end
+ local function setOpen(value)
+  if value and not data then return false end
+  if opened==value then return true end
+  if value and deps.beforeOpen then deps.beforeOpen()end
+  opened=value;veil.Visible=value;gui:SetAttribute('Open',value)
+  if value then savedSelection=GuiService.SelectedObject;if UIS.GamepadEnabled then GuiService.SelectedObject=inLobby and close or back end
+  else GuiService.SelectedObject=savedSelection and savedSelection.Parent and savedSelection or nil;savedSelection=nil end
+  if deps.onPanelChanged then deps.onPanelChanged(value)end
+  refreshHistory();return true
+ end
+ local function section(name,order)
+  local item=text(scroll,'Section'..order,name,UDim2.new(1,-12,0,26),UDim2.new(),Enum.Font.GothamBold,palette.mint)
+  item.LayoutOrder=order;item.TextSize=14
+ end
+ local function row(id,name,detail,order,accent)
+  local card=make('Frame',scroll,{Name='Item_'..id,Size=UDim2.new(1,-12,0,76),BackgroundColor3=palette.card,LayoutOrder=order});round(card,9)
+  local tile=make('Frame',card,{Size=UDim2.fromOffset(50,50),Position=UDim2.fromOffset(12,13),BackgroundColor3=palette.bg});round(tile,7)
+  local fallback=label(tile,'',UDim2.fromScale(1,1),UDim2.new(),Enum.Font.GothamBold,accent);fallback.Name='IconFallback'
+  local image=make('ImageLabel',tile,{Name='SkillIcon',Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit})
+  icons.Apply(image,id,fallback)
+  text(card,'Title',name,UDim2.new(1,-90,0,24),UDim2.fromOffset(76,7),Enum.Font.GothamBold,accent).TextSize=16
+  local desc=text(card,'Description',detail,UDim2.new(1,-90,0,38),UDim2.fromOffset(76,32),nil,palette.muted);desc.TextSize=13
+ end
+ local function render()
+  if not data or renderedRevision==data.revision then return end
+  renderedRevision=data.revision;scroll.CanvasPosition=Vector2.zero
+  for _,child in ipairs(scroll:GetChildren())do if child:IsA('GuiObject')then child:Destroy()end end
+  heading.Text=({victory='드래곤 격파!',defeat='원정 종료 · 다시 도전!',retreat='원정 중단 · 전열 정비'})[data.result]or'전투 종료'
+  heading.TextColor3=data.result=='victory'and palette.gold or palette.text
+  record.Text=data.testMode and '개발용 보스 테스트 · 최고 처치 기록에 반영하지 않습니다.'or
+   ((data.newBest and '이번 접속 최고 기록!  ·  'or'이번 접속 최고  ·  ')..tostring(data.bestScore or data.kills)..' 처치')
+  metrics[1].Text=string.format('%02d:%02d',math.floor(data.seconds/60),data.seconds%60)
+  metrics[2].Text=tostring(data.kills);metrics[3].Text='Lv. '..data.level
+  section('완성한 마법 조합',1)
+  local names={};for _,spell in ipairs(data.spells)do table.insert(names,spell.name..' '..spell.level..'단계')end
+  local spells=text(scroll,'Spells',table.concat(names,'  ·  ')..'\n골렘 '..data.golem..'단계',UDim2.new(1,-12,0,52),UDim2.new(),Enum.Font.GothamMedium,palette.text);spells.LayoutOrder=2;spells.TextSize=15
+  row(data.activeSkill,'Q · '..data.activeName,'출전할 때 선택한 사용 스킬',3,palette.gold)
+  section(string.format('보유 증강 %d회 · 행운 +%d',data.augmentCount,data.luck),4)
+  local rarityNames={common='일반',rare='희귀',epic='영웅'}
+  local rarityColors={common=palette.text,rare=Color3.fromRGB(113,194,255),epic=Color3.fromRGB(219,154,255)}
+  for i,a in ipairs(data.augments)do
+   row('aug_'..a.id,string.format('%s  ×%d  /  %s',a.name,a.count,rarityNames[a.rarity]or'일반'),a.desc,4+i,rarityColors[a.rarity]or palette.text)
+  end
+  local tailOrder=5+#data.augments
+  if #data.augments==0 then
+   local empty=text(scroll,'EmptyAugments','이 판에는 증강을 선택하지 않았습니다.',UDim2.new(1,-12,0,32),UDim2.new(),nil,palette.muted);empty.LayoutOrder=tailOrder;empty.TextSize=14
+   tailOrder+=1
+  end
+  section('생존 강화와 진행',tailOrder)
+  local detail=string.format('최대 체력 +%d · 이동 속도 +%d · 수집 범위 +%d\n무료 새로고침 %d / 2회 사용 · 군단장 보상 %s',data.vitality*15,data.agility*2,data.magnet*3,data.rerollsUsed,data.fieldBossRewarded and '수령'or'미수령')
+  local utility=text(scroll,'Utility',detail,UDim2.new(1,-12,0,54),UDim2.new(),nil,palette.text);utility.LayoutOrder=tailOrder+1;utility.TextSize=14
+ end
+ local function resize()
+  local camera=workspace.CurrentCamera;if not camera then return end
+  local size=camera.ViewportSize
+  scale.Scale=math.max(.1,math.min(1,(size.X-24)/760,(size.Y-72)/690))
+ end
+ local function bindCamera()
+  if viewportConnection then viewportConnection:Disconnect()end
+  local camera=workspace.CurrentCamera;if camera then viewportConnection=camera:GetPropertyChangedSignal('ViewportSize'):Connect(resize)end;resize()
+ end
+ local function closeHistory()if inLobby then setOpen(false)end end
+ history.Activated:Connect(function()if inLobby and not blocked()then render();setOpen(true)end end)
+ close.Activated:Connect(closeHistory)
+ back.Activated:Connect(function()
+  if inLobby then closeHistory();return end
+  if over and not returning then returning=true;back.Text='로비로 이동 중…';net.Action:FireServer('returnToLobby')end
+ end)
+ connect(UIS.InputBegan,function(key)if opened and inLobby and(key.KeyCode==Enum.KeyCode.Escape or key.KeyCode==Enum.KeyCode.ButtonB)then closeHistory()end end)
+ local function watchMenu(other)
+  if not table.find(menuNames,other.Name)or menuConnections[other]then return end
+  menuConnections[other]={other:GetAttributeChangedSignal('Open'):Connect(refreshHistory),other:GetAttributeChangedSignal('LoadoutOpen'):Connect(refreshHistory)}
+ end
+ for _,other in ipairs(playerGui:GetChildren())do watchMenu(other)end
+ connect(playerGui.ChildAdded,watchMenu)
+ connect(playerGui.ChildRemoved,function(other)
+  local items=menuConnections[other];if items then for _,c in ipairs(items)do c:Disconnect()end;menuConnections[other]=nil;refreshHistory()end
+ end)
+ connect(net.State.OnClientEvent,function(s)
+  local wasLobby,wasOver=inLobby,over
+  inLobby=s.lobby==true;over=s.over==true
+  data=over and s.runResult or(inLobby and s.lastRun or nil)
+  close.Visible=inLobby;back.Text=inLobby and '기록 닫기 · 로비 둘러보기'or(returning and '로비로 이동 중…'or'로비로 돌아가기')
+  if inLobby then returning=false end
+  if wasLobby~=inLobby or(wasOver and not over)or not data then setOpen(false)end
+  if data then render();if over and not blocked()then setOpen(true)end end
+  refreshHistory()
+ end)
+ connect(workspace:GetPropertyChangedSignal('CurrentCamera'),bindCamera);bindCamera()
+ local function destroy()
+  if destroyed then return end;destroyed=true;setOpen(false)
+  for _,c in ipairs(connections)do c:Disconnect()end
+  for _,items in pairs(menuConnections)do for _,c in ipairs(items)do c:Disconnect()end end
+  if viewportConnection then viewportConnection:Disconnect()end
+  gui:Destroy()
+ end
+ gui.Destroying:Connect(destroy);gui:SetAttribute('Open',false)
+ return {Gui=gui,Close=function()setOpen(false)end,Destroy=destroy}
 end
 ]====])
 -- Source: src/client/flow/SkillIcons.luau

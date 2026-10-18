@@ -28,6 +28,7 @@ assert(not scores.Add({UserId=0/0,Name='Bad'})and not scores.Add({UserId=math.hu
 assert(scores.Add(a)and scores.Snapshot()[1].bestScore==25,'Re-registering after round reset retains record')
 local copy=scores.Snapshot();copy[1].bestScore=999999;table.clear(copy);assert(scores.Snapshot()[1].bestScore==25,'Snapshots cannot mutate private records')
 for i=1,25 do local p={UserId=100+i,Name='Fixture'..i};scores.Add(p);run(p,30+i,'victory')end
+assert(scores.Best(a)==25,'Personal best survives falling out of the displayed top twenty')
 local top=scores.Snapshot();assert(#top==20 and top[1].bestScore==55 and top[20].bestScore==36,'Only top twenty sorted records returned')
 scores.Remove(a);assert(scores.Add(a),'Same account can join a new connection');run(a,0,'defeat')
 -- A new collector isolates zero and disconnect checks from the top-twenty limit.

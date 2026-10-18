@@ -39,7 +39,7 @@ local session = require(modules.flow.Session)({
     creature = actors.Create, finishDash = movement.FinishDash,
     clearIceShots = combat.ClearProjectiles, sync = progression.Sync,
     allowBossTest=RunService:IsStudio(),
-    scoreAdd=lobbyScores.Add,scoreRecord=lobbyScores.Record,scoreRemove=lobbyScores.Remove,
+    scoreAdd=lobbyScores.Add,scoreRecord=lobbyScores.Record,scoreRemove=lobbyScores.Remove,scoreBest=lobbyScores.Best,
     lobbyCenter=Vector3.new(0,0,178),lobbyRadius=58,
     clock = clock, lobbySpawn=lobbySpawn, resetSpawn = waves.ResetSpawn, resetBoss = function() if boss then boss.Reset() end;if fieldBoss then fieldBoss.Reset()end end,
 })
