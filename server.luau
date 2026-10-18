@@ -17,9 +17,11 @@ local players = require(modules.shared.PlayerState)({states = states})
 local movement = require(modules.combat.Movement)({
     world = world, rootOf = players.RootOf, paused = players.Paused, effect = net.Effect,
 })
+local lobbyScores=require(modules.flow.LobbyScores)()
 local progression = require(modules.flow.Progression)({
     world = world, states = states, gems = gems, rng = rng, block = actors.Block,
     rootOf = players.RootOf, paused = players.Paused, finishDash = movement.FinishDash,
+    lobbyScores=lobbyScores.Snapshot,
     augments = require(modules.flow.Augments), update = net.State, clock = clock, spellOptions = require(modules.flow.Loadout).Options, activeOptions = require(modules.flow.Loadout).ActiveOptions,
 })
 local combat = require(modules.combat.Combat)({
@@ -37,6 +39,8 @@ local session = require(modules.flow.Session)({
     creature = actors.Create, finishDash = movement.FinishDash,
     clearIceShots = combat.ClearProjectiles, sync = progression.Sync,
     allowBossTest=RunService:IsStudio(),
+    scoreAdd=lobbyScores.Add,scoreRecord=lobbyScores.Record,scoreRemove=lobbyScores.Remove,
+    lobbyCenter=Vector3.new(0,0,178),lobbyRadius=58,
     clock = clock, lobbySpawn=lobbySpawn, resetSpawn = waves.ResetSpawn, resetBoss = function() if boss then boss.Reset() end;if fieldBoss then fieldBoss.Reset()end end,
 })
 boss = require(modules.world.Boss)({
@@ -95,6 +99,7 @@ RunService.Heartbeat:Connect(function(dt)
     if tickClock < .05 then return end
     dt = math.min(tickClock,.15)
     tickClock = 0
+    session.StepLobby()
     local alive = players.LiveCount()
     if alive > 0 and not players.Paused() then
         clock.elapsed += dt

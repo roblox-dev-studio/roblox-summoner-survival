@@ -638,6 +638,19 @@ Branch codex/light-skills-four-loadout, baseline8316189. Fetched team/main and c
 - `studio_augment_art`는 처음 실제 PreRender가 없어 운석 정상수명 반환 assertion에서 실패했습니다. 이후 기존 Animator._step 테스트 훅을 임시 Heartbeat 연결로2113회 전진해,실제 엔진 객체에서22전용/44시연·6충격 수명·40작업/192파편/24입자홀더 포화·재사용·일시정지·컨테이너 교체·정리·오류0을 확인했습니다. 임시 연결은 제거했습니다. **수동 애니메이션 시계 검증이며 자연 프레임/시각 품질 통과가 아닙니다.**
 - 남은 인수: 잠금 해제 후 N의 종족 필터/12종 실제 외형,새6종 혼합 전투와24모델 실전 표시기, P의6개 효과 전후 비교,일반 생존→보스/로비 재시작,실제2인·모바일·부하·청취·밸런스. 소스/엔진 수치만으로 미술 완성·프레임 성능·재미를 승인하지 않습니다.
 
+## 2026-10-18 · 로비 허브·스킬 카탈로그·아이콘19장
+
+- 기준 `51001dc` 후속. 진입점2개+src의 정렬 경로/내용 NUL 구분 SHA-256 `72908b72a2f78567b4c2babd9eef1a0ac0952fbdc845d0c86366107356a44f60`. 로비/서버 기록/메뉴·이미지 연결을 통합했고, JSON·MD·아이콘 helper와 설치기를 최종 재생성했습니다.
+- 정적: Python15개(카탈로그7개 포함), 성장·행운/증강·12적·서버 점수 순수 회귀, Luau156개 문법/전역 검사, diff 공백 검사 통과. PNG19개의 실제 형식/1254×1254/bytes/SHA-256과 manifest 일치 확인.
+- 엔진: 독립 Studio `434a088f-5ad4-4b16-86ab-0273ee1fd09f`의 기존 AugmentReview Edit에 신규/변경13소스 반영 후 Play 재시작. HUD 정리와 최종19이미지 매핑도 반영 후 재시작했습니다. Mac 잠금 때문에 새 Baseplate UI를 열지 못했으며 공유 프로덕션 place는 수정하지 않았습니다.
+- Server `studio_lobby_scores`, `studio_lobby`, `studio_retreat`, `studio_boss_test_start` 통과. 실제 엔진 안의 격리된 가상 참가자로 사망/승리/중단·개별/전체 복귀·재시작 최고값 유지·stale상태 거부·보스 테스트 제외·접속 종료·18/22속도·반경/추락 복귀·전투 격리 확인. 실제 두 플레이어의 동시 입력 검증은 아닙니다.
+- Client `studio_lobby_hub` 통과. 실제 로비4진입점/충돌 레이어와 격리 GUI의 준비중·서버 스냅샷 순위·메뉴/리스폰/종료/Destroy 정리를 검사했습니다. 구매/가챠/점수 제출 요청은0. `studio_skill_icon_ui`는 부모/공통 아이콘 매핑·미등록 대체 표시·기본 로비/출전 패널 전환·Q/자동마법 이미지 슬롯·증강3카드 갱신 통과. 최종19개 helper로 재실행했습니다.
+- 실제 접속 스냅샷: 로비 Hub.Enabled=true, LoadoutOpen=false, Humanoid.WalkSpeed18, 위치 약(-2.42,3.16,190.66). 실제 로비662 BasePart/8 Light. 부품 수는 성능 검증 결과가 아닙니다. Output에서 프로젝트 오류는 없었고 Roblox CorePackages FoundationProvider 경고는 있었습니다.
+- 이미지: 내장 imagegen으로19개 개별 생성, 원본 PNG/프롬프트/해시 보관. 제작 담당이 전체를 개별 검토했고 통합 담당도 메테오·수호결계·빙하쇄도·행운부적·골렘 원본을 직접 확인했습니다. HTML 갤러리에는 큰 그림과 CSS64px 표시가 있습니다. **Roblox 업로드는0, 모든 assetId는 null**입니다. UI에 슬롯과 fallback이 연결된 상태이며 게임에서 새 그림이 로딩됐다는 뜻이 아닙니다.
+- 렌더 제약: 실제 클라이언트1초 관측 Heartbeat60/PreRender0. Mac이 잠겨 있어 자연 화면·실제 걸어서 진입·터치/패드·작은 화면·64px 표시 품질은 미검수입니다. 결과를 시각/청취/재미 합격으로 분류하지 않습니다.
+- 로컬 인수 파일 `artifacts/lobby-skill-review/LobbySkillReview.rbxlx`: 이전 저장된 전장을 보존한 XML에 현재 진입점/모듈154개를 패키징하고 읽기 복원 후 소스 내용 일치를 검증했습니다. `manifest.json`, `engine-evidence.json` 동봉. 새 파일의 Studio 재열기/저장은 아직 하지 않았습니다. 재현용 설치기는 저장소 `install.luau`입니다.
+- 남은 인수: 잠금 해제 후 새 Baseplate 설치 또는 위 파일 열기/Play/저장, 실제 걷기/포털/패널/전투/복귀 및 로비 화면 검수. 이미지19장을 허가된 Roblox 자산으로 등록하고 manifest의 실제 ID를 연결한 다음 로딩/작은 카드 가독성을 확인해야 합니다. 상점/가챠 거래와 영구/전체 서버 랭킹은 구현 범위에 없습니다.
+
 ## 2026-10-18 · 외형 정정: 후드 대검 군단장 + 실제 CC0 말
 
 - 사용자 정정: 트리가드는 돌진과 무기 공격을 섞는 동작 참고였으며 외형 모사 요청이 아니었습니다. 금빛 기사/깃/도끼창을 제거하고 자체 후드·철제 반가면·가죽끈/철갑·붉은 망토·양손 대검으로 교체했습니다. 이전 도형 말은 전부 제거했습니다.
@@ -716,6 +729,14 @@ Session 신규 접속/미선택 기본값, Progression 상태 기본값, 로비 
 ## 2026-10-18 · 일괄 PR/병합 전 최종 확인
 
 사용자 요청으로 누적 변경을 한 PR로 제출/병합합니다. 기준 team/main8f90607, fetch 후 main 추가 커밋/충돌 없음. 별도 진행 중인 PR6/7/8은 이번 변경에 포함하지 않습니다. 최종 소스 SHA-256(진입점·맵·src 경로/내용 정렬): `ec2d5729e3e49bc82ed1f8a0fdbb91f42f4acb6add0cd9d3802abb24a9d189a5`. 로컬 설치기 일치/Python9개/성장·장착·Q 회귀/Luau169개/공백 검사 통과. 연결 Studio36d9ae01-92b0-4f38-abcf-dfe9961372a5의 최종 코드에서 studio_arena, studio_field_boss, studio_active_spells, studio_commander_visual 네 fixture 재실행 통과. 일반 로비로 복구. 새 빈 Baseplate 전체 설치·실제 협동/모바일/저사양 장시간 성능은 미검증으로 유지합니다.
+
+## 2026-10-18 · PR6/7/8 병합 전 통합 검증
+
+- 통합 소스 `169cf81`에 최신 main `8d7408b`의 전장/해골 군단장/Q4초·판정 폭을 보존했습니다. 새 로비와 12종 카탈로그, 25증강을 함께 검사했습니다. 집중된 주문은 4→3.4→2.8초, 신규 접속 Q는 빙하 쇄도입니다.
+- 설치기·카탈로그 재생성 및 일치, Python16개, 진행/증강/몬스터/접속 점수 회귀, Luau181개 문법/전역 통과. 세 PR의 갱신된 head에서 GitHub source-checks 성공.
+- 독립 AugmentReview.rbxlx (`434a088f-5ad4-4b16-86ab-0273ee1fd09f`, placeId0) Edit에 변경40모듈과 새 전장을 적용하고 Play 재시작. Server의 studio_augments, studio_active_spells, studio_enemy_families, studio_field_boss, studio_lobby_scores, studio_lobby, studio_retreat, studio_boss_test_start, studio_arena 통과. Client의 studio_lobby_hub, studio_skill_icon_ui, studio_enemy_family_visuals 통과. 실제 엔진의 격리 fixture12개이며 사람의 연속 플레이/실제 다인 검증은 아닙니다.
+- 실제 접속 Hub=true/LoadoutOpen=false, Heartbeat60/PreRender0. Mac 잠금으로 최신 로비/새 몬스터의 렌더 화면, 새 군단장과 함께 보는 미술 품질, 청취, 저장된 place 재열기 인수는 여전히 대기입니다. 원시 결과는 로컬 artifacts/lobby-skill-review/merge-engine-evidence.json에 보관했습니다.
+- 사용자의 PR 병합 지시에 따라 소스·엔진 통합 변경을 main에 반영하며, 이를 게임 공개나 시각/재미 인수 완료로 취급하지 않습니다.
 
 ## 2026-10-18 · PR6과 최신 main 통합
 

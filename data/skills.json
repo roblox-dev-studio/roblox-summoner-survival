@@ -1,0 +1,1168 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "python3 tools/build_skill_catalog.py",
+  "sourceOfTruth": {
+    "gameplay": "Existing server Luau modules; evaluated by pinned Luau",
+    "iconUploads": "assets/ui/skill-icons/manifest.json",
+    "generatedOutputs": [
+      "data/skills.json",
+      "docs/SKILL_CATALOG.md",
+      "src/client/flow/SkillIcons.luau"
+    ]
+  },
+  "sourceHashes": {
+    "src/server/flow/Loadout.luau": "8b5bfb5a02342c90fe7bdd8c5944d694e6021ee2b8daf9927103a48eee5a1fd3",
+    "src/server/flow/Augments.luau": "1aa17517bfc67b8479e739101db9489709004c083a780ff9ff0b80808bb72e96",
+    "src/server/combat/Weapons.luau": "0b06b6e9ca0cf125f4459e75735b366c6f8b68131c8ef986e6613527b8a23860",
+    "src/client/combat/AugmentStyles.luau": "c47f1c9e36fe34a9da0ffdacb2f48103a390ab36ff67dae13e2df4cf93d62087",
+    "src/client/flow/SkillPreview.luau": "4ae3956c57489dbb06f80d5213da2d6badfcf32da7ae431b3590ea0de5f90f66",
+    "assets/ui/skill-icons/manifest.json": "49c6ffbd421f93dd6df2d04195ab58a39098c8b912cc2f38e0041cd11d0cf987"
+  },
+  "loadout": {
+    "autoSlots": 4,
+    "defaults": [
+      "ice",
+      "meteor",
+      "blades",
+      "lightRing"
+    ]
+  },
+  "counts": {
+    "auto": 9,
+    "active": 4,
+    "builtin": 3,
+    "skills": 16,
+    "augments": 25,
+    "dedicatedAugments": 22,
+    "commonAugments": 3,
+    "plannedUniqueImages": 19,
+    "builtinImages": 3,
+    "builtinImagesPending": 0
+  },
+  "iconPolicy": "16 skill images (including basic attack, golem and dash) + 3 common augmentation images; 22 dedicated augmentations reuse their parent image with rarity and variant-name badges. Local PNG paths are not Roblox asset URLs.",
+  "skills": [
+    {
+      "id": "lightRing",
+      "name": "성운 광륜",
+      "description": "빛나는 초승달이 곡선을 그리며 날아갔다가 돌아오며 다시 타격합니다.",
+      "category": "auto",
+      "categoryName": "자동 마법",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": "초승달 부메랑 · 왕복 관통",
+      "upgradeDescription": "피해 +8 · 주기 -0.25초",
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/LightSpells.luau",
+        "src/client/combat/LightArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "lightRing",
+      "assetPath": "assets/ui/skill-icons/lightRing.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "ice",
+      "name": "빙결 얼음창",
+      "description": "마법진에서 얼음창을 쏘아 적을 밀치고 얼립니다.",
+      "category": "auto",
+      "categoryName": "자동 마법",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": "빙결 · 밀치기",
+      "upgradeDescription": "피해 +8 · 빙결 +0.1초 · 둔화 +0.4초",
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/Combat.luau",
+        "src/client/combat/Effects.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "ice",
+      "assetPath": "assets/ui/skill-icons/ice.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "lightning",
+      "name": "연쇄 번개",
+      "description": "하늘에서 내려꽂힌 번개가 주변 적에게 이어집니다.",
+      "category": "auto",
+      "categoryName": "자동 마법",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": "여러 적 연속 타격",
+      "upgradeDescription": "피해 +7 · 연쇄 타깃 +1",
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/Combat.luau",
+        "src/client/combat/LightningArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "lightning",
+      "assetPath": "assets/ui/skill-icons/lightning.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "meteor",
+      "name": "메테오",
+      "description": "거대한 운석이 하늘에서 낙하해 밀집한 적을 강타합니다.",
+      "category": "auto",
+      "categoryName": "자동 마법",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": "강력한 광역 폭발",
+      "upgradeDescription": "피해 +22 · 반경 +1 · 주기 -0.3초",
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/AreaSpells.luau",
+        "src/client/combat/AreaArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "meteor",
+      "assetPath": "assets/ui/skill-icons/meteor.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "blades",
+      "name": "비전 결정",
+      "description": "등 뒤의 결정 5개가 한 발씩 적을 추적한 뒤 다시 충전됩니다.",
+      "category": "auto",
+      "categoryName": "자동 마법",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": "다섯 결정 · 순차 추적 발사",
+      "upgradeDescription": "결정 피해 +4 · 재충전 -0.35초",
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/ArcaneCrystals.luau",
+        "src/client/combat/ProjectileArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "blades",
+      "assetPath": "assets/ui/skill-icons/blades.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "skyLances",
+      "name": "천공의 창",
+      "description": "적 머리 위 마법진에서 긴 마법 창들이 차례로 내려꽂힙니다.",
+      "category": "auto",
+      "categoryName": "자동 마법",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": "상공 마법진 · 다섯 창 순차 낙하",
+      "upgradeDescription": "창 피해 +8 · 주기 -0.4초",
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/SkyLances.luau",
+        "src/client/combat/SkyLanceArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "skyLances",
+      "assetPath": "assets/ui/skill-icons/skyLances.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "frost",
+      "name": "서리 폭발",
+      "description": "몸에서 냉기 파동이 퍼져 가까운 적을 한꺼번에 얼립니다.",
+      "category": "auto",
+      "categoryName": "자동 마법",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": "포위 탈출 · 빙결",
+      "upgradeDescription": "피해 +8 · 반경 +1 · 빙결 +0.2초",
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/AreaSpells.luau",
+        "src/client/combat/AreaArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "frost",
+      "assetPath": "assets/ui/skill-icons/frost.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "missile",
+      "name": "추적 마탄",
+      "description": "보스와 체력이 높은 적을 우선 추적하는 마탄입니다. 범위 피해는 없습니다.",
+      "category": "auto",
+      "categoryName": "자동 마법",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": "강한 적 하나를 집중 공격",
+      "upgradeDescription": "피해 +7 · 짝수 단계에 탄환 +1",
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/HomingMissiles.luau",
+        "src/client/combat/ProjectileArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "missile",
+      "assetPath": "assets/ui/skill-icons/missile.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "ward",
+      "name": "수호 결계",
+      "description": "주기적으로 보호막을 펼칩니다. 흡수량을 다 쓰면 깨집니다.",
+      "category": "auto",
+      "categoryName": "자동 마법",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": "피해 흡수 · 생존",
+      "upgradeDescription": "흡수량 +12 · 주기 -0.3초",
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/AreaSpells.luau",
+        "src/client/combat/AreaArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "ward",
+      "assetPath": "assets/ui/skill-icons/ward.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "fire",
+      "name": "화염탄",
+      "description": "정면 불꽃 탄환 · 적중 범위 피해 · 4초",
+      "category": "active",
+      "categoryName": "Q 사용 스킬",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": null,
+      "upgradeDescription": null,
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/ActiveSpells.luau",
+        "src/client/combat/FireArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "fire",
+      "assetPath": "assets/ui/skill-icons/fire.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "thunder",
+      "name": "뇌창",
+      "description": "정면으로 날아가는 번개 창 · 관통 · 4초",
+      "category": "active",
+      "categoryName": "Q 사용 스킬",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": null,
+      "upgradeDescription": null,
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/ActiveSpells.luau",
+        "src/client/combat/ActiveArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "thunder",
+      "assetPath": "assets/ui/skill-icons/thunder.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "aetherLance",
+      "name": "성운창",
+      "description": "아지랑이 빛의 창 · 관통 · 4초",
+      "category": "active",
+      "categoryName": "Q 사용 스킬",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": null,
+      "upgradeDescription": null,
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/ActiveSpells.luau",
+        "src/client/combat/AetherLanceArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "aetherLance",
+      "assetPath": "assets/ui/skill-icons/aetherLance.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "iceRush",
+      "name": "빙하 쇄도",
+      "description": "정면 얼음 기둥 · 빙결 · 4초",
+      "category": "active",
+      "categoryName": "Q 사용 스킬",
+      "active": true,
+      "status": "implemented_selectable",
+      "role": null,
+      "upgradeDescription": null,
+      "definitionSource": "src/server/flow/Loadout.luau",
+      "implementationPaths": [
+        "src/server/combat/ActiveSpells.luau",
+        "src/client/combat/GlacialArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "iceRush",
+      "assetPath": "assets/ui/skill-icons/iceRush.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "basic",
+      "name": "기본 공격 · 별빛 마법탄",
+      "description": "작은 빛의 탄환 · 누르고 연속 발사",
+      "category": "basic",
+      "categoryName": "기본 공격",
+      "active": true,
+      "status": "implemented_builtin",
+      "role": null,
+      "upgradeDescription": null,
+      "definitionSource": "src/client/flow/SkillPreview.luau",
+      "descriptionKind": "existing_preview_caption",
+      "implementationPaths": [
+        "src/server/combat/BasicAttack.luau",
+        "src/server/combat/Weapons.luau",
+        "src/client/combat/LightArt.luau"
+      ],
+      "weaponProfile": {
+        "id": "starlightWand",
+        "profile": {
+          "damage": 13,
+          "interval": 0.3,
+          "name": "별빛 지팡이",
+          "radius": 1.6,
+          "range": 52,
+          "speed": 80,
+          "style": "starlight"
+        }
+      },
+      "iconKey": "basic",
+      "assetPath": "assets/ui/skill-icons/basic.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "golem",
+      "name": "골렘 대지 강타",
+      "description": "현재 게임과 같은 5단계 최대 연출",
+      "category": "summon",
+      "categoryName": "소환수",
+      "active": true,
+      "status": "implemented_builtin",
+      "role": null,
+      "upgradeDescription": "내려찍기·강타 피해와 범위 증가",
+      "definitionSource": "src/client/flow/SkillPreview.luau",
+      "descriptionKind": "existing_preview_caption",
+      "implementationPaths": [
+        "src/server/combat/Combat.luau",
+        "src/client/combat/Effects.luau"
+      ],
+      "iconKey": "golem",
+      "assetPath": "assets/ui/skill-icons/golem.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "dash",
+      "name": "대시",
+      "description": "이동 궤적과 잔상",
+      "category": "movement",
+      "categoryName": "이동",
+      "active": true,
+      "status": "implemented_builtin",
+      "role": null,
+      "upgradeDescription": null,
+      "definitionSource": "src/client/flow/SkillPreview.luau",
+      "descriptionKind": "existing_preview_caption",
+      "implementationPaths": [
+        "src/server/combat/Movement.luau",
+        "src/client/combat/Effects.luau"
+      ],
+      "iconKey": "dash",
+      "assetPath": "assets/ui/skill-icons/dash.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    }
+  ],
+  "augments": [
+    {
+      "id": "ice_twin",
+      "cardId": "aug_ice_twin",
+      "name": "쌍빙창",
+      "description": "얼음창을 2발 발사. 다른 적을 우선하고 각 발은 피해 75%.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "ice",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 1,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "쌍빙창"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "겹친 냉기 나선 · 두 발",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/Combat.luau",
+        "src/client/combat/Effects.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "ice",
+      "assetPath": "assets/ui/skill-icons/ice.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "ice_shatter",
+      "cardId": "aug_ice_shatter",
+      "name": "빙쇄",
+      "description": "얼음창 적중 시 반경 5에 50% 파편 피해와 짧은 빙결.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "ice",
+      "rarity": "epic",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 2,
+      "badge": {
+        "rarity": "영웅",
+        "variantName": "빙쇄"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "회전 파편 · 방사형 얼음 파쇄",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/Combat.luau",
+        "src/client/combat/Effects.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "ice",
+      "assetPath": "assets/ui/skill-icons/ice.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "lightning_fork",
+      "cardId": "aug_lightning_fork",
+      "name": "갈래 번개",
+      "description": "연쇄 번개의 최대 타깃 +2. 같은 적은 한 번만 타격.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "lightning",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 1,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "갈래 번개"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "교차 전류 · 연쇄 +2",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/Combat.luau",
+        "src/client/combat/LightningArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "lightning",
+      "assetPath": "assets/ui/skill-icons/lightning.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "lightning_frozen",
+      "cardId": "aug_lightning_frozen",
+      "name": "빙결 전도",
+      "description": "빙결 또는 둔화 중인 적에게 연쇄 번개 피해 +60%.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "lightning",
+      "rarity": "epic",
+      "maxStacks": 1,
+      "requiresAny": [
+        "ice",
+        "frost"
+      ],
+      "minimumParentLevel": 2,
+      "badge": {
+        "rarity": "영웅",
+        "variantName": "빙결 전도"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "서리 전류 · 빙결 적에 눈꽃 방전",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/Combat.luau",
+        "src/client/combat/LightningArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "lightning",
+      "assetPath": "assets/ui/skill-icons/lightning.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "meteor_wide",
+      "cardId": "aug_meteor_wide",
+      "name": "거대 운석",
+      "description": "메테오 폭발 반경 +35%. 예고와 폭발도 함께 확대.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "meteor",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 1,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "거대 운석"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "분절 궤도 · 용암 파편 충격파",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/AreaSpells.luau",
+        "src/client/combat/AreaArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "meteor",
+      "assetPath": "assets/ui/skill-icons/meteor.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "meteor_echo",
+      "cardId": "aug_meteor_echo",
+      "name": "운석의 여진",
+      "description": "메테오 착탄 0.65초 후 같은 지점에 50% 피해의 후속 폭발.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "meteor",
+      "rarity": "epic",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 2,
+      "badge": {
+        "rarity": "영웅",
+        "variantName": "운석의 여진"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "수렴 균열 · 여진의 불씨",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/AreaSpells.luau",
+        "src/client/combat/AreaArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "meteor",
+      "assetPath": "assets/ui/skill-icons/meteor.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "blades_volley",
+      "cardId": "aug_blades_volley",
+      "name": "칠성 결정",
+      "description": "충전되는 비전 결정 5개 → 7개. 순서대로 발사.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "blades",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 1,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "칠성 결정"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "일곱 별의 후광 · 7발",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/ArcaneCrystals.luau",
+        "src/client/combat/ProjectileArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "blades",
+      "assetPath": "assets/ui/skill-icons/blades.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "blades_pierce",
+      "cardId": "aug_blades_pierce",
+      "name": "관통 결정",
+      "description": "각 결정이 적을 한 번 더 관통. 같은 적 재타격 없음.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "blades",
+      "rarity": "epic",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 2,
+      "badge": {
+        "rarity": "영웅",
+        "variantName": "관통 결정"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "날카로운 결정 날 · 관통 섬광",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/ArcaneCrystals.luau",
+        "src/client/combat/ProjectileArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "blades",
+      "assetPath": "assets/ui/skill-icons/blades.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "frost_wide",
+      "cardId": "aug_frost_wide",
+      "name": "광역 한파",
+      "description": "서리 폭발 탐지·피해·빙결 반경 +30%.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "frost",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 1,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "광역 한파"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "서리 응축 · 가지치는 육각 눈꽃",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/AreaSpells.luau",
+        "src/client/combat/AreaArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "frost",
+      "assetPath": "assets/ui/skill-icons/frost.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "frost_echo",
+      "cardId": "aug_frost_echo",
+      "name": "이중 서리",
+      "description": "서리 폭발 0.6초 후 현재 위치에서 50% 피해의 추가 냉기 파동.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "frost",
+      "rarity": "epic",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 2,
+      "badge": {
+        "rarity": "영웅",
+        "variantName": "이중 서리"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "역회전 응축 · 피어나는 서리 결정",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/AreaSpells.luau",
+        "src/client/combat/AreaArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "frost",
+      "assetPath": "assets/ui/skill-icons/frost.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "ward_reservoir",
+      "cardId": "aug_ward_reservoir",
+      "name": "깊은 결계",
+      "description": "수호 결계 흡수량 +50%, 지속시간 5초 → 7초.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "ward",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 1,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "깊은 결계"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "교차하는 룬 돔",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/AreaSpells.luau",
+        "src/client/combat/AreaArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "ward",
+      "assetPath": "assets/ui/skill-icons/ward.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "ward_pulse",
+      "cardId": "aug_ward_pulse",
+      "name": "결계 해방",
+      "description": "결계 소진·만료 시 반경 8에 최초 흡수량의 75% 피해. 취소 시 발동 안 함.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "ward",
+      "rarity": "epic",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 2,
+      "badge": {
+        "rarity": "영웅",
+        "variantName": "결계 해방"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "보호 룬 아치 · 열리는 금빛 결계",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/AreaSpells.luau",
+        "src/client/combat/AreaArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "ward",
+      "assetPath": "assets/ui/skill-icons/ward.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "missile_salvo",
+      "cardId": "aug_missile_salvo",
+      "name": "추적 탄막",
+      "description": "추적 마탄 시전마다 탄환 +2. 각 탄환은 한 대상만 타격.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "missile",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 1,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "추적 탄막"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "쌍나선 탄두 · 추가 마탄",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/HomingMissiles.luau",
+        "src/client/combat/ProjectileArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "missile",
+      "assetPath": "assets/ui/skill-icons/missile.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "missile_hunter",
+      "cardId": "aug_missile_hunter",
+      "name": "거수 사냥꾼",
+      "description": "추적 마탄이 정예·필드보스·드래곤에게 피해 +50%.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "missile",
+      "rarity": "epic",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 2,
+      "badge": {
+        "rarity": "영웅",
+        "variantName": "거수 사냥꾼"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "사냥꾼 화살촉 · 정예 적중 표식",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/HomingMissiles.luau",
+        "src/client/combat/ProjectileArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "missile",
+      "assetPath": "assets/ui/skill-icons/missile.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "skyLances_rain",
+      "cardId": "aug_skyLances_rain",
+      "name": "칠성 창우",
+      "description": "천공의 창 5자루 → 7자루. 추가 두 창은 대각선에 낙하.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "skyLances",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 1,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "칠성 창우"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "일곱 별의 천공진 · 7자루",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/SkyLances.luau",
+        "src/client/combat/SkyLanceArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "skyLances",
+      "assetPath": "assets/ui/skill-icons/skyLances.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "skyLances_execute",
+      "cardId": "aug_skyLances_execute",
+      "name": "천공의 심판",
+      "description": "체력 50% 이하 적에게 천공의 창 피해 +50%.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "skyLances",
+      "rarity": "epic",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 2,
+      "badge": {
+        "rarity": "영웅",
+        "variantName": "천공의 심판"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "금빛 심판진 · 저체력 처형 십자",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/SkyLances.luau",
+        "src/client/combat/SkyLanceArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "skyLances",
+      "assetPath": "assets/ui/skill-icons/skyLances.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "lightRing_twin",
+      "cardId": "aug_lightRing_twin",
+      "name": "쌍월",
+      "description": "광륜을 좌우 12도로 2개 발사. 각각 기존 피해의 70%.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "lightRing",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 1,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "쌍월"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "엇갈린 두 초승달",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/LightSpells.luau",
+        "src/client/combat/LightArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "lightRing",
+      "assetPath": "assets/ui/skill-icons/lightRing.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "lightRing_return",
+      "cardId": "aug_lightRing_return",
+      "name": "귀환의 칼날",
+      "description": "돌아오는 광륜 피해 +75%. 출발·귀환 각각 적당 1회.",
+      "category": "auto_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "lightRing",
+      "rarity": "epic",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": 2,
+      "badge": {
+        "rarity": "영웅",
+        "variantName": "귀환의 칼날"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "귀환 때 펼쳐지는 세 겹 칼날",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/LightSpells.luau",
+        "src/client/combat/LightArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "lightRing",
+      "assetPath": "assets/ui/skill-icons/lightRing.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "fire_blast",
+      "cardId": "aug_fire_blast",
+      "name": "작열 화염탄",
+      "description": "Q 화염탄 폭발 반경 5 → 7. 착탄 범위가 화면에 표시됨.",
+      "category": "active_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "fire",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": null,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "작열 화염탄"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "나선 화염 꼬리 · 솟아오르는 작열",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/ActiveSpells.luau",
+        "src/client/combat/FireArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "fire",
+      "assetPath": "assets/ui/skill-icons/fire.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "thunder_chain",
+      "cardId": "aug_thunder_chain",
+      "name": "뇌창 전도",
+      "description": "Q 뇌창 적중 시 근처 최대 2명에 50% 전류. 시전당 추가 타격 2회 제한.",
+      "category": "active_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "thunder",
+      "rarity": "epic",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": null,
+      "badge": {
+        "rarity": "영웅",
+        "variantName": "뇌창 전도"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "회전 전류 · 연결 방전",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/ActiveSpells.luau",
+        "src/client/combat/ActiveArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "thunder",
+      "assetPath": "assets/ui/skill-icons/thunder.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "aether_execute",
+      "cardId": "aug_aether_execute",
+      "name": "성운 처형",
+      "description": "체력 50% 이하 적에게 Q 성운창 피해 +50%.",
+      "category": "active_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "aetherLance",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": null,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "성운 처형"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "성운 궤도 · 저체력 십자 폭발",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/ActiveSpells.luau",
+        "src/client/combat/AetherLanceArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "aetherLance",
+      "assetPath": "assets/ui/skill-icons/aetherLance.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "iceRush_wide",
+      "cardId": "aug_iceRush_wide",
+      "name": "빙하 대로",
+      "description": "Q 빙하 쇄도 폭 +50%. 기둥 연출과 판정 함께 확대.",
+      "category": "active_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": "iceRush",
+      "rarity": "rare",
+      "maxStacks": 1,
+      "requiresAny": [],
+      "minimumParentLevel": null,
+      "badge": {
+        "rarity": "희귀",
+        "variantName": "빙하 대로"
+      },
+      "iconMode": "parent_with_badge",
+      "visualNote": "넓은 빙하 위로 이어지는 서리 관문",
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/combat/ActiveSpells.luau",
+        "src/client/combat/GlacialArt.luau",
+        "src/client/combat/AugmentArt.luau"
+      ],
+      "iconKey": "iceRush",
+      "assetPath": "assets/ui/skill-icons/iceRush.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "quick_cast",
+      "cardId": "aug_quick_cast",
+      "name": "신속 시전",
+      "description": "자동 마법 재사용 주기 -8%p. 최대 3회, Q·골렘·비행 시간 제외.",
+      "category": "common_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": null,
+      "rarity": "common",
+      "maxStacks": 3,
+      "requiresAny": [],
+      "minimumParentLevel": null,
+      "badge": {
+        "rarity": "일반",
+        "variantName": "신속 시전"
+      },
+      "iconMode": "dedicated_common",
+      "visualNote": null,
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/flow/Progression.luau"
+      ],
+      "iconKey": "quick_cast",
+      "assetPath": "assets/ui/skill-icons/quick_cast.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "active_focus",
+      "cardId": "aug_active_focus",
+      "name": "집중된 주문",
+      "description": "Q 재사용 주기 -15%p. 최대 2회, 4초 → 최저 2.8초.",
+      "category": "common_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": null,
+      "rarity": "common",
+      "maxStacks": 2,
+      "requiresAny": [],
+      "minimumParentLevel": null,
+      "badge": {
+        "rarity": "일반",
+        "variantName": "집중된 주문"
+      },
+      "iconMode": "dedicated_common",
+      "visualNote": null,
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/flow/Progression.luau"
+      ],
+      "iconKey": "active_focus",
+      "assetPath": "assets/ui/skill-icons/active_focus.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    },
+    {
+      "id": "lucky_charm",
+      "cardId": "aug_lucky_charm",
+      "name": "행운의 부적",
+      "description": "행운 +20. 다음 무작위 카드의 희귀·영웅 등급 가중치 증가.",
+      "category": "common_augment",
+      "active": true,
+      "status": "implemented",
+      "parentSkill": null,
+      "rarity": "common",
+      "maxStacks": 3,
+      "requiresAny": [],
+      "minimumParentLevel": null,
+      "badge": {
+        "rarity": "일반",
+        "variantName": "행운의 부적"
+      },
+      "iconMode": "dedicated_common",
+      "visualNote": null,
+      "definitionSource": "src/server/flow/Augments.luau",
+      "implementationPaths": [
+        "src/server/flow/Augments.luau",
+        "src/server/flow/Progression.luau"
+      ],
+      "iconKey": "lucky_charm",
+      "assetPath": "assets/ui/skill-icons/lucky_charm.png",
+      "robloxAssetId": null,
+      "iconStatus": "local_ready_unpublished"
+    }
+  ]
+}

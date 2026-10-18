@@ -4,13 +4,17 @@ return function(deps)
  local theme=require(script.Parent.Parent.Theme)
  local make,label,round,stroke=theme.Make,theme.Label,theme.Round,theme.Stroke
  local palette=theme.Palette
- local gui=make('ScreenGui',player:WaitForChild('PlayerGui'),{Name='SummonerLobbyUI',ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=30,Enabled=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+ local icons=require(script.Parent.SkillIcons)
+ local connections={}
+ local function connect(signal,callback)local connection=signal:Connect(callback);table.insert(connections,connection);return connection end
+ local gui=make('ScreenGui',player:WaitForChild('PlayerGui'),{Name='SummonerLobbyUI',ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=30,Enabled=false,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
  local veil=make('Frame',gui,{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(8,14,27),BackgroundTransparency=.2})
  local panel=make('Frame',veil,{Name='Panel',Size=UDim2.fromOffset(960,768),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,BackgroundTransparency=.04});round(panel,20);stroke(panel)
  local scale=make('UIScale',panel,{Scale=1})
  local function resize()local v=workspace.CurrentCamera.ViewportSize;scale.Scale=math.min(1,(v.X-24)/960,(v.Y-24)/768)end
- workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'):Connect(resize);resize()
- local heading=label(panel,'ARCANE HAVEN  /  마법사의 안식처',UDim2.fromOffset(900,38),UDim2.fromOffset(28,18),Enum.Font.GothamBold,palette.mint);heading.TextSize=25;heading.TextXAlignment=Enum.TextXAlignment.Left
+ connect(workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'),resize);resize()
+ local heading=label(panel,'ARCANE HAVEN  /  출전 준비',UDim2.fromOffset(690,38),UDim2.fromOffset(28,18),Enum.Font.GothamBold,palette.mint);heading.TextSize=25;heading.TextXAlignment=Enum.TextXAlignment.Left
+ local close=make('TextButton',panel,{Name='CloseLoadout',Size=UDim2.fromOffset(160,34),Position=UDim2.fromOffset(772,20),Text='로비 둘러보기',BackgroundColor3=palette.card,TextColor3=palette.text,Font=Enum.Font.GothamBold,TextSize=14});round(close,8)
  local hint=label(panel,'Q 사용 스킬 1개와 자동 마법 4개를 골라 출발하세요.',UDim2.fromOffset(900,24),UDim2.fromOffset(28,62),nil,palette.muted);hint.TextXAlignment=Enum.TextXAlignment.Left;hint.TextSize=15
  local slots=label(panel,'마법 목록을 불러오는 중…',UDim2.fromOffset(900,24),UDim2.fromOffset(28,196),Enum.Font.GothamBold,palette.gold);slots.Name='SelectedSpells';slots.TextXAlignment=Enum.TextXAlignment.Left;slots.TextSize=15
  local grid=make('ScrollingFrame',panel,{Name='Spells',Size=UDim2.fromOffset(904,390),Position=UDim2.fromOffset(28,232),CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,BackgroundTransparency=1,BorderSizePixel=0})
@@ -26,7 +30,26 @@ return function(deps)
  local activeLabel=label(panel,'Q 사용 스킬',UDim2.fromOffset(900,20),UDim2.fromOffset(28,90),Enum.Font.GothamBold,palette.gold);activeLabel.TextSize=13;activeLabel.TextXAlignment=Enum.TextXAlignment.Left
  local selected,options,buttons={},{},{}
  local activeSkill='iceRush';local activeButtons={}
- local queued=false;local inLobby=nil;local pending=false
+ local queued=false;local inLobby=nil;local pending=false;local opened=false
+ local function setOpen(value)
+  if value and inLobby~=true then return false end
+  if opened==value then return true end
+  if value and deps.beforeOpen then deps.beforeOpen()end
+  opened=value;gui.Enabled=value;gui:SetAttribute('LoadoutOpen',value)
+  if deps.onPanelChanged then deps.onPanelChanged(value)end
+  return true
+ end
+ gui:SetAttribute('LoadoutOpen',false)
+ close.Activated:Connect(function()setOpen(false)end)
+ connect(game:GetService('UserInputService').InputBegan,function(key)
+  if opened and(key.KeyCode==Enum.KeyCode.Escape or key.KeyCode==Enum.KeyCode.ButtonB)then setOpen(false)end
+ end)
+ local function spellIcon(parent,id,size,position,color)
+  local back=make('Frame',parent,{Name='IconTile',Size=UDim2.fromOffset(size,size),Position=position,BackgroundColor3=Color3.fromRGB(17,28,43)});round(back,8)
+  local fallback=label(back,'✦',UDim2.fromScale(1,1),UDim2.new(),Enum.Font.GothamBold,color or palette.mint);fallback.Name='IconFallback';fallback.TextSize=math.floor(size*.5)
+  local image=make('ImageLabel',back,{Name='SkillIcon',Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit});round(image,8)
+  icons.Apply(image,id,fallback)
+ end
  local function refresh()
   local names={};for _,id in ipairs(selected)do for _,v in ipairs(options)do if v.id==id then table.insert(names,v.name)end end end
   slots.Text=string.format('선택 %d / 4   ·   ',#selected)..table.concat(names,'  +  ')
@@ -42,7 +65,9 @@ return function(deps)
  local function buildActive(items)
   local width=(904-(#items-1)*10)/#items
   for index,v in ipairs(items)do
-   local b=make('TextButton',panel,{Name='Active_'..v.id,Size=UDim2.fromOffset(width,58),Position=UDim2.fromOffset(28+(index-1)*(width+10),116),BackgroundColor3=palette.card,Text=v.name..'\n'..v.desc,TextColor3=palette.text,TextSize=14,Font=Enum.Font.GothamBold,AutoButtonColor=true});round(b,10);stroke(b)
+   local b=make('TextButton',panel,{Name='Active_'..v.id,Size=UDim2.fromOffset(width,58),Position=UDim2.fromOffset(28+(index-1)*(width+10),116),BackgroundColor3=palette.card,Text='',AutoButtonColor=true});round(b,10);stroke(b)
+   spellIcon(b,v.id,42,UDim2.fromOffset(8,8),palette.mint)
+   local text=label(b,v.name..'\n'..v.desc,UDim2.new(1,-64,1,-8),UDim2.fromOffset(58,4),Enum.Font.GothamBold,palette.text);text.TextSize=12;text.TextXAlignment=Enum.TextXAlignment.Left
    activeButtons[v.id]=b
    b.Activated:Connect(function()if queued or pending then return end;activeSkill=v.id;refresh()end)
   end
@@ -50,10 +75,11 @@ return function(deps)
  local function build()
   for index,v in ipairs(options)do
    local b=make('TextButton',grid,{Name=v.id,Text='',BackgroundColor3=palette.card,LayoutOrder=index,AutoButtonColor=true});round(b,12);stroke(b,Color3.fromRGB(v.color[1],v.color[2],v.color[3]))
-   local name=label(b,v.name,UDim2.new(1,-110,0,23),UDim2.fromOffset(14,8),Enum.Font.GothamBold,Color3.fromRGB(v.color[1],v.color[2],v.color[3]));name.TextSize=18;name.TextXAlignment=Enum.TextXAlignment.Left
+   spellIcon(b,v.id,62,UDim2.fromOffset(10,13),Color3.fromRGB(v.color[1],v.color[2],v.color[3]))
+   local name=label(b,v.name,UDim2.new(1,-176,0,23),UDim2.fromOffset(84,8),Enum.Font.GothamBold,Color3.fromRGB(v.color[1],v.color[2],v.color[3]));name.TextSize=17;name.TextXAlignment=Enum.TextXAlignment.Left
    local mark=label(b,'',UDim2.fromOffset(80,23),UDim2.new(1,-90,0,8),nil,palette.mint);mark.TextSize=12
-   local role=label(b,v.role,UDim2.new(1,-28,0,18),UDim2.fromOffset(14,33),nil,palette.gold);role.TextSize=11;role.TextXAlignment=Enum.TextXAlignment.Left
-   local desc=label(b,v.desc,UDim2.new(1,-28,0,26),UDim2.fromOffset(14,53),nil,palette.muted);desc.TextSize=12;desc.TextXAlignment=Enum.TextXAlignment.Left
+   local role=label(b,v.role,UDim2.new(1,-96,0,18),UDim2.fromOffset(84,33),nil,palette.gold);role.TextSize=11;role.TextXAlignment=Enum.TextXAlignment.Left
+   local desc=label(b,v.desc,UDim2.new(1,-96,0,26),UDim2.fromOffset(84,53),nil,palette.muted);desc.TextSize=12;desc.TextXAlignment=Enum.TextXAlignment.Left
    buttons[v.id]={button=b,mark=mark}
    b.Activated:Connect(function()
     if queued or pending then return end
@@ -82,7 +108,7 @@ return function(deps)
   pending=true;start.Text='출발 준비 중…';net.Action:FireServer('startRound',table.clone(selected),activeSkill)
   task.delay(2,function()pending=false;refresh()end)
  end)
- net.State.OnClientEvent:Connect(function(s)
+ connect(net.State.OnClientEvent,function(s)
   local visible=s.lobby==true
   if visible and inLobby~=true then selected=table.clone(s.loadout or {});activeSkill=s.activeSkill or 'iceRush';input.SetSuspended(true);hud.Enabled=false end
   if not visible and inLobby~=false then
@@ -92,8 +118,10 @@ return function(deps)
   end
   local preview=player.PlayerGui:FindFirstChild('DragonPreview');local open=preview and preview:FindFirstChild('OpenButton')
   if open then open.Visible=not visible end
-  local skillView=player.PlayerGui:FindFirstChild("SkillPreview")
-  inLobby=visible;gui.Enabled=visible and not(skillView and skillView:GetAttribute("Open"));gui:SetAttribute('InLobby',visible)
+  inLobby=visible;if not visible then setOpen(false)end
+  local previewOpen=false
+  for _,name in ipairs({'SkillPreview','EnemyPreview','DragonPreview'})do local view=player.PlayerGui:FindFirstChild(name);if view and view:GetAttribute('Open')then previewOpen=true;break end end
+  gui.Enabled=visible and opened and not previewOpen;gui:SetAttribute('InLobby',visible)
   if not visible then return end
   if #options==0 and s.spellOptions then options=s.spellOptions;build()end
   if not next(activeButtons) and s.activeOptions then buildActive(s.activeOptions)end
@@ -103,5 +131,6 @@ return function(deps)
   status.Text=s.lobbyMessage or(queued and '준비 완료 · 다른 플레이어가 준비하면 함께 출발합니다.' or '혼자라면 바로 출발 · 친구와 함께라면 전원 준비 후 출발')
   refresh()
  end)
- return {Gui=gui}
+ gui.Destroying:Connect(function()setOpen(false);for _,connection in ipairs(connections)do connection:Disconnect()end end)
+ return {Gui=gui,Open=function()return setOpen(true)end,Close=function()return setOpen(false)end}
 end

@@ -41,6 +41,11 @@ task details belong in an issue or PR, not a growing global instruction log.
    visual/audio review and human enjoyment are different evidence levels.
 6. Submit a focused PR with the template. Do not merge your own change or publish the game
    unless the user explicitly asks. Regenerate the installer after resolving source conflicts.
+7. Include pictures of visible additions/changes in the PR body, with captions and stable
+   image links. Use actual Studio/game captures for implemented visuals and label standalone
+   asset previews separately. Record the source revision and capture conditions; compare
+   before/after under matching conditions when relevant. If capture is unavailable, state
+   the blocker and mark visual review pending instead of substituting an older or mock image.
 
 Update relevant docs in the same change: architecture/contracts for module changes,
 ASSET_CREDITS and an asset manifest for reused materials, PLAYTEST_NOTES for observed

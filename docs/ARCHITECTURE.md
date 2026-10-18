@@ -1,5 +1,23 @@
 # 모듈 구조와 기능 분담
 
+## 로비 허브와 스킬 카탈로그
+
+- `world/LobbyWorld`는 전장 밖 중심 `(0, 0, 178)`의 네이티브 안식처와 출전/상점/가챠/랭킹 진입점을 생성합니다.
+  `Architecture`는 충돌, `Decor`는 장식, `Interactions`는 `LobbyHubAction` 속성이 있는 프롬프트를 담당합니다.
+- 클라이언트 `flow/LobbyHub`는 프롬프트와 하단 버튼을 같은 `Open(action)`에 연결합니다.
+  상점·가챠는 준비 상태이며 구매·추첨 요청을 보내지 않습니다. `Lobby.Open/Close`는 기존 출전 선택창을 관리합니다.
+  `LoadoutOpen`/각 미리보기 `Open` 속성으로 화면 중첩을 막고, 진입점이 메뉴의 이동 입력 잠금/복구를 연결합니다.
+- 서버 `flow/LobbyScores`는 정상 전투의 최고 처치수를 접속 단위로 보관합니다. `Session`이 참가/종료/이탈을 알리고
+  `Progression.Sync`가 로비에만 `lobbyScores: {{userId, name, bestScore}}`를 보냅니다. 클라이언트 점수 제출 경로는 없습니다.
+  순위는 최대 20행, 점수 내림차순/동점 UserId 오름차순입니다. DataStore/전체 서버 랭킹은 포함하지 않습니다.
+- `tools/build_skill_catalog.py`는 기존 서버 정의와 클라이언트 변형 목록을 읽어
+  `data/skills.json`, `docs/SKILL_CATALOG.md`, `flow/SkillIcons.luau`를 함께 생성합니다.
+  게임 규칙은 계속 서버 원본이며 JSON을 또 하나의 수치 원본으로 사용하지 않습니다.
+- `assets/ui/skill-icons/manifest.json`은 PNG 경로와 생성 출처/해시/업로드 ID를 보관합니다.
+  `SkillIcons.Get(id)`는 증강의 부모 그림과 희귀도 배지를 반환하고,
+  `Apply(ImageLabel, id, fallback)`는 실제 Roblox ID가 있을 때만 그림을 표시합니다.
+  로컬 PNG 존재, 업로드 연결, 실제 엔진 로딩/시각 검수는 서로 다른 상태입니다.
+
 세 사람 모두 서버·클라이언트를 개발합니다. 작업 하나를 맡으면 해당 기능의 규칙,
 화면, 효과와 검증까지 연결합니다. 담당자는 이슈마다 정하고 서로 리뷰합니다.
 

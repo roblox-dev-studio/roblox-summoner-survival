@@ -14,10 +14,18 @@ local cameraController=require(world:WaitForChild("Camera"))({player=player})
 require(world:WaitForChild("CharacterMotion"))()
 require(world:WaitForChild("DragonPresentation"))()
 require(world:WaitForChild("EnemyPresentation"))()
-local skillPreview,enemyPreview
-local dragonPreview=require(world:WaitForChild("DragonPreview"))({player=player,net=net,input=input,hud=hud.Gui,beforeOpen=function()if skillPreview then skillPreview.Close()end;if enemyPreview then enemyPreview.Close()end end})
-require(flow:WaitForChild("Lobby"))({player=player,net=net,input=input,hud=hud.Gui,camera=cameraController})
-skillPreview=require(flow:WaitForChild("SkillPreview"))({player=player,net=net,input=input,hud=hud.Gui,dragon=dragonPreview,camera=cameraController,beforeOpen=function()if enemyPreview then enemyPreview.Close()end end})
-enemyPreview=require(world:WaitForChild('EnemyPreview'))({player=player,net=net,input=input,hud=hud.Gui,camera=cameraController,beforeOpen=function()if skillPreview then skillPreview.Close()end;if dragonPreview then dragonPreview.Close()end end})
+local skillPreview,enemyPreview,lobby,lobbyHub
+local function menuMovement(open)
+ local module=player.PlayerScripts:FindFirstChild('PlayerModule')
+ if module then local ok,controls=pcall(function()return require(module):GetControls()end);if ok then if open then controls:Disable()else controls:Enable()end end end
+end
+local function closeLobbyMenus()if lobbyHub then lobbyHub.Close()end;if lobby then lobby.Close()end end
+local dragonPreview=require(world:WaitForChild("DragonPreview"))({player=player,net=net,input=input,hud=hud.Gui,beforeOpen=function()closeLobbyMenus();if skillPreview then skillPreview.Close()end;if enemyPreview then enemyPreview.Close()end end})
+lobby=require(flow:WaitForChild("Lobby"))({player=player,net=net,input=input,hud=hud.Gui,camera=cameraController,onPanelChanged=menuMovement,beforeOpen=function()
+ if lobbyHub then lobbyHub.Close()end;if skillPreview then skillPreview.Close()end;if enemyPreview then enemyPreview.Close()end;if dragonPreview then dragonPreview.Close()end
+end})
+lobbyHub=require(flow:WaitForChild('LobbyHub'))({player=player,net=net,onLoadout=function()lobby.Open()end,onPanelChanged=menuMovement})
+skillPreview=require(flow:WaitForChild("SkillPreview"))({player=player,net=net,input=input,hud=hud.Gui,dragon=dragonPreview,camera=cameraController,beforeOpen=function()closeLobbyMenus();if enemyPreview then enemyPreview.Close()end end})
+enemyPreview=require(world:WaitForChild('EnemyPreview'))({player=player,net=net,input=input,hud=hud.Gui,camera=cameraController,beforeOpen=function()closeLobbyMenus();if skillPreview then skillPreview.Close()end;if dragonPreview then dragonPreview.Close()end end})
 net.Action:FireServer("ready")
 print("[Summoner] HUD ready")

@@ -329,9 +329,11 @@ local players = require(modules.shared.PlayerState)({states = states})
 local movement = require(modules.combat.Movement)({
     world = world, rootOf = players.RootOf, paused = players.Paused, effect = net.Effect,
 })
+local lobbyScores=require(modules.flow.LobbyScores)()
 local progression = require(modules.flow.Progression)({
     world = world, states = states, gems = gems, rng = rng, block = actors.Block,
     rootOf = players.RootOf, paused = players.Paused, finishDash = movement.FinishDash,
+    lobbyScores=lobbyScores.Snapshot,
     augments = require(modules.flow.Augments), update = net.State, clock = clock, spellOptions = require(modules.flow.Loadout).Options, activeOptions = require(modules.flow.Loadout).ActiveOptions,
 })
 local combat = require(modules.combat.Combat)({
@@ -349,6 +351,8 @@ local session = require(modules.flow.Session)({
     creature = actors.Create, finishDash = movement.FinishDash,
     clearIceShots = combat.ClearProjectiles, sync = progression.Sync,
     allowBossTest=RunService:IsStudio(),
+    scoreAdd=lobbyScores.Add,scoreRecord=lobbyScores.Record,scoreRemove=lobbyScores.Remove,
+    lobbyCenter=Vector3.new(0,0,178),lobbyRadius=58,
     clock = clock, lobbySpawn=lobbySpawn, resetSpawn = waves.ResetSpawn, resetBoss = function() if boss then boss.Reset() end;if fieldBoss then fieldBoss.Reset()end end,
 })
 boss = require(modules.world.Boss)({
@@ -407,6 +411,7 @@ RunService.Heartbeat:Connect(function(dt)
     if tickClock < .05 then return end
     dt = math.min(tickClock,.15)
     tickClock = 0
+    session.StepLobby()
     local alive = players.LiveCount()
     if alive > 0 and not players.Paused() then
         clock.elapsed += dt
@@ -1569,6 +1574,51 @@ local activeNames={};for _,v in ipairs(activeOptions)do activeNames[v.id]=v.name
 local function validateActive(id)return type(id)=='string' and activeNames[id]~=nil end
 return {Options=options,Validate=validate,SlotCount=SLOT_COUNT,Defaults={'ice','meteor','blades','lightRing'},ActiveOptions=activeOptions,ActiveNames=activeNames,ValidateActive=validateActive}
 ]====])
+-- Source: src/server/flow/LobbyScores.luau
+addModule(modules,{"flow","LobbyScores"},[====[
+-- Server-only, in-memory records for connected players. No DataStore or client writes.
+-- A completed normal run contributes its authoritative kill count exactly once.
+return function()
+ local entries,owners={},{}
+ local finished=setmetatable({},{__mode='k'})
+ local cached
+ local function integer(value,nonnegative)
+  return type(value)=='number'and value==value and math.abs(value)<=9007199254740991 and value%1==0 and(not nonnegative or value>=0)
+ end
+ local function add(player)
+  if not player or not integer(player.UserId,false)or type(player.Name)~='string'or player.Name==''then return false end
+  local owner=owners[player.UserId];if owner and owner~=player then return false end
+  local name=type(player.DisplayName)=='string'and player.DisplayName~=''and player.DisplayName or player.Name
+  local existing=entries[player]
+  if existing then if existing.name~=name then existing.name=name;cached=nil end;return true end
+  owners[player.UserId]=player;entries[player]={userId=player.UserId,name=name};cached=nil;return true
+ end
+ local function record(state,result)
+  if type(state)~='table'or finished[state]or not entries[state.player]then return false end
+  if result~='defeat'and result~='victory'and result~='retreat'then return false end
+  if state.over~=true or state.result~=result or state.lobby then return false end
+  finished[state]=true
+  if state.bossTest or state.fieldBossTest or not integer(state.kills,true)then return false end
+  local entry=entries[state.player]
+  if entry.bestScore==nil or state.kills>entry.bestScore then entry.bestScore=state.kills;cached=nil;return true end
+  return false
+ end
+ local function remove(player)
+  local entry=entries[player];if not entry then return end
+  entries[player]=nil;if owners[entry.userId]==player then owners[entry.userId]=nil end;cached=nil
+ end
+ local function snapshot()
+  if not cached then
+   cached={}
+   for _,entry in pairs(entries)do if entry.bestScore~=nil then table.insert(cached,{userId=entry.userId,name=entry.name,bestScore=entry.bestScore})end end
+   table.sort(cached,function(a,b)if a.bestScore==b.bestScore then return a.userId<b.userId end;return a.bestScore>b.bestScore end)
+   while #cached>20 do table.remove(cached)end
+  end
+  local result={};for i,entry in ipairs(cached)do result[i]={userId=entry.userId,name=entry.name,bestScore=entry.bestScore}end;return result
+ end
+ return {Add=add,Record=record,Remove=remove,Snapshot=snapshot}
+end
+]====])
 -- Source: src/server/flow/Progression.luau
 addModule(modules,{"flow","Progression"},[====[
 -- XP, offers, upgrades and the HUD state packet.
@@ -1589,7 +1639,7 @@ return function(deps)
 		local _,h=rootOf(s)
         local remaining=clock.phase=="boss" and math.floor(clock.bossElapsed) or clock.roundLength-math.floor(clock.elapsed)
         local b=clock.boss;local f=clock.fieldBoss
-		update:FireClient(s.player,{time=math.max(0,remaining),phase=clock.phase,lobby=s.lobby==true,queued=s.queued==true,bossTestQueued=s.bossTestQueued==true,bossTest=s.bossTest==true,fieldBossTestQueued=s.fieldBossTestQueued==true,fieldBossTest=s.fieldBossTest==true,fieldBoss=f and {name=f.name,hp=math.max(0,f.hp),maxHp=f.maxHp,action=f.action}or nil,loadout=s.loadout,spellOptions=s.lobby and spellOptions or nil,activeOptions=s.lobby and deps.activeOptions or nil,activeSkill=s.activeSkill or "iceRush",activeName=s.activeName or "빙하 쇄도",lobbyMessage=s.lobbyMessage,shield=s.shield or 0,boss=b and {name=b.name,hp=math.max(0,b.hp),maxHp=b.maxHp,stage=b.phase,airborne=b.airborne} or nil,level=s.level,xp=s.xp,need=need(s),hp=h and math.ceil(h.Health) or 0,maxHp=h and h.MaxHealth or 100,
+		update:FireClient(s.player,{time=math.max(0,remaining),phase=clock.phase,lobby=s.lobby==true,lobbyScores=s.lobby and deps.lobbyScores and deps.lobbyScores()or nil,queued=s.queued==true,bossTestQueued=s.bossTestQueued==true,bossTest=s.bossTest==true,fieldBossTestQueued=s.fieldBossTestQueued==true,fieldBossTest=s.fieldBossTest==true,fieldBoss=f and {name=f.name,hp=math.max(0,f.hp),maxHp=f.maxHp,action=f.action}or nil,loadout=s.loadout,spellOptions=s.lobby and spellOptions or nil,activeOptions=s.lobby and deps.activeOptions or nil,activeSkill=s.activeSkill or "iceRush",activeName=s.activeName or "빙하 쇄도",lobbyMessage=s.lobbyMessage,shield=s.shield or 0,boss=b and {name=b.name,hp=math.max(0,b.hp),maxHp=b.maxHp,stage=b.phase,airborne=b.airborne} or nil,level=s.level,xp=s.xp,need=need(s),hp=h and math.ceil(h.Health) or 0,maxHp=h and h.MaxHealth or 100,
 			kills=s.kills,fire=s.fire,lightning=s.lightning,ice=s.ice,meteor=s.meteor or 0,blades=s.blades or 0,frost=s.frost or 0,ward=s.ward or 0,missile=s.missile or 0,skyLances=s.skyLances or 0,lightRing=s.lightRing or 0,golem=s.golem,offers=s.offers,offerRevision=s.offerRevision,luck=augments.Luck(s),offerOdds=s.offerOdds,augmentWeights=augments.Weights(s),augments=augments.Summary(s),rerolls=s.rerolls==nil and 2 or s.rerolls,over=s.over,result=s.result,cooldown=math.max(0,math.ceil(s.cooldown)),dashCooldown=math.ceil((s.dashCooldown or 0)*10)/10,golemCooldown=math.max(0,math.ceil(s.petHeavyCooldown or 0)),paused=paused()})
 	end
 	local function levelCheck(s)
@@ -1696,8 +1746,9 @@ return function(deps)
 	local starting = false
 	local STARTING_HEALTH = 150 -- Pattern-review tuning; applies on join and restart.
 	local function endPlayer(s,result)
-		if s.over then return end
+		if states[s.player]~=s or s.over then return end
 		s.over=true; s.result=result; s.offers=nil
+		if deps.scoreRecord then deps.scoreRecord(s,result)end
 		finishDash(s)
 		clearIceShots(s)
 		local c=s.player.Character; local h=c and c:FindFirstChildOfClass("Humanoid")
@@ -1710,6 +1761,7 @@ return function(deps)
 		s.activeSkill=savedActive[player] or 'iceRush';s.activeName=loadouts.ActiveNames[s.activeSkill]
 		s.lobby=true;s.loadout=table.clone(saved[player] or loadouts.Defaults)
 		states[player]=s
+		if deps.scoreAdd then deps.scoreAdd(player)end
 		s.pet=creature(player.Name.."_Golem",Color3.fromRGB(95,112,120),true)
 		s.petRig={}
 		for _,part in ipairs(s.pet:GetChildren()) do if part:IsA("BasePart") then s.petRig[part]=s.pet:GetPivot():ToObjectSpace(part.CFrame) end end
@@ -1720,7 +1772,7 @@ return function(deps)
 		root.CFrame=(deps.lobbySpawn or CFrame.new(0,4,150))*CFrame.new(rng:NextNumber(-4,4),0,rng:NextNumber(-4,4))
 		s.pet:PivotTo(CFrame.new(root.Position.X+5,3.6,root.Position.Z+4))
 		local humanoid=character:WaitForChild("Humanoid")
-		humanoid.WalkSpeed=0; humanoid.MaxHealth=STARTING_HEALTH; humanoid.Health=STARTING_HEALTH
+		humanoid.WalkSpeed=18; humanoid.MaxHealth=STARTING_HEALTH; humanoid.Health=STARTING_HEALTH
 		humanoid.DisplayDistanceType=Enum.HumanoidDisplayDistanceType.None
 		s.loaded=true
 		humanoid.Died:Connect(function() if states[player]==s then
@@ -1806,13 +1858,36 @@ return function(deps)
  end
  local function removePlayer(p)
 		saved[p]=nil;savedActive[p]=nil
+		if deps.scoreRemove then deps.scoreRemove(p)end
 		local s=states[p]; if s and s.pet then s.pet:Destroy() end; states[p]=nil
 		if s then clearIceShots(s) end
 		tryStart()
 		if next(states)==nil then world:ClearAllChildren(); table.clear(enemies); table.clear(gems); clock.elapsed=0; resetSpawn(); if deps.resetBoss then deps.resetBoss() end end
 	end
 
+
+ local function stepLobby()
+  local spawn=deps.lobbySpawn or CFrame.new(0,4,150)
+  local center=deps.lobbyCenter or Vector3.new(0,0,178)
+  local radius=deps.lobbyRadius or 58
+  for _,s in pairs(states)do
+   if s.lobby and s.loaded and not s.returning then
+    local character=s.player.Character
+    local root=character and character:FindFirstChild('HumanoidRootPart')
+    local humanoid=character and character:FindFirstChildOfClass('Humanoid')
+    if root and humanoid and humanoid.Health>0 then
+     local pos=root.Position;local offset=Vector3.new(pos.X-center.X,0,pos.Z-center.Z)
+     if offset.Magnitude>radius or pos.Y< -10 then
+      root.CFrame=spawn;root.AssemblyLinearVelocity=Vector3.zero;root.AssemblyAngularVelocity=Vector3.zero
+      if s.pet and s.pet.Parent then s.pet:PivotTo(CFrame.new(spawn.Position+Vector3.new(5,0,4)))end
+     end
+    end
+   end
+  end
+ end
+
 	return {
+        StepLobby = stepLobby,
 		AddPlayer = addPlayer,
 		RemovePlayer = removePlayer,
 		EndPlayer = endPlayer,
@@ -2496,31 +2571,177 @@ end
 ]====])
 -- Source: src/server/world/LobbyWorld.luau
 addModule(modules,{"world","LobbyWorld"},[====[
--- Reproducible waiting sanctuary, separate from the combat runtime.
+-- Original native-part academy sanctuary. Rebuilt from source; no uploaded assets.
+-- Only Architecture collides. Decor/Interactions never enter the combat runtime.
 return function()
  local old=workspace:FindFirstChild('SummonerLobby');if old then old:Destroy()end
- local folder=Instance.new('Folder');folder.Name='SummonerLobby';folder.Parent=workspace
- local function part(name,size,cf,color,material,shape)
-  local p=Instance.new('Part');p.Name=name;p.Size=size;p.CFrame=cf;p.Color=color;p.Material=material or Enum.Material.Slate;p.Shape=shape or Enum.PartType.Block;p.Anchored=true;p.Parent=folder;return p
+ local hub=Instance.new('Folder');hub.Name='SummonerLobby';hub:SetAttribute('LobbyStyle','AstralAcademy');hub.Parent=workspace
+ local architecture=Instance.new('Folder');architecture.Name='Architecture';architecture.Parent=hub
+ local decor=Instance.new('Folder');decor.Name='Decor';decor.Parent=hub
+ local interactions=Instance.new('Folder');interactions.Name='Interactions';interactions.Parent=hub
+ local center=Vector3.new(0,0,178)
+ local c={stone=Color3.fromRGB(58,66,83),pale=Color3.fromRGB(118,126,139),dark=Color3.fromRGB(32,40,57),gold=Color3.fromRGB(171,140,83),mint=Color3.fromRGB(113,195,183),violet=Color3.fromRGB(149,135,189),wood=Color3.fromRGB(92,67,56),text=Color3.fromRGB(232,230,209)}
+ local function piece(parent,name,size,frame,color,material,shape)
+  local p=Instance.new(shape=='wedge'and'WedgePart'or'Part');p.Name=name;p.Size=size;p.CFrame=frame;p.Color=color;p.Material=material or Enum.Material.Slate
+  if shape and shape~='wedge'then p.Shape=shape end
+  p.Anchored=true;p.CanCollide=parent==architecture;p.CanTouch=false;p.CanQuery=parent==architecture;p.TopSurface=Enum.SurfaceType.Smooth;p.BottomSurface=Enum.SurfaceType.Smooth;p.Parent=parent;return p
  end
- local stone=Color3.fromRGB(39,49,72);local mint=Color3.fromRGB(91,244,216)
- part('Sanctuary',Vector3.new(3,68,68),CFrame.new(0,-1.5,150)*CFrame.Angles(0,0,math.pi/2),stone,nil,Enum.PartType.Cylinder)
- part('Dais',Vector3.new(.4,22,22),CFrame.new(0,.2,150)*CFrame.Angles(0,0,math.pi/2),Color3.fromRGB(57,64,90),nil,Enum.PartType.Cylinder)
+ local function block(parent,name,size,frame,color,material)return piece(parent,name,size,frame,color,material)end
+ local function disc(parent,name,radius,height,frame,color,material)
+  return piece(parent,name,Vector3.new(height,radius*2,radius*2),frame*CFrame.Angles(0,0,math.pi/2),color,material,Enum.PartType.Cylinder)
+ end
+ local function ring(name,frame,radius,width,count,color,material)
+  for i=1,count do
+   local a=(i-.5)*math.pi*2/count
+   block(decor,name,Vector3.new(width,.07,math.pi*radius*2/count*.84),frame*CFrame.new(math.cos(a)*radius,0,math.sin(a)*radius)*CFrame.Angles(0,-a,0),color,material or Enum.Material.Metal)
+  end
+ end
+ local function column(frame,height)
+  disc(architecture,'ColumnFoot',1.12,.35,frame*CFrame.new(0,.175,0),c.pale)
+  disc(architecture,'ColumnBase',.84,.55,frame*CFrame.new(0,.62,0),c.stone)
+  disc(architecture,'FlutedColumn',.58,height-1.7,frame*CFrame.new(0,height*.5,0),c.pale,Enum.Material.Marble)
+  disc(decor,'ColumnCollar',.7,.16,frame*CFrame.new(0,1.3,0),c.gold,Enum.Material.Metal)
+  disc(decor,'ColumnCollar',.7,.16,frame*CFrame.new(0,height-.8,0),c.gold,Enum.Material.Metal)
+  disc(architecture,'ColumnCapital',.95,.45,frame*CFrame.new(0,height-.225,0),c.stone)
+ end
+ local function arch(name,frame,radius,depth,color)
+  local count=18
+  for i=0,count do
+   local a=i*math.pi/count
+   block(decor,name,Vector3.new(.88,radius*math.pi/count*.96,depth),frame*CFrame.new(math.cos(a)*radius,math.sin(a)*radius,0)*CFrame.Angles(0,0,a),color)
+  end
+ end
+ local function label(anchor,title,subtitle,accent)
+  local gui=Instance.new('BillboardGui');gui.Name='LandmarkTitle';gui.Size=UDim2.fromOffset(250,68);gui.MaxDistance=85;gui.AlwaysOnTop=false;gui.Parent=anchor
+  local titleLabel=Instance.new('TextLabel');titleLabel.Name='Title';titleLabel.Size=UDim2.fromScale(1,.55);titleLabel.BackgroundTransparency=1;titleLabel.Font=Enum.Font.GothamBold;titleLabel.TextSize=22;titleLabel.TextColor3=c.text;titleLabel.TextStrokeColor3=c.dark;titleLabel.TextStrokeTransparency=.2;titleLabel.Text=title;titleLabel.Parent=gui
+  local sub=titleLabel:Clone();sub.Name='Subtitle';sub.Position=UDim2.fromScale(0,.58);sub.Size=UDim2.fromScale(1,.4);sub.TextSize=14;sub.TextColor3=accent;sub.Text=subtitle;sub.Parent=gui
+ end
+ local function marker(name,frame,title,subtitle,accent)
+  local p=block(decor,name,Vector3.new(.2,.2,.2),frame,c.dark);p.Transparency=1;label(p,title,subtitle,accent)
+ end
+ local function entrance(action,frame,title)
+  local anchor=block(interactions,'Entrance_'..action,Vector3.new(1,1,1),frame*CFrame.new(0,3,0),c.dark);anchor.Transparency=1;anchor:SetAttribute('LobbyHubAction',action)
+  local prompt=Instance.new('ProximityPrompt');prompt.Name='Open_'..action;prompt.ActionText=action=='loadout'and'출전 준비'or'살펴보기';prompt.ObjectText=title;prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.GamepadKeyCode=Enum.KeyCode.ButtonX;prompt.HoldDuration=0;prompt.MaxActivationDistance=10;prompt.RequiresLineOfSight=false;prompt:SetAttribute('LobbyHubAction',action);prompt.Parent=anchor
+ end
+ local function station(action,point,title,subtitle,accent)
+  local frame=CFrame.lookAt(point,Vector3.new(center.X,point.Y,center.Z))
+  disc(architecture,'StationStep_'..action,13,.22,frame*CFrame.new(0,.11,0),c.dark)
+  disc(architecture,'StationStep_'..action,12,.24,frame*CFrame.new(0,.34,0),c.stone)
+  disc(architecture,'StationFloor_'..action,10.8,.25,frame*CFrame.new(0,.585,0),c.pale)
+  ring('StationBrassBorder',frame*CFrame.new(0,.73,0),10.1,.13,28,c.gold)
+  entrance(action,frame*CFrame.new(0,0,-7.8),title)
+  marker('Sign_'..action,frame*CFrame.new(0,12,-1),title,subtitle,accent)
+  return frame
+ end
+ local function lantern(frame,accent)
+  disc(architecture,'LanternFoot',.65,.3,frame*CFrame.new(0,.15,0),c.stone)
+  disc(decor,'LanternPost',.11,3.5,frame*CFrame.new(0,1.9,0),c.gold,Enum.Material.Metal)
+  disc(decor,'LanternShade',.65,.2,frame*CFrame.new(0,3.8,0),c.dark,Enum.Material.Metal)
+  local bulb=piece(decor,'LanternPearl',Vector3.one*.58,frame*CFrame.new(0,3.5,0),accent,Enum.Material.Neon,Enum.PartType.Ball)
+  local light=Instance.new('PointLight');light.Color=accent;light.Range=15;light.Brightness=.6;light.Shadows=false;light.Parent=bulb
+ end
+ -- Continuous terrace and low curved guard rail keep the walkable area readable.
+ disc(architecture,'SanctuaryFoundation',56,3,CFrame.new(center+Vector3.new(0,-1.5,0)),c.dark)
+ disc(architecture,'AcademyCourtyard',55,.16,CFrame.new(center+Vector3.new(0,.08,0)),c.stone)
+ ring('TerraceTrim',CFrame.new(center+Vector3.new(0,.18,0)),53.8,.22,64,c.gold)
  for i=1,40 do
-  local a=i*math.pi/20
-  local p=part('RunicInlay',Vector3.new(2,.08,.17),CFrame.new(math.cos(a)*10,.44,150+math.sin(a)*10)*CFrame.Angles(0,-a-math.pi/2,0),mint,Enum.Material.Neon);p.CanCollide=false
+  local a=i*math.pi*2/40
+  local frame=CFrame.new(center+Vector3.new(math.cos(a)*54.8,0,math.sin(a)*54.8))*CFrame.Angles(0,-a,0)
+  block(architecture,'TerraceGuard',Vector3.new(.9,3.5,8.7),frame*CFrame.new(0,1.75,0),c.stone)
+  if i%5==0 then column(frame,5.5)end
  end
+ disc(architecture,'ArrivalMedallion',12,.2,CFrame.new(center+Vector3.new(0,.26,0)),c.pale)
+ ring('ArrivalCompass',CFrame.new(center+Vector3.new(0,.38,0)),10.7,.16,32,c.gold)
  for i=1,8 do
-  local a=i*math.pi/4;local pos=Vector3.new(math.cos(a)*27,0,150+math.sin(a)*27)
-  part('Obelisk',Vector3.new(3,9,3),CFrame.new(pos+Vector3.new(0,4.5,0)),stone)
-  local p=part('SpellCrystal',Vector3.new(2,3.5,2),CFrame.new(pos+Vector3.new(0,11,0))*CFrame.Angles(0,math.pi/4,.3),i%2==0 and mint or Color3.fromRGB(188,151,255),Enum.Material.Neon);p.CanCollide=false
-  local light=Instance.new('PointLight');light.Color=p.Color;light.Range=18;light.Brightness=1.5;light.Parent=p
+  local a=i*math.pi/4
+  piece(decor,'CompassPetal',Vector3.new(.55,.08,3.8),CFrame.new(center+Vector3.new(math.sin(a)*5,.38,math.cos(a)*5))*CFrame.Angles(0,a,0),c.dark,nil,'wedge')
  end
- for i=1,24 do
+ local points={Vector3.new(0,0,151),Vector3.new(-34,0,177),Vector3.new(34,0,177),Vector3.new(0,0,214)}
+ for _,point in ipairs(points)do
+  local direction=(point-center).Unit
+  for distance=13,(point-center).Magnitude-9,3.4 do
+   local p=center+direction*distance
+   block(decor,'RadialPath',Vector3.new(7,.06,2.85),CFrame.lookAt(p+Vector3.new(0,.2,0),p+direction),Color3.fromRGB(82,91,106))
+   for _,side in ipairs({-1,1})do block(decor,'PathEdge',Vector3.new(.12,.07,2.5),CFrame.lookAt(p+Vector3.new(0,.24,0),p+direction)*CFrame.new(side*3.8,0,0),c.gold,Enum.Material.Metal)end
+  end
+ end
+ -- Departure gate: open walk-through arch, concentric stone/brass layers, small runes.
+ local portal=CFrame.new(points[1])*CFrame.Angles(0,math.pi,0)
+ for step=1,3 do block(architecture,'PortalStep',Vector3.new(19-step*2,.2,9-step),portal*CFrame.new(0,step*.2-.1,0),step==3 and c.pale or c.stone)end
+ for _,side in ipairs({-1,1})do column(portal*CFrame.new(side*7,0,2),7.5)end
+ arch('PortalVoussoir',portal*CFrame.new(0,7.1,2),7.1,1.9,c.pale)
+ arch('PortalInnerBrass',portal*CFrame.new(0,7.1,1.88),6.25,.28,c.gold)
+ for i=1,11 do
   local a=i*math.pi/12
-  local p=part('PortalArc',Vector3.new(1.7,1.7,1.1),CFrame.new(math.cos(a)*8,9+math.sin(a)*8,127)*CFrame.Angles(0,0,a),i%3==0 and mint or stone, i%3==0 and Enum.Material.Neon or Enum.Material.Slate);p.CanCollide=false
+  block(decor,'PortalRune',Vector3.new(.12,.44,.08),portal*CFrame.new(math.cos(a)*6.65,7.1+math.sin(a)*6.65,1.01)*CFrame.Angles(0,0,a),c.mint,Enum.Material.Neon)
  end
- return CFrame.new(0,4,150)*CFrame.Angles(0,math.pi,0)
+ ring('DepartureCircle',portal*CFrame.new(0,.63,-1),4,.15,24,c.mint,Enum.Material.Metal)
+ entrance('loadout',portal*CFrame.new(0,0,-3),'출전의 문')
+ marker('Sign_loadout',portal*CFrame.new(0,16,1),'출전의 문','마법을 준비하고 전장으로',c.mint)
+ -- Shop: a curved counter under a stone arcade, books, scrolls, potion bottles.
+ local shop=station('shop',points[2],'별빛 교역소','상점 · 준비 중',Color3.fromRGB(218,181,119))
+ for _,side in ipairs({-1,1})do column(shop*CFrame.new(side*7.6,.71,4),8.3)end
+ arch('ShopArcade',shop*CFrame.new(0,8.8,4),7.6,1.4,c.stone)
+ disc(architecture,'ShopCounterFoot',4.5,1.9,shop*CFrame.new(0,1.65,1.6),c.dark)
+ disc(architecture,'ShopCounterTop',4.8,.35,shop*CFrame.new(0,2.77,1.6),c.wood,Enum.Material.Wood)
+ for i=1,5 do
+  local x=(i-3)*1.28;local color=i%2==0 and c.violet or c.mint
+  piece(decor,'PotionBottle',Vector3.new(.55,.85,.55),shop*CFrame.new(x,3.36,1.2+math.abs(x)*.18),color,Enum.Material.Glass,Enum.PartType.Ball)
+  disc(decor,'PotionNeck',.12,.3,shop*CFrame.new(x,3.89,1.2+math.abs(x)*.18),color,Enum.Material.Glass)
+  disc(decor,'PotionStopper',.15,.16,shop*CFrame.new(x,4.11,1.2+math.abs(x)*.18),c.gold,Enum.Material.Wood)
+ end
+ for _,side in ipairs({-1,1})do
+  local stand=shop*CFrame.new(side*6,1.4,1.8)
+  disc(architecture,'BookStand',1.2,1.4,stand,c.dark)
+  local book=shop*CFrame.new(side*6,2.4,1.8)*CFrame.Angles(math.rad(24),0,0)
+  for _,page in ipairs({-1,1})do
+   block(decor,'BookCover',Vector3.new(1.1,.12,1.7),book*CFrame.new(page*.56,0,0)*CFrame.Angles(0,0,-page*.12),c.gold,Enum.Material.Fabric)
+   block(decor,'OpenPages',Vector3.new(1.04,.14,1.61),book*CFrame.new(page*.55,.12,0)*CFrame.Angles(0,0,-page*.12),c.text,Enum.Material.SmoothPlastic)
+  end
+ end
+ -- Summoning altar: restrained central pearl framed by layered armillary rings.
+ local gacha=station('gacha',points[3],'별의 소환 제단','가챠 · 준비 중',c.violet)
+ disc(architecture,'SummoningPlinth',5.6,.45,gacha*CFrame.new(0,.94,1.7),c.stone)
+ disc(architecture,'SummoningTable',4.7,.45,gacha*CFrame.new(0,1.39,1.7),c.dark)
+ ring('SummoningRunes',gacha*CFrame.new(0,1.64,1.7),4.05,.14,24,c.violet,Enum.Material.Metal)
+ for i=1,3 do
+  local a=i*math.pi*2/3
+  local frame=gacha*CFrame.new(math.cos(a)*3.2,1.6,1.7+math.sin(a)*3.2)*CFrame.Angles(0,-a,0)
+  piece(decor,'AltarCurvedSupport',Vector3.new(.65,3.1,.95),frame*CFrame.new(0,1.35,0)*CFrame.Angles(0,0,-.26),c.pale,nil,'wedge')
+  local pearl=piece(decor,'AltarSmallRune',Vector3.one*.26,frame*CFrame.new(-.4,3.05,0),c.violet,Enum.Material.Neon,Enum.PartType.Ball);pearl.CastShadow=false
+ end
+ for _,tilt in ipairs({CFrame.Angles(.75,0,.35),CFrame.Angles(-.5,.4,-.9)})do
+  local circle=gacha*CFrame.new(0,5.1,1.7)*tilt
+  for i=1,20 do
+   local a=i*math.pi/10
+   block(decor,'ArmillaryArc',Vector3.new(.13,.13,.68),circle*CFrame.new(math.cos(a)*2.1,0,math.sin(a)*2.1)*CFrame.Angles(0,-a,0),c.gold,Enum.Material.Metal)
+  end
+ end
+ piece(decor,'DormantSummoningPearl',Vector3.one*1.55,gacha*CFrame.new(0,5.1,1.7),Color3.fromRGB(111,107,145),Enum.Material.Marble,Enum.PartType.Ball)
+ for i=1,6 do
+  local a=i*math.pi/3;piece(decor,'AltarFacet',Vector3.new(.42,1.15,.68),gacha*CFrame.new(math.cos(a)*5.3,2.15,1.7+math.sin(a)*5.3)*CFrame.Angles(0,a,.2),c.violet,Enum.Material.SmoothPlastic,'wedge')
+ end
+ -- Ranking archive: an engraved board with honest server-session scope, no fake names.
+ local ranking=station('ranking',points[4],'최고 점수 기록관','현재 서버 기록 확인',Color3.fromRGB(204,185,137))
+ for _,side in ipairs({-1,1})do column(ranking*CFrame.new(side*7,.71,4),9)end
+ local board=block(architecture,'RankingBoard',Vector3.new(12.7,7,.65),ranking*CFrame.new(0,5.3,4),c.dark)
+ for _,side in ipairs({-1,1})do block(decor,'ArchiveFrame',Vector3.new(.22,7.6,.85),ranking*CFrame.new(side*6.55,5.3,4),c.gold,Enum.Material.Metal)end
+ for _,y in ipairs({1.55,9.05})do block(decor,'ArchiveFrame',Vector3.new(13.3,.22,.85),ranking*CFrame.new(0,y,4),c.gold,Enum.Material.Metal)end
+ arch('ArchiveCrown',ranking*CFrame.new(0,9.6,4),7,1.05,c.stone)
+ local surface=Instance.new('SurfaceGui');surface.Name='ArchiveInscription';surface.Face=Enum.NormalId.Front;surface.CanvasSize=Vector2.new(700,380);surface.Parent=board
+ local inscription=Instance.new('TextLabel');inscription.Size=UDim2.fromScale(1,1);inscription.BackgroundTransparency=1;inscription.TextColor3=c.text;inscription.Font=Enum.Font.GothamBold;inscription.TextSize=31;inscription.Text='최고 점수 기록\n\n현재 서버 · 이번 접속\n\n기록관 입구에서 확인하세요';inscription.Parent=surface
+ -- Warm pools of light, low planters and four route markers finish the courtyard.
+ for i=1,8 do
+  local a=(i-.5)*math.pi/4;local frame=CFrame.new(center+Vector3.new(math.cos(a)*22,0,math.sin(a)*22))
+  lantern(frame,Color3.fromRGB(231,207,156))
+ end
+ for _,position in ipairs({Vector3.new(-24,0,207),Vector3.new(24,0,207),Vector3.new(-25,0,144),Vector3.new(25,0,144)})do
+  local frame=CFrame.new(position);disc(architecture,'GardenUrn',2.1,1.2,frame*CFrame.new(0,.6,0),c.stone)
+  disc(decor,'GardenEarth',1.9,.1,frame*CFrame.new(0,1.23,0),c.dark)
+  for i=1,5 do local a=i*math.pi*2/5;piece(decor,'SilverleafShrub',Vector3.new(2,1.25,2),frame*CFrame.new(math.cos(a)*.8,1.7,math.sin(a)*.8),Color3.fromRGB(73+i*3,103+i*2,91+i*2),Enum.Material.Grass,Enum.PartType.Ball)end
+ end
+ hub:SetAttribute('LobbyCenter',center);hub:SetAttribute('SpawnPosition',Vector3.new(0,4,187))
+ return CFrame.new(0,4,187)
 end
 ]====])
 -- Source: src/server/world/Waves.luau
@@ -2711,11 +2932,19 @@ local cameraController=require(world:WaitForChild("Camera"))({player=player})
 require(world:WaitForChild("CharacterMotion"))()
 require(world:WaitForChild("DragonPresentation"))()
 require(world:WaitForChild("EnemyPresentation"))()
-local skillPreview,enemyPreview
-local dragonPreview=require(world:WaitForChild("DragonPreview"))({player=player,net=net,input=input,hud=hud.Gui,beforeOpen=function()if skillPreview then skillPreview.Close()end;if enemyPreview then enemyPreview.Close()end end})
-require(flow:WaitForChild("Lobby"))({player=player,net=net,input=input,hud=hud.Gui,camera=cameraController})
-skillPreview=require(flow:WaitForChild("SkillPreview"))({player=player,net=net,input=input,hud=hud.Gui,dragon=dragonPreview,camera=cameraController,beforeOpen=function()if enemyPreview then enemyPreview.Close()end end})
-enemyPreview=require(world:WaitForChild('EnemyPreview'))({player=player,net=net,input=input,hud=hud.Gui,camera=cameraController,beforeOpen=function()if skillPreview then skillPreview.Close()end;if dragonPreview then dragonPreview.Close()end end})
+local skillPreview,enemyPreview,lobby,lobbyHub
+local function menuMovement(open)
+ local module=player.PlayerScripts:FindFirstChild('PlayerModule')
+ if module then local ok,controls=pcall(function()return require(module):GetControls()end);if ok then if open then controls:Disable()else controls:Enable()end end end
+end
+local function closeLobbyMenus()if lobbyHub then lobbyHub.Close()end;if lobby then lobby.Close()end end
+local dragonPreview=require(world:WaitForChild("DragonPreview"))({player=player,net=net,input=input,hud=hud.Gui,beforeOpen=function()closeLobbyMenus();if skillPreview then skillPreview.Close()end;if enemyPreview then enemyPreview.Close()end end})
+lobby=require(flow:WaitForChild("Lobby"))({player=player,net=net,input=input,hud=hud.Gui,camera=cameraController,onPanelChanged=menuMovement,beforeOpen=function()
+ if lobbyHub then lobbyHub.Close()end;if skillPreview then skillPreview.Close()end;if enemyPreview then enemyPreview.Close()end;if dragonPreview then dragonPreview.Close()end
+end})
+lobbyHub=require(flow:WaitForChild('LobbyHub'))({player=player,net=net,onLoadout=function()lobby.Open()end,onPanelChanged=menuMovement})
+skillPreview=require(flow:WaitForChild("SkillPreview"))({player=player,net=net,input=input,hud=hud.Gui,dragon=dragonPreview,camera=cameraController,beforeOpen=function()closeLobbyMenus();if enemyPreview then enemyPreview.Close()end end})
+enemyPreview=require(world:WaitForChild('EnemyPreview'))({player=player,net=net,input=input,hud=hud.Gui,camera=cameraController,beforeOpen=function()closeLobbyMenus();if skillPreview then skillPreview.Close()end;if dragonPreview then dragonPreview.Close()end end})
 net.Action:FireServer("ready")
 print("[Summoner] HUD ready")
 ]====]
@@ -5613,6 +5842,7 @@ return function(deps)
 	local player, net = deps.player, deps.net
 	local theme = require(script.Parent.Parent:WaitForChild("Theme"))
 	local palette, make, round, stroke, label = theme.Palette, theme.Make, theme.Round, theme.Stroke, theme.Label
+	local icons=require(script.Parent.SkillIcons)
 	local gui=Instance.new("ScreenGui"); gui.Name="SummonerHUD"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=false; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; gui.Parent=player:WaitForChild("PlayerGui")
 	local encounter=make("Frame",gui,{Name="EncounterPanel",Size=UDim2.new(.8,0,0,26),Position=UDim2.new(1,-12,0,6),AnchorPoint=Vector2.new(1,0),BackgroundColor3=palette.bg,BackgroundTransparency=.15})
 	make("UISizeConstraint",encounter,{MaxSize=Vector2.new(320,26)});round(encounter,8)
@@ -5652,7 +5882,7 @@ return function(deps)
 		info.TextSize=width<500 and 10 or 12
 		skills.TextSize=width<500 and 10 or 11
 	end
-	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutActions);layoutActions()
+	local resizeConnection=workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutActions);layoutActions()
 	local rarityColors={common=Color3.fromRGB(190,214,222),rare=Color3.fromRGB(113,194,255),epic=Color3.fromRGB(219,154,255)}
     local rarityNames={common="일반",rare="희귀",epic="영웅"}
     local buildButton=make("TextButton",top,{Name="AugmentSummary",Size=UDim2.new(1,-24,0,25),Position=UDim2.fromOffset(12,116),BackgroundColor3=palette.card,TextColor3=palette.mint,Text="행운 +0 · 증강 0 · 보기",TextSize=12,Font=Enum.Font.GothamBold});round(buildButton,6)
@@ -5678,10 +5908,13 @@ return function(deps)
     reroll.Activated:Connect(function()if not waiting and reroll.Active then waiting=true;net.Action:FireServer("reroll",offerRevision)end end)
 	for i=1,3 do
 		local b=make("TextButton",cards,{Name="Choice"..i,Size=UDim2.new(1,-8,0,112),BackgroundColor3=palette.card,Text="",LayoutOrder=i,ZIndex=13,AutoButtonColor=true}); round(b,12); stroke(b)
-		local tag=label(b,"마법 강화",UDim2.new(1,-28,.25,0),UDim2.new(0,14,0,4),Enum.Font.GothamBold,palette.mint); tag.TextSize=11; tag.TextXAlignment=Enum.TextXAlignment.Left; tag.ZIndex=14
-		local name=label(b,"화염탄 강화",UDim2.new(1,-28,.3,0),UDim2.new(0,14,.27,0),Enum.Font.GothamBold); name.TextSize=20; name.TextXAlignment=Enum.TextXAlignment.Left; name.ZIndex=14
-		local desc=label(b,"피해량 증가",UDim2.new(1,-28,.29,0),UDim2.new(0,14,.63,0),nil,palette.muted); desc.TextSize=13; desc.TextXAlignment=Enum.TextXAlignment.Left; desc.ZIndex=14
-		buttons[i]={button=b,tag=tag,name=name,desc=desc,border=b:FindFirstChildOfClass("UIStroke")}
+		local tile=make('Frame',b,{Name='IconTile',Size=UDim2.fromOffset(68,68),Position=UDim2.fromOffset(12,22),BackgroundColor3=Color3.fromRGB(17,28,43),ZIndex=14});round(tile,9)
+		local fallback=label(tile,'✦',UDim2.fromScale(1,1),UDim2.new(),Enum.Font.GothamBold,palette.mint);fallback.Name='IconFallback';fallback.TextSize=32;fallback.ZIndex=15
+		local image=make('ImageLabel',tile,{Name='SkillIcon',Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit,Visible=false,ZIndex=15});round(image,9)
+		local tag=label(b,"마법 강화",UDim2.new(1,-108,.25,0),UDim2.new(0,94,0,4),Enum.Font.GothamBold,palette.mint); tag.TextSize=11; tag.TextXAlignment=Enum.TextXAlignment.Left; tag.ZIndex=14
+		local name=label(b,"화염탄 강화",UDim2.new(1,-108,.3,0),UDim2.new(0,94,.27,0),Enum.Font.GothamBold); name.TextSize=19; name.TextXAlignment=Enum.TextXAlignment.Left; name.ZIndex=14
+		local desc=label(b,"피해량 증가",UDim2.new(1,-108,.29,0),UDim2.new(0,94,.63,0),nil,palette.muted); desc.TextSize=13; desc.TextXAlignment=Enum.TextXAlignment.Left; desc.ZIndex=14
+		buttons[i]={button=b,tag=tag,name=name,desc=desc,image=image,fallback=fallback,border=b:FindFirstChildOfClass("UIStroke")}
 		b.Activated:Connect(function() if b:GetAttribute("ChoiceId") and not waiting then waiting=true; net.Action:FireServer("choose",b:GetAttribute("ChoiceId"),offerRevision) end end)
 	end
 	local ending=make("Frame",gui,{Name="Ending",Size=UDim2.fromScale(1,1),BackgroundColor3=palette.bg,BackgroundTransparency=.08,Visible=false,ZIndex=20})
@@ -5692,7 +5925,7 @@ return function(deps)
 	pulse.Activated:Connect(deps.input.FireWave)
 	dashButton.Activated:Connect(deps.input.Dash)
 	local lastChoice=""
-	net.State.OnClientEvent:Connect(function(s)
+	local stateConnection=net.State.OnClientEvent:Connect(function(s)
         returnButton.Visible=s.lobby~=true and s.over~=true
         local augments=s.augments or {};local ranks=0;local descriptions={}
         for _,a in ipairs(augments)do ranks+=a.count;table.insert(descriptions,string.format("[%s] %s ×%d\n%s",rarityNames[a.rarity]or"일반",a.name,a.count,a.desc))end
@@ -5741,12 +5974,13 @@ return function(deps)
             modalHint.Text=s.paused and "전투 일시 정지 · 하나를 선택하세요" or "선택하는 동안 보호됩니다 · 하나를 선택하세요"
 			for i,v in ipairs(buttons) do
 				local offer=s.offers[i]; v.button.Visible=offer~=nil
-				if offer then v.button:SetAttribute("ChoiceId",offer.id); v.tag.Text=(rarityNames[offer.rarity]or"일반").." · "..offer.tag.."  /  "..offer.level..(offer.kind=="level"and"단계"or"회");v.tag.TextColor3=rarityColors[offer.rarity]or palette.mint;if v.border then v.border.Color=v.tag.TextColor3;v.border.Thickness=offer.rarity=="epic"and 2 or 1 end; v.name.Text=offer.title; v.desc.Text=offer.desc end
+				if offer then v.button:SetAttribute("ChoiceId",offer.id); v.tag.Text=(rarityNames[offer.rarity]or"일반").." · "..offer.tag.."  /  "..offer.level..(offer.kind=="level"and"단계"or"회");v.tag.TextColor3=rarityColors[offer.rarity]or palette.mint;if v.border then v.border.Color=v.tag.TextColor3;v.border.Thickness=offer.rarity=="epic"and 2 or 1 end; v.name.Text=offer.title; v.desc.Text=offer.desc;icons.Apply(v.image,offer.id,v.fallback);v.fallback.TextColor3=v.tag.TextColor3 end
 			end
 		else waiting=false; lastChoice="" end
 		if s.over then resultTitle.Text=s.result=="victory" and "드래곤 격파!" or "다시 도전!"; resultInfo.Text=string.format("레벨 %d  ·  처치 %d  ·  증강 %d  ·  행운 +%d\n이번 판 증강은 로비 복귀 시 초기화됩니다.",s.level,s.kills,ranks,s.luck or 0) end
 	end)
 
+	gui.Destroying:Connect(function()resizeConnection:Disconnect();stateConnection:Disconnect()end)
 	return {
 		Gui = gui,
 	}
@@ -5760,13 +5994,17 @@ return function(deps)
  local theme=require(script.Parent.Parent.Theme)
  local make,label,round,stroke=theme.Make,theme.Label,theme.Round,theme.Stroke
  local palette=theme.Palette
- local gui=make('ScreenGui',player:WaitForChild('PlayerGui'),{Name='SummonerLobbyUI',ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=30,Enabled=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+ local icons=require(script.Parent.SkillIcons)
+ local connections={}
+ local function connect(signal,callback)local connection=signal:Connect(callback);table.insert(connections,connection);return connection end
+ local gui=make('ScreenGui',player:WaitForChild('PlayerGui'),{Name='SummonerLobbyUI',ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=30,Enabled=false,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
  local veil=make('Frame',gui,{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(8,14,27),BackgroundTransparency=.2})
  local panel=make('Frame',veil,{Name='Panel',Size=UDim2.fromOffset(960,768),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,BackgroundTransparency=.04});round(panel,20);stroke(panel)
  local scale=make('UIScale',panel,{Scale=1})
  local function resize()local v=workspace.CurrentCamera.ViewportSize;scale.Scale=math.min(1,(v.X-24)/960,(v.Y-24)/768)end
- workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'):Connect(resize);resize()
- local heading=label(panel,'ARCANE HAVEN  /  마법사의 안식처',UDim2.fromOffset(900,38),UDim2.fromOffset(28,18),Enum.Font.GothamBold,palette.mint);heading.TextSize=25;heading.TextXAlignment=Enum.TextXAlignment.Left
+ connect(workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'),resize);resize()
+ local heading=label(panel,'ARCANE HAVEN  /  출전 준비',UDim2.fromOffset(690,38),UDim2.fromOffset(28,18),Enum.Font.GothamBold,palette.mint);heading.TextSize=25;heading.TextXAlignment=Enum.TextXAlignment.Left
+ local close=make('TextButton',panel,{Name='CloseLoadout',Size=UDim2.fromOffset(160,34),Position=UDim2.fromOffset(772,20),Text='로비 둘러보기',BackgroundColor3=palette.card,TextColor3=palette.text,Font=Enum.Font.GothamBold,TextSize=14});round(close,8)
  local hint=label(panel,'Q 사용 스킬 1개와 자동 마법 4개를 골라 출발하세요.',UDim2.fromOffset(900,24),UDim2.fromOffset(28,62),nil,palette.muted);hint.TextXAlignment=Enum.TextXAlignment.Left;hint.TextSize=15
  local slots=label(panel,'마법 목록을 불러오는 중…',UDim2.fromOffset(900,24),UDim2.fromOffset(28,196),Enum.Font.GothamBold,palette.gold);slots.Name='SelectedSpells';slots.TextXAlignment=Enum.TextXAlignment.Left;slots.TextSize=15
  local grid=make('ScrollingFrame',panel,{Name='Spells',Size=UDim2.fromOffset(904,390),Position=UDim2.fromOffset(28,232),CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,BackgroundTransparency=1,BorderSizePixel=0})
@@ -5782,7 +6020,26 @@ return function(deps)
  local activeLabel=label(panel,'Q 사용 스킬',UDim2.fromOffset(900,20),UDim2.fromOffset(28,90),Enum.Font.GothamBold,palette.gold);activeLabel.TextSize=13;activeLabel.TextXAlignment=Enum.TextXAlignment.Left
  local selected,options,buttons={},{},{}
  local activeSkill='iceRush';local activeButtons={}
- local queued=false;local inLobby=nil;local pending=false
+ local queued=false;local inLobby=nil;local pending=false;local opened=false
+ local function setOpen(value)
+  if value and inLobby~=true then return false end
+  if opened==value then return true end
+  if value and deps.beforeOpen then deps.beforeOpen()end
+  opened=value;gui.Enabled=value;gui:SetAttribute('LoadoutOpen',value)
+  if deps.onPanelChanged then deps.onPanelChanged(value)end
+  return true
+ end
+ gui:SetAttribute('LoadoutOpen',false)
+ close.Activated:Connect(function()setOpen(false)end)
+ connect(game:GetService('UserInputService').InputBegan,function(key)
+  if opened and(key.KeyCode==Enum.KeyCode.Escape or key.KeyCode==Enum.KeyCode.ButtonB)then setOpen(false)end
+ end)
+ local function spellIcon(parent,id,size,position,color)
+  local back=make('Frame',parent,{Name='IconTile',Size=UDim2.fromOffset(size,size),Position=position,BackgroundColor3=Color3.fromRGB(17,28,43)});round(back,8)
+  local fallback=label(back,'✦',UDim2.fromScale(1,1),UDim2.new(),Enum.Font.GothamBold,color or palette.mint);fallback.Name='IconFallback';fallback.TextSize=math.floor(size*.5)
+  local image=make('ImageLabel',back,{Name='SkillIcon',Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit});round(image,8)
+  icons.Apply(image,id,fallback)
+ end
  local function refresh()
   local names={};for _,id in ipairs(selected)do for _,v in ipairs(options)do if v.id==id then table.insert(names,v.name)end end end
   slots.Text=string.format('선택 %d / 4   ·   ',#selected)..table.concat(names,'  +  ')
@@ -5798,7 +6055,9 @@ return function(deps)
  local function buildActive(items)
   local width=(904-(#items-1)*10)/#items
   for index,v in ipairs(items)do
-   local b=make('TextButton',panel,{Name='Active_'..v.id,Size=UDim2.fromOffset(width,58),Position=UDim2.fromOffset(28+(index-1)*(width+10),116),BackgroundColor3=palette.card,Text=v.name..'\n'..v.desc,TextColor3=palette.text,TextSize=14,Font=Enum.Font.GothamBold,AutoButtonColor=true});round(b,10);stroke(b)
+   local b=make('TextButton',panel,{Name='Active_'..v.id,Size=UDim2.fromOffset(width,58),Position=UDim2.fromOffset(28+(index-1)*(width+10),116),BackgroundColor3=palette.card,Text='',AutoButtonColor=true});round(b,10);stroke(b)
+   spellIcon(b,v.id,42,UDim2.fromOffset(8,8),palette.mint)
+   local text=label(b,v.name..'\n'..v.desc,UDim2.new(1,-64,1,-8),UDim2.fromOffset(58,4),Enum.Font.GothamBold,palette.text);text.TextSize=12;text.TextXAlignment=Enum.TextXAlignment.Left
    activeButtons[v.id]=b
    b.Activated:Connect(function()if queued or pending then return end;activeSkill=v.id;refresh()end)
   end
@@ -5806,10 +6065,11 @@ return function(deps)
  local function build()
   for index,v in ipairs(options)do
    local b=make('TextButton',grid,{Name=v.id,Text='',BackgroundColor3=palette.card,LayoutOrder=index,AutoButtonColor=true});round(b,12);stroke(b,Color3.fromRGB(v.color[1],v.color[2],v.color[3]))
-   local name=label(b,v.name,UDim2.new(1,-110,0,23),UDim2.fromOffset(14,8),Enum.Font.GothamBold,Color3.fromRGB(v.color[1],v.color[2],v.color[3]));name.TextSize=18;name.TextXAlignment=Enum.TextXAlignment.Left
+   spellIcon(b,v.id,62,UDim2.fromOffset(10,13),Color3.fromRGB(v.color[1],v.color[2],v.color[3]))
+   local name=label(b,v.name,UDim2.new(1,-176,0,23),UDim2.fromOffset(84,8),Enum.Font.GothamBold,Color3.fromRGB(v.color[1],v.color[2],v.color[3]));name.TextSize=17;name.TextXAlignment=Enum.TextXAlignment.Left
    local mark=label(b,'',UDim2.fromOffset(80,23),UDim2.new(1,-90,0,8),nil,palette.mint);mark.TextSize=12
-   local role=label(b,v.role,UDim2.new(1,-28,0,18),UDim2.fromOffset(14,33),nil,palette.gold);role.TextSize=11;role.TextXAlignment=Enum.TextXAlignment.Left
-   local desc=label(b,v.desc,UDim2.new(1,-28,0,26),UDim2.fromOffset(14,53),nil,palette.muted);desc.TextSize=12;desc.TextXAlignment=Enum.TextXAlignment.Left
+   local role=label(b,v.role,UDim2.new(1,-96,0,18),UDim2.fromOffset(84,33),nil,palette.gold);role.TextSize=11;role.TextXAlignment=Enum.TextXAlignment.Left
+   local desc=label(b,v.desc,UDim2.new(1,-96,0,26),UDim2.fromOffset(84,53),nil,palette.muted);desc.TextSize=12;desc.TextXAlignment=Enum.TextXAlignment.Left
    buttons[v.id]={button=b,mark=mark}
    b.Activated:Connect(function()
     if queued or pending then return end
@@ -5838,7 +6098,7 @@ return function(deps)
   pending=true;start.Text='출발 준비 중…';net.Action:FireServer('startRound',table.clone(selected),activeSkill)
   task.delay(2,function()pending=false;refresh()end)
  end)
- net.State.OnClientEvent:Connect(function(s)
+ connect(net.State.OnClientEvent,function(s)
   local visible=s.lobby==true
   if visible and inLobby~=true then selected=table.clone(s.loadout or {});activeSkill=s.activeSkill or 'iceRush';input.SetSuspended(true);hud.Enabled=false end
   if not visible and inLobby~=false then
@@ -5848,8 +6108,10 @@ return function(deps)
   end
   local preview=player.PlayerGui:FindFirstChild('DragonPreview');local open=preview and preview:FindFirstChild('OpenButton')
   if open then open.Visible=not visible end
-  local skillView=player.PlayerGui:FindFirstChild("SkillPreview")
-  inLobby=visible;gui.Enabled=visible and not(skillView and skillView:GetAttribute("Open"));gui:SetAttribute('InLobby',visible)
+  inLobby=visible;if not visible then setOpen(false)end
+  local previewOpen=false
+  for _,name in ipairs({'SkillPreview','EnemyPreview','DragonPreview'})do local view=player.PlayerGui:FindFirstChild(name);if view and view:GetAttribute('Open')then previewOpen=true;break end end
+  gui.Enabled=visible and opened and not previewOpen;gui:SetAttribute('InLobby',visible)
   if not visible then return end
   if #options==0 and s.spellOptions then options=s.spellOptions;build()end
   if not next(activeButtons) and s.activeOptions then buildActive(s.activeOptions)end
@@ -5859,8 +6121,224 @@ return function(deps)
   status.Text=s.lobbyMessage or(queued and '준비 완료 · 다른 플레이어가 준비하면 함께 출발합니다.' or '혼자라면 바로 출발 · 친구와 함께라면 전원 준비 후 출발')
   refresh()
  end)
- return {Gui=gui}
+ gui.Destroying:Connect(function()setOpen(false);for _,connection in ipairs(connections)do connection:Disconnect()end end)
+ return {Gui=gui,Open=function()return setOpen(true)end,Close=function()return setOpen(false)end}
 end
+]====])
+-- Source: src/client/flow/LobbyHub.luau
+addModule(modules,{"flow","LobbyHub"},[====[
+-- Read-only sanctuary navigation. Purchases, rolls and score writes are not implemented here.
+-- Existing loadout/start flow is delegated explicitly through onLoadout.
+return function(deps)
+ local player,net=deps.player,deps.net
+ local playerGui=player:WaitForChild('PlayerGui')
+ local UIS=game:GetService('UserInputService');local GuiService=game:GetService('GuiService');local Prompts=game:GetService('ProximityPromptService')
+ local theme=require(script.Parent.Parent.Theme);local make,label,round,stroke=theme.Make,theme.Label,theme.Round,theme.Stroke;local colors=theme.Palette
+ local gui=make('ScreenGui',playerGui,{Name='SummonerLobbyHub',ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=35,Enabled=false,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+ local connections,worldConnections,menuConnections,promptStates={},{},{},{}
+ local inLobby,opened,destroyed=false,nil,false;local scores={};local savedSelection;local viewportConnection
+ local copy={shop={title='별빛 교역소',eyebrow='ACADEMY SHOP',accent=colors.gold,description='마법 도구와 장비를 만나는 학술원의 교역소입니다.',note='상점 준비 중',detail='지금은 진열 공간을 둘러볼 수 있어요.\n상품 구매와 재화 사용은 아직 열리지 않았습니다.'},
+  gacha={title='별의 소환 제단',eyebrow='ASTRAL SUMMONING',accent=Color3.fromRGB(185,160,231),description='별의 힘이 모이는 소환 제단입니다.',note='가챠 준비 중',detail='소환 기능을 준비하고 있어요.\n현재는 추첨이나 보상 지급이 이루어지지 않습니다.'},
+  ranking={title='최고 처치 기록관',eyebrow='ACADEMY RECORDS',accent=colors.mint,description='현재 서버에 접속한 플레이어의 이번 접속 최고 처치 수입니다.'}}
+ local dock=make('Frame',gui,{Name='Navigation',Size=UDim2.fromOffset(700,100),Position=UDim2.new(.5,0,1,-20),AnchorPoint=Vector2.new(.5,1),BackgroundColor3=colors.bg,BackgroundTransparency=.08});round(dock,15);stroke(dock)
+ local dockScale=make('UIScale',dock,{Scale=1})
+ local welcome=label(dock,'별빛 학술원  ·  자유롭게 둘러보세요',UDim2.new(1,-28,0,22),UDim2.fromOffset(14,8),Enum.Font.GothamBold,colors.text);welcome.TextSize=14;welcome.TextXAlignment=Enum.TextXAlignment.Left
+ local hint=label(dock,'WASD 이동  ·  구역 입구에서 E / 패드 X',UDim2.fromOffset(345,22),UDim2.new(1,-359,0,8),nil,colors.muted);hint.TextSize=12;hint.TextXAlignment=Enum.TextXAlignment.Right
+ local buttons={}
+ for i,item in ipairs({{'loadout','출전 준비'},{'shop','상점 · 준비 중'},{'gacha','가챠 · 준비 중'},{'ranking','최고 점수'}})do
+  local b=make('TextButton',dock,{Name='Open_'..item[1],Size=UDim2.fromOffset(158,44),Position=UDim2.fromOffset(14+(i-1)*171,42),Text=item[2],Font=Enum.Font.GothamBold,TextSize=14,BackgroundColor3=i==1 and colors.mint or colors.card,TextColor3=i==1 and colors.bg or colors.text});round(b,9);buttons[item[1]]=b
+ end
+ local veil=make('Frame',gui,{Name='Veil',Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(6,12,21),BackgroundTransparency=.25,Visible=false,Active=true})
+ local panel=make('Frame',veil,{Name='Panel',Size=UDim2.fromOffset(720,510),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=colors.bg});round(panel,18);stroke(panel)
+ local panelScale=make('UIScale',panel,{Scale=1})
+ local eyebrow=label(panel,'',UDim2.fromOffset(580,22),UDim2.fromOffset(28,22),Enum.Font.GothamBold,colors.mint);eyebrow.TextSize=12;eyebrow.TextXAlignment=Enum.TextXAlignment.Left
+ local heading=label(panel,'',UDim2.fromOffset(580,38),UDim2.fromOffset(28,49),Enum.Font.GothamBold,colors.text);heading.Name='Heading';heading.TextSize=27;heading.TextXAlignment=Enum.TextXAlignment.Left
+ local description=label(panel,'',UDim2.fromOffset(664,44),UDim2.fromOffset(28,98),nil,colors.muted);description.TextSize=15;description.TextXAlignment=Enum.TextXAlignment.Left
+ local close=make('TextButton',panel,{Name='Close',Size=UDim2.fromOffset(72,34),Position=UDim2.new(1,-100,0,26),Text='닫기',Font=Enum.Font.GothamBold,TextSize=14,BackgroundColor3=colors.card,TextColor3=colors.text});round(close,8)
+ local notice=make('Frame',panel,{Name='ComingSoon',Size=UDim2.fromOffset(664,252),Position=UDim2.fromOffset(28,162),BackgroundColor3=colors.card});round(notice,13)
+ local ornament=make('Frame',notice,{Size=UDim2.fromOffset(58,58),Position=UDim2.fromOffset(32,34),Rotation=45,BackgroundColor3=Color3.fromRGB(52,66,77)});round(ornament,9);stroke(ornament,colors.gold)
+ local note=label(notice,'',UDim2.fromOffset(510,42),UDim2.fromOffset(120,35),Enum.Font.GothamBold,colors.gold);note.Name='Status';note.TextSize=24;note.TextXAlignment=Enum.TextXAlignment.Left
+ local detail=label(notice,'',UDim2.fromOffset(590,108),UDim2.fromOffset(34,113),nil,colors.text);detail.Name='Description';detail.TextSize=18;detail.TextXAlignment=Enum.TextXAlignment.Left
+ local records=make('ScrollingFrame',panel,{Name='Scores',Size=UDim2.fromOffset(664,252),Position=UDim2.fromOffset(28,162),BackgroundTransparency=1,ScrollBarThickness=4,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,BorderSizePixel=0,Visible=false})
+ make('UIListLayout',records,{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder})
+ local empty=label(panel,'아직 기록이 없어요.\n전투를 마치면 이번 접속의 최고 점수를 확인할 수 있습니다.',UDim2.fromOffset(620,160),UDim2.fromOffset(50,200),nil,colors.muted);empty.Name='EmptyScores';empty.TextSize=18;empty.Visible=false
+ local footer=label(panel,'',UDim2.fromOffset(664,50),UDim2.fromOffset(28,435),nil,colors.muted);footer.Name='Scope';footer.TextSize=13;footer.TextXAlignment=Enum.TextXAlignment.Left
+ local function connect(signal,callback)local connection=signal:Connect(callback);table.insert(connections,connection);return connection end
+ local function resize()
+  local camera=workspace.CurrentCamera;if not camera then return end;local size=camera.ViewportSize
+  panelScale.Scale=math.max(.3,math.min(1,(size.X-24)/720,(size.Y-24)/510));dockScale.Scale=math.max(.3,math.min(1,(size.X-24)/700))
+ end
+ local function bindCamera()
+  if viewportConnection then viewportConnection:Disconnect();viewportConnection=nil end
+  local camera=workspace.CurrentCamera;if camera then viewportConnection=camera:GetPropertyChangedSignal('ViewportSize'):Connect(resize)end;resize()
+ end
+ local function menuBlocked()
+  for _,name in ipairs({'SummonerLobbyUI','DragonPreview','SkillPreview','EnemyPreview'})do
+   local other=playerGui:FindFirstChild(name)
+   if other and(other:GetAttribute('Open')==true or other:GetAttribute('LoadoutOpen')==true)then return true end
+  end
+  return false
+ end
+ local function closePanel()
+  if not opened then return end;opened=nil;veil.Visible=false;gui:SetAttribute('Open',false);gui:SetAttribute('Panel',nil)
+  GuiService.SelectedObject=savedSelection and savedSelection.Parent and savedSelection or nil;savedSelection=nil
+  if deps.onPanelChanged then deps.onPanelChanged(false)end
+ end
+ local function syncVisibility()
+  if destroyed then return end
+  local blocked=menuBlocked();if not inLobby or blocked then closePanel()end
+  gui.Enabled=inLobby and not blocked;dock.Visible=opened==nil
+  for prompt in pairs(promptStates)do if prompt.Parent then prompt.Enabled=inLobby and not blocked and opened==nil end end
+ end
+ local function renderScores()
+  for _,child in ipairs(records:GetChildren())do if child:IsA('Frame')then child:Destroy()end end
+  for i,score in ipairs(scores)do
+   local row=make('Frame',records,{Name='Score_'..score.userId,Size=UDim2.new(1,-8,0,46),LayoutOrder=i,BackgroundColor3=score.userId==player.UserId and Color3.fromRGB(34,64,68)or colors.card});round(row,8)
+   local rank=label(row,tostring(i),UDim2.fromOffset(42,46),UDim2.fromOffset(5,0),Enum.Font.GothamBold,colors.gold);rank.TextSize=16
+   local name=label(row,score.name,UDim2.new(1,-190,1,0),UDim2.fromOffset(56,0),Enum.Font.GothamMedium,colors.text);name.Name='PlayerName';name.TextSize=15;name.TextXAlignment=Enum.TextXAlignment.Left
+   local value=label(row,tostring(score.bestScore),UDim2.fromOffset(125,46),UDim2.new(1,-140,0,0),Enum.Font.GothamBold,colors.mint);value.Name='BestScore';value.TextSize=18;value.TextXAlignment=Enum.TextXAlignment.Right
+  end
+  empty.Visible=opened=='ranking'and #scores==0;gui:SetAttribute('ScoreCount',#scores)
+ end
+ local function open(action)
+  if destroyed or not inLobby or menuBlocked()then return false end
+  if action=='loadout'then
+   closePanel();syncVisibility();if deps.onLoadout then deps.onLoadout()end;return deps.onLoadout~=nil
+  end
+  local content=copy[action];if not content then return false end
+  local wasOpen=opened~=nil;if not wasOpen then savedSelection=GuiService.SelectedObject end
+  opened=action;eyebrow.Text=content.eyebrow;eyebrow.TextColor3=content.accent;heading.Text=content.title;description.Text=content.description
+  notice.Visible=action~='ranking';records.Visible=action=='ranking';empty.Visible=action=='ranking'and #scores==0
+  if action=='ranking'then footer.Text='현재 서버 · 이번 접속 기록\n영구 저장과 전체 서버 랭킹은 준비 중입니다.';renderScores()
+  else note.Text=content.note;note.TextColor3=content.accent;detail.Text=content.detail;footer.Text='준비 중인 기능입니다. 결제·추첨·보상 지급은 진행되지 않습니다.'end
+  veil.Visible=true;gui:SetAttribute('Open',true);gui:SetAttribute('Panel',action);syncVisibility()
+  if UIS.GamepadEnabled then GuiService.SelectedObject=close end
+  if not wasOpen and deps.onPanelChanged then deps.onPanelChanged(true)end;return true
+ end
+ for action,b in pairs(buttons)do b.Activated:Connect(function()open(action)end)end
+ close.Activated:Connect(function()closePanel();syncVisibility()end)
+ connect(UIS.InputBegan,function(key)if opened and(key.KeyCode==Enum.KeyCode.Escape or key.KeyCode==Enum.KeyCode.ButtonB)then closePanel();syncVisibility()end end)
+ local function bindPrompt(prompt)
+  if not prompt:IsA('ProximityPrompt')or promptStates[prompt]~=nil then return end
+  local action=prompt:GetAttribute('LobbyHubAction');if action~='loadout'and not copy[action]then return end
+  promptStates[prompt]=prompt.Enabled;syncVisibility()
+ end
+ local currentWorld
+ local function bindWorld(world)
+  if world.Name~='SummonerLobby'or currentWorld==world then return end
+  for _,connection in ipairs(worldConnections)do connection:Disconnect()end;table.clear(worldConnections)
+  for prompt,enabled in pairs(promptStates)do if prompt.Parent then prompt.Enabled=enabled end end;table.clear(promptStates)
+  currentWorld=world
+  for _,object in ipairs(world:GetDescendants())do bindPrompt(object)end
+  table.insert(worldConnections,world.DescendantAdded:Connect(bindPrompt))
+  table.insert(worldConnections,world.DescendantRemoving:Connect(function(object)promptStates[object]=nil end))
+ end
+ if deps.world then bindWorld(deps.world)else connect(workspace.ChildAdded,bindWorld);local world=workspace:FindFirstChild('SummonerLobby');if world then bindWorld(world)end end
+ connect(Prompts.PromptTriggered,function(prompt,who)
+  if who and who~=player then return end
+  if currentWorld and prompt:IsDescendantOf(currentWorld)and promptStates[prompt]~=nil then open(prompt:GetAttribute('LobbyHubAction'))end
+ end)
+ local function watchMenu(other)
+  if not table.find({'SummonerLobbyUI','DragonPreview','SkillPreview','EnemyPreview'},other.Name)or menuConnections[other]then return end
+  menuConnections[other]={other:GetAttributeChangedSignal('Open'):Connect(syncVisibility),other:GetAttributeChangedSignal('LoadoutOpen'):Connect(syncVisibility)};syncVisibility()
+ end
+ for _,other in ipairs(playerGui:GetChildren())do watchMenu(other)end
+ connect(playerGui.ChildAdded,watchMenu)
+ connect(playerGui.ChildRemoved,function(other)
+  local items=menuConnections[other];if items then for _,connection in ipairs(items)do connection:Disconnect()end;menuConnections[other]=nil;syncVisibility()end
+ end)
+ connect(net.State.OnClientEvent,function(state)
+  inLobby=state.lobby==true;gui:SetAttribute('InLobby',inLobby)
+  if inLobby then
+   local fresh={};local seen={}
+   for _,record in ipairs(type(state.lobbyScores)=='table'and state.lobbyScores or{})do
+    if #fresh>=20 then break end
+    if type(record)=='table'and type(record.userId)=='number'and math.abs(record.userId)<1e12 and record.userId%1==0 and type(record.name)=='string'and type(record.bestScore)=='number'and record.bestScore>=0 and record.bestScore<1e12 and not seen[record.userId]then
+     seen[record.userId]=true;table.insert(fresh,{userId=record.userId,name=string.sub(record.name,1,80),bestScore=math.floor(record.bestScore)})
+    end
+   end
+   table.sort(fresh,function(a,b)if a.bestScore==b.bestScore then return a.userId<b.userId end;return a.bestScore>b.bestScore end);scores=fresh
+   if opened=='ranking'then renderScores()end
+  end
+  syncVisibility()
+ end)
+ connect(player.CharacterAdded,function()closePanel();syncVisibility()end)
+ if player.CharacterRemoving then connect(player.CharacterRemoving,function()closePanel();syncVisibility()end)end
+ connect(workspace:GetPropertyChangedSignal('CurrentCamera'),bindCamera);bindCamera()
+ local function destroy()
+  if destroyed then return end;closePanel();destroyed=true
+  for _,connection in ipairs(connections)do connection:Disconnect()end
+  for _,connection in ipairs(worldConnections)do connection:Disconnect()end
+  for _,items in pairs(menuConnections)do for _,connection in ipairs(items)do connection:Disconnect()end end
+  if viewportConnection then viewportConnection:Disconnect()end
+  for prompt,enabled in pairs(promptStates)do if prompt.Parent then prompt.Enabled=enabled end end
+  gui:Destroy()
+ end
+ gui.Destroying:Connect(destroy);gui:SetAttribute('Open',false);gui:SetAttribute('InLobby',false);syncVisibility()
+ return {Gui=gui,Open=open,Close=function()closePanel();syncVisibility()end,Destroy=destroy}
+end
+]====])
+-- Source: src/client/flow/SkillIcons.luau
+addModule(modules,{"flow","SkillIcons"},[====[
+-- Generated by tools/build_skill_catalog.py. Edit only the icon upload manifest.
+-- Presentation metadata only: local PNG paths never become Roblox image URLs.
+local entries={}
+entries["lightRing"]=table.freeze({iconKey="lightRing",name="성운 광륜",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightRing.png"})
+entries["ice"]=table.freeze({iconKey="ice",name="빙결 얼음창",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ice.png"})
+entries["lightning"]=table.freeze({iconKey="lightning",name="연쇄 번개",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightning.png"})
+entries["meteor"]=table.freeze({iconKey="meteor",name="메테오",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/meteor.png"})
+entries["blades"]=table.freeze({iconKey="blades",name="비전 결정",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/blades.png"})
+entries["skyLances"]=table.freeze({iconKey="skyLances",name="천공의 창",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/skyLances.png"})
+entries["frost"]=table.freeze({iconKey="frost",name="서리 폭발",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/frost.png"})
+entries["missile"]=table.freeze({iconKey="missile",name="추적 마탄",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/missile.png"})
+entries["ward"]=table.freeze({iconKey="ward",name="수호 결계",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ward.png"})
+entries["fire"]=table.freeze({iconKey="fire",name="화염탄",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/fire.png"})
+entries["thunder"]=table.freeze({iconKey="thunder",name="뇌창",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/thunder.png"})
+entries["aetherLance"]=table.freeze({iconKey="aetherLance",name="성운창",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/aetherLance.png"})
+entries["iceRush"]=table.freeze({iconKey="iceRush",name="빙하 쇄도",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/iceRush.png"})
+entries["basic"]=table.freeze({iconKey="basic",name="기본 공격 · 별빛 마법탄",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/basic.png"})
+entries["golem"]=table.freeze({iconKey="golem",name="골렘 대지 강타",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/golem.png"})
+entries["dash"]=table.freeze({iconKey="dash",name="대시",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/dash.png"})
+entries["ice_twin"]=table.freeze({iconKey="ice",name="쌍빙창",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ice.png",parentSkill="ice",rarity="rare",badge="희귀 · 쌍빙창"})
+entries["ice_shatter"]=table.freeze({iconKey="ice",name="빙쇄",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ice.png",parentSkill="ice",rarity="epic",badge="영웅 · 빙쇄"})
+entries["lightning_fork"]=table.freeze({iconKey="lightning",name="갈래 번개",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightning.png",parentSkill="lightning",rarity="rare",badge="희귀 · 갈래 번개"})
+entries["lightning_frozen"]=table.freeze({iconKey="lightning",name="빙결 전도",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightning.png",parentSkill="lightning",rarity="epic",badge="영웅 · 빙결 전도"})
+entries["meteor_wide"]=table.freeze({iconKey="meteor",name="거대 운석",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/meteor.png",parentSkill="meteor",rarity="rare",badge="희귀 · 거대 운석"})
+entries["meteor_echo"]=table.freeze({iconKey="meteor",name="운석의 여진",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/meteor.png",parentSkill="meteor",rarity="epic",badge="영웅 · 운석의 여진"})
+entries["blades_volley"]=table.freeze({iconKey="blades",name="칠성 결정",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/blades.png",parentSkill="blades",rarity="rare",badge="희귀 · 칠성 결정"})
+entries["blades_pierce"]=table.freeze({iconKey="blades",name="관통 결정",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/blades.png",parentSkill="blades",rarity="epic",badge="영웅 · 관통 결정"})
+entries["frost_wide"]=table.freeze({iconKey="frost",name="광역 한파",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/frost.png",parentSkill="frost",rarity="rare",badge="희귀 · 광역 한파"})
+entries["frost_echo"]=table.freeze({iconKey="frost",name="이중 서리",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/frost.png",parentSkill="frost",rarity="epic",badge="영웅 · 이중 서리"})
+entries["ward_reservoir"]=table.freeze({iconKey="ward",name="깊은 결계",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ward.png",parentSkill="ward",rarity="rare",badge="희귀 · 깊은 결계"})
+entries["ward_pulse"]=table.freeze({iconKey="ward",name="결계 해방",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/ward.png",parentSkill="ward",rarity="epic",badge="영웅 · 결계 해방"})
+entries["missile_salvo"]=table.freeze({iconKey="missile",name="추적 탄막",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/missile.png",parentSkill="missile",rarity="rare",badge="희귀 · 추적 탄막"})
+entries["missile_hunter"]=table.freeze({iconKey="missile",name="거수 사냥꾼",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/missile.png",parentSkill="missile",rarity="epic",badge="영웅 · 거수 사냥꾼"})
+entries["skyLances_rain"]=table.freeze({iconKey="skyLances",name="칠성 창우",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/skyLances.png",parentSkill="skyLances",rarity="rare",badge="희귀 · 칠성 창우"})
+entries["skyLances_execute"]=table.freeze({iconKey="skyLances",name="천공의 심판",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/skyLances.png",parentSkill="skyLances",rarity="epic",badge="영웅 · 천공의 심판"})
+entries["lightRing_twin"]=table.freeze({iconKey="lightRing",name="쌍월",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightRing.png",parentSkill="lightRing",rarity="rare",badge="희귀 · 쌍월"})
+entries["lightRing_return"]=table.freeze({iconKey="lightRing",name="귀환의 칼날",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lightRing.png",parentSkill="lightRing",rarity="epic",badge="영웅 · 귀환의 칼날"})
+entries["fire_blast"]=table.freeze({iconKey="fire",name="작열 화염탄",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/fire.png",parentSkill="fire",rarity="rare",badge="희귀 · 작열 화염탄"})
+entries["thunder_chain"]=table.freeze({iconKey="thunder",name="뇌창 전도",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/thunder.png",parentSkill="thunder",rarity="epic",badge="영웅 · 뇌창 전도"})
+entries["aether_execute"]=table.freeze({iconKey="aetherLance",name="성운 처형",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/aetherLance.png",parentSkill="aetherLance",rarity="rare",badge="희귀 · 성운 처형"})
+entries["iceRush_wide"]=table.freeze({iconKey="iceRush",name="빙하 대로",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/iceRush.png",parentSkill="iceRush",rarity="rare",badge="희귀 · 빙하 대로"})
+entries["quick_cast"]=table.freeze({iconKey="quick_cast",name="신속 시전",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/quick_cast.png",rarity="common",badge="일반 · 신속 시전"})
+entries["active_focus"]=table.freeze({iconKey="active_focus",name="집중된 주문",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/active_focus.png",rarity="common",badge="일반 · 집중된 주문"})
+entries["lucky_charm"]=table.freeze({iconKey="lucky_charm",name="행운의 부적",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lucky_charm.png",rarity="common",badge="일반 · 행운의 부적"})
+table.freeze(entries)
+local function get(id)
+ if type(id)~='string'then return nil end
+ return entries[string.gsub(id,'^aug_','')]
+end
+local function apply(imageLabel,id,fallback)
+ local entry=get(id)
+ local assetId=entry and entry.robloxAssetId
+ local ready=type(assetId)=='string'and string.match(assetId,'^[1-9]%d*$')~=nil
+ imageLabel.Image=ready and('rbxassetid://'..assetId)or ''
+ imageLabel.Visible=ready
+ if fallback then fallback.Visible=not ready end
+ return ready,entry
+end
+return table.freeze({Get=get,Apply=apply})
 ]====])
 -- Source: src/client/flow/SkillPreview.luau
 addModule(modules,{"flow","SkillPreview"},[====[
@@ -5960,7 +6438,7 @@ return function(deps)
    if UIS.GamepadEnabled then GuiService.SelectedObject=spellButtons[selected.id]end
   else
    dragging=false;touch=nil;stick=Vector2.zero;if scene then scene.Clear()end
-   hud.Enabled=not lastLobby;if lobby then lobby.Enabled=lastLobby end
+   hud.Enabled=not lastLobby;if lobby then lobby.Enabled=lastLobby and lobby:GetAttribute('LoadoutOpen')==true end
    if deps.dragon then deps.dragon.Gui.Enabled=true end
    if playerControls then playerControls:Enable()end
    local camera=workspace.CurrentCamera
@@ -6716,7 +7194,8 @@ return function(deps)
   if opened==value then return end
   if value and deps.beforeOpen then deps.beforeOpen()end
   opened=value;overlay.Visible=value;button.Visible=not value;gui:SetAttribute('Open',value)
-  input.SetSuspended(value)
+  local lobbyGui=player.PlayerGui:FindFirstChild('SummonerLobbyUI')
+  input.SetSuspended(value or(lobbyGui and lobbyGui:GetAttribute('InLobby')==true))
   net.Action:FireServer('previewDragon',value)
   if value then
    oldHudEnabled=hud.Enabled;hud.Enabled=false
@@ -7010,7 +7489,7 @@ return function(deps)
   else
    dragging=false;touch=nil;stick=Vector2.zero;scene.Clear();if controls then controls:Enable()end
    if deps.camera then deps.camera.Restore(oldCamera)end
-   hud.Enabled=not lastLobby;local lobby=player.PlayerGui:FindFirstChild('SummonerLobbyUI');if lobby then lobby.Enabled=lastLobby end
+   hud.Enabled=not lastLobby;local lobby=player.PlayerGui:FindFirstChild('SummonerLobbyUI');if lobby then lobby.Enabled=lastLobby and lobby:GetAttribute('LoadoutOpen')==true end
    GuiService.SelectedObject=oldSelection and oldSelection.Parent and oldSelection or nil
   end
  end
