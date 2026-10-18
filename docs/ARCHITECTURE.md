@@ -368,8 +368,14 @@ EnemyMotion의 추가 roll도 제거했습니다. 개체별 위상/템포/수평
 
 `Progression.FieldBossReward`가 생존 참가자당1회 회복과 추가 레벨 XP를 지급합니다. 열려 있는 offers는 유지합니다. 적 사망 경로는 필드보스 모델/보상을 소유 모듈에 남기며 일반 XP 구슬을 생성하지 않습니다. 냉기/넉백 예외와 보스 우선 목표에도 필드보스를 포함합니다.
 
-클라이언트 `CommanderMount`는 기존 고정 스켈레톤 메시를 공유하고 별도 군마 관절/장비를 그립니다. `EnemyPresentation`은 `FieldAction`/`FieldProgress` 복제 속성으로 상체 공격 동작을 선택합니다. `FieldBossArt`는 `Effect('fieldBoss',kind,pos,dir)`의 짧은 시각 효과만 처리합니다. 피해는 없습니다.
+클라이언트 `CommanderMount`는 전용 절차 갑옷 기수·양손 도끼창과 군마 관절을 그립니다. 일반 해골의 고정 스켈레톤 메시를 군단장에는 사용하지 않습니다. `EnemyPresentation`은 `FieldAction`/`FieldProgress` 복제 속성으로 상체 공격 동작을 선택합니다. `FieldBossArt`는 `Effect('fieldBoss',kind,pos,dir)`의 짧은 시각 효과만 처리합니다. 피해는 없습니다.
 
 State 패킷에 `fieldBoss={name,hp,maxHp,action}?`, `fieldBossTest`, `fieldBossTestQueued`를 추가합니다. `Action('startFieldBossTest',fourIds,qId)`는 Studio 여부, 로비/로드 상태, 빈도 제한, 정확히4개인 장착 목록/Q, 전원 동일 모드를 서버에서 확인합니다. 세션 복귀·재시작·마지막 접속 해제는 기존 resetBoss 콜백에 필드보스 초기화를 함께 연결합니다.
 
 적 렌더러의 비동기 메시 준비가 끝나기 전에 서버 모델의 Core가 정리될 수 있으므로, EnemyPresentation은 완료 후 Parent와 PrimaryPart를 다시 확인합니다. 유효하지 않으면 준비한 시각 rig를 해제하고 등록하지 않습니다.
+
+### 군단장 전용 외형과 네 무기 패턴
+
+`FieldBoss`에 slamWindup/slam(고정 원형 착탄), thrustWindup/thrust(고정 직선+짧은 전진)를 추가했습니다. 기존 횡베기/기마 돌진과 같은 서버 hit-once/무적/보상/퇴각 경로를 공유합니다. 보스의 attackIndex/lastAttack으로 근접 순서와 원거리 돌진/찌르기 교대를 결정하며 클라이언트는 패턴을 선택하지 않습니다. Effect의 fieldBoss kind에 slam/thrust가 추가됐고 계약의 다른 인자는 같습니다.
+
+`EnemyProfiles.commander`는 originalKnight 프로필입니다. `EnemyVisuals`가 전용 CommanderMount로 라우팅하므로 일반 SkeletonMesh 캐시/CC0 원본은 바꾸지 않습니다. CommanderMount는 서버 FieldAction/FieldProgress에 맞춰 torso/head/arm/hand/leg/weapon 프레임을 계산하고, 공격 후 직전 무기 자세에서 기본 자세로 보간합니다. 두 손은 무기 좌표계에서 계산하며 왕관/창날/도끼날은 로컬 기본 Part/WedgePart로 재현됩니다. CommanderStyle=GildedHalberdKnight, CommanderMotion, EquipmentCount=1은 시연/검사용 로컬 메타데이터입니다. 호환상 SkeletonMeshStatus=Ready 속성 이름은 유지하되 군단장에는 실제 스켈레톤 메시를 만들지 않습니다.

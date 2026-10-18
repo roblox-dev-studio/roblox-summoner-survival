@@ -108,3 +108,9 @@ png-clipart-flame-fire-flame.png: user supplied visual reference for a long tear
 - 기수는 위에 기록한 KayKit Skeletons 1.0 CC0 Warrior 원본과 장비를 재사용합니다. 추가 동작은 같은 GLB의 `1H_Melee_Attack_Slice_Horizontal`, `Blocking`, `Block_Attack`, `Sit_Chair_Idle`입니다. 새 네트워크 소재나 제3자 스크립트는 추가하지 않았습니다.
 - 군마의 몸·목·두개골·관절 다리·고삐·갈기·꼬리, 왕관·남색 망토와 영혼 궤적은 이 프로젝트에서 작성한 절차 모델입니다. 재현 소스: `src/client/world/CommanderMount.luau`, `FieldBossArt.luau`. 실제 피해/예고는 서버 `FieldBoss.luau`에 있습니다.
 - 변환: 기존 `tools/convert_skeleton.py --character Warrior`를 NumPy/Pillow 환경에서 실행합니다. 원본 SHA와 선택 클립은 `assets/enemies/kaykit-skeletons/manifest.json`, 전체 설치는 `python3 tools/build_installer.py`로 재현합니다.
+
+### 2026-10-18 군단장 전용 갑옷/도끼창 교체
+
+현재 군단장 기수·투구·장식깃·흉갑·관절 갑옷·망토·도끼창·모션은 `CommanderMount.luau`의 프로젝트 자체 절차 모델입니다. 앞서 재사용했던 KayKit Warrior 기수/검/방패는 군단장에서 제거했습니다. KayKit 원본은 일반 적에 그대로 사용합니다. 별도 외부 메시·이미지·애니메이션·스크립트는 추가하지 않았습니다. 자산 구조와 재현 경로는 `assets/enemies/commander/manifest.json`에 기록합니다.
+
+사용자가 언급한 ELDEN RING 트리가드는 기마 중갑 기사와 준비/타격의 무게감에 대한 미술·전투 방향 참고입니다. 게임 모델·텍스처·모션 파일은 가져오지 않았습니다. 작품 정보 참고: https://www.bandainamcoent.com/games/elden-ring . 실제 이 게임의 실루엣과 절차 소스가 구현 기준입니다.

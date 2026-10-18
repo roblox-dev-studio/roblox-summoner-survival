@@ -40,13 +40,7 @@ return function()
      if frozen then mode=rig.mode or'idle'end;rig.mode=mode
      local visualFrame=motion.frame(rig.motion,rig.frame,delta,mode=='walk',frozen)
      if model:GetAttribute('EnemyKind')=='commander'then
-      local action=model:GetAttribute('FieldAction');local progress=model:GetAttribute('FieldProgress')or 0
-      local pose='guard';local clock=rig.motion.time
-      if action=='approach'or action=='charge'then pose='walk';clock=rig.motion.gait
-      elseif action=='cleaveWindup'then pose='sweep';clock=mesh.duration(rig,'sweep')*.28*progress
-      elseif action=='cleave'then pose='sweep';clock=mesh.duration(rig,'sweep')*(.28+.72*progress)
-      elseif action=='chargeWindup'then pose='guard';clock=progress*mesh.duration(rig,'guard')end
-      mesh.pose(rig,visualFrame,clock,pose)
+      mesh.pose(rig,visualFrame,rig.motion.gait,model:GetAttribute('FieldAction')or'idle')
      else
      mesh.pose(rig,visualFrame,mode=='prepare'and rig.prepareTime or(mode=='attack'and rig.attackTime or(mode=='walk'and rig.motion.gait or rig.motion.time)),mode)
      end
