@@ -730,6 +730,14 @@ Session 신규 접속/미선택 기본값, Progression 상태 기본값, 로비 
 
 사용자 요청으로 누적 변경을 한 PR로 제출/병합합니다. 기준 team/main8f90607, fetch 후 main 추가 커밋/충돌 없음. 별도 진행 중인 PR6/7/8은 이번 변경에 포함하지 않습니다. 최종 소스 SHA-256(진입점·맵·src 경로/내용 정렬): `ec2d5729e3e49bc82ed1f8a0fdbb91f42f4acb6add0cd9d3802abb24a9d189a5`. 로컬 설치기 일치/Python9개/성장·장착·Q 회귀/Luau169개/공백 검사 통과. 연결 Studio36d9ae01-92b0-4f38-abcf-dfe9961372a5의 최종 코드에서 studio_arena, studio_field_boss, studio_active_spells, studio_commander_visual 네 fixture 재실행 통과. 일반 로비로 복구. 새 빈 Baseplate 전체 설치·실제 협동/모바일/저사양 장시간 성능은 미검증으로 유지합니다.
 
+## 2026-10-18 · PR6/7/8 병합 전 통합 검증
+
+- 통합 소스 `169cf81`에 최신 main `8d7408b`의 전장/해골 군단장/Q4초·판정 폭을 보존했습니다. 새 로비와 12종 카탈로그, 25증강을 함께 검사했습니다. 집중된 주문은 4→3.4→2.8초, 신규 접속 Q는 빙하 쇄도입니다.
+- 설치기·카탈로그 재생성 및 일치, Python16개, 진행/증강/몬스터/접속 점수 회귀, Luau181개 문법/전역 통과. 세 PR의 갱신된 head에서 GitHub source-checks 성공.
+- 독립 AugmentReview.rbxlx (`434a088f-5ad4-4b16-86ab-0273ee1fd09f`, placeId0) Edit에 변경40모듈과 새 전장을 적용하고 Play 재시작. Server의 studio_augments, studio_active_spells, studio_enemy_families, studio_field_boss, studio_lobby_scores, studio_lobby, studio_retreat, studio_boss_test_start, studio_arena 통과. Client의 studio_lobby_hub, studio_skill_icon_ui, studio_enemy_family_visuals 통과. 실제 엔진의 격리 fixture12개이며 사람의 연속 플레이/실제 다인 검증은 아닙니다.
+- 실제 접속 Hub=true/LoadoutOpen=false, Heartbeat60/PreRender0. Mac 잠금으로 최신 로비/새 몬스터의 렌더 화면, 새 군단장과 함께 보는 미술 품질, 청취, 저장된 place 재열기 인수는 여전히 대기입니다. 원시 결과는 로컬 artifacts/lobby-skill-review/merge-engine-evidence.json에 보관했습니다.
+- 사용자의 PR 병합 지시에 따라 소스·엔진 통합 변경을 main에 반영하며, 이를 게임 공개나 시각/재미 인수 완료로 취급하지 않습니다.
+
 ## 2026-10-18 · PR6과 최신 main 통합
 
 - `8d7408b`의 잿빛 전장/해골 군단장/기본 Q 빙하 쇄도/화염탄·성운창 폭을 보존하며 증강 브랜치에 통합했습니다. Q 기본 주기는 최신 4초를 따르고 집중된 주문은 4→3.4→2.8초로 적용합니다. 이전 7초 기준 수치가 되살아나는 충돌을 수정했습니다.
