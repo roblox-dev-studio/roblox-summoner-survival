@@ -57,6 +57,14 @@
 - 독립 place 로비에서 `tests/studio_augment_network.luau`를 Client→Server 순서로 실행. 15초 안에 Client `PlayerGui.AugmentNetworkCheck.Result`의 실제 Effect 수신·네 가지 표시 ID 확인. 임시 observer는 15초에 연결/카메라를 복구하며 결과 폴더는 Play 종료 시 제거.
 - 실제 전투에서 여러 플레이어·최대 적/탄환·작은 화면의 가독성/성능은 별도 검수. 풀 상한 통과를 프레임 성능 통과로 해석하지 않음.
 
+### 로비 마법 도감
+
+- 로비 하단 `마법 도감`에서 전체41/자동9/Q4/증강25/기본3 분류, 이름·효과·조합 검색, 빈 결과/지우기를 확인합니다.
+- 빙쇄의 얼음창2단계, 빙결 전도의 번개2단계+얼음창/서리 조합, Q 전용 선택과 공통 중첩 조건이 현재 서버 정의와 같은지 확인합니다.
+- 도감→다른 로비 패널→출전 준비→전투에서 중첩·입력 잠금이 남지 않고 검색 중 P/N/V가 미리보기를 열지 않아야 합니다.
+- 아이콘 미등록 대체 표시와 실제 업로드 후 그림 로딩은 구분합니다. 720×650 기준 레이아웃은 실제 작은 화면/터치·패드로 별도 검수합니다.
+- Client `studio_lobby_hub`와 기존 `studio_skill_icon_ui`, Python 카탈로그 회귀를 실행합니다. 엔진 객체/상태 검사와 자연 렌더 화면 검수를 구분합니다.
+
 ### 기존 전투 회귀
 
 Server: studio_basic_attack, studio_light_spells, studio_active_spells, studio_lobby, studio_retreat. Client: studio_ward_follow, studio_glacial_art, studio_elemental_art. 기존 studio_area_spells / studio_homing_missiles / studio_boss_combat / studio_enemies도 변경 영역에 따라 실행합니다. fixture 실행은 본인 임시 객체만 만들고 제거해야 합니다.

@@ -7,17 +7,18 @@ return function(deps)
  local theme=require(script.Parent.Parent.Theme);local make,label,round,stroke=theme.Make,theme.Label,theme.Round,theme.Stroke;local colors=theme.Palette
  local gui=make('ScreenGui',playerGui,{Name='SummonerLobbyHub',ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=35,Enabled=false,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
  local connections,worldConnections,menuConnections,promptStates={},{},{},{}
- local inLobby,opened,destroyed=false,nil,false;local scores={};local savedSelection;local viewportConnection
+ local inLobby,opened,destroyed=false,nil,false;local scores={};local savedSelection;local viewportConnection;local panelHeight=510
  local copy={shop={title='별빛 교역소',eyebrow='ACADEMY SHOP',accent=colors.gold,description='마법 도구와 장비를 만나는 학술원의 교역소입니다.',note='상점 준비 중',detail='지금은 진열 공간을 둘러볼 수 있어요.\n상품 구매와 재화 사용은 아직 열리지 않았습니다.'},
   gacha={title='별의 소환 제단',eyebrow='ASTRAL SUMMONING',accent=Color3.fromRGB(185,160,231),description='별의 힘이 모이는 소환 제단입니다.',note='가챠 준비 중',detail='소환 기능을 준비하고 있어요.\n현재는 추첨이나 보상 지급이 이루어지지 않습니다.'},
-  ranking={title='최고 처치 기록관',eyebrow='ACADEMY RECORDS',accent=colors.mint,description='현재 서버에 접속한 플레이어의 이번 접속 최고 처치 수입니다.'}}
+  ranking={title='최고 처치 기록관',eyebrow='ACADEMY RECORDS',accent=colors.mint,description='현재 서버에 접속한 플레이어의 이번 접속 최고 처치 수입니다.'},
+  codex={title='마법 · 증강 도감',eyebrow='SPELL ARCHIVE',accent=colors.mint,description='마법 16종과 증강 25개. 효과와 조건을 살펴보고 다음 빌드를 준비하세요.'}}
  local dock=make('Frame',gui,{Name='Navigation',Size=UDim2.fromOffset(700,100),Position=UDim2.new(.5,0,1,-20),AnchorPoint=Vector2.new(.5,1),BackgroundColor3=colors.bg,BackgroundTransparency=.08});round(dock,15);stroke(dock)
  local dockScale=make('UIScale',dock,{Scale=1})
- local welcome=label(dock,'별빛 학술원  ·  자유롭게 둘러보세요',UDim2.new(1,-28,0,22),UDim2.fromOffset(14,8),Enum.Font.GothamBold,colors.text);welcome.TextSize=14;welcome.TextXAlignment=Enum.TextXAlignment.Left
+ local welcome=label(dock,'별빛 학술원  ·  자유롭게 둘러보세요',UDim2.fromOffset(320,22),UDim2.fromOffset(14,8),Enum.Font.GothamBold,colors.text);welcome.TextSize=14;welcome.TextXAlignment=Enum.TextXAlignment.Left
  local hint=label(dock,'WASD 이동  ·  구역 입구에서 E / 패드 X',UDim2.fromOffset(345,22),UDim2.new(1,-359,0,8),nil,colors.muted);hint.TextSize=12;hint.TextXAlignment=Enum.TextXAlignment.Right
  local buttons={}
- for i,item in ipairs({{'loadout','출전 준비'},{'shop','상점 · 준비 중'},{'gacha','가챠 · 준비 중'},{'ranking','최고 점수'}})do
-  local b=make('TextButton',dock,{Name='Open_'..item[1],Size=UDim2.fromOffset(158,44),Position=UDim2.fromOffset(14+(i-1)*171,42),Text=item[2],Font=Enum.Font.GothamBold,TextSize=14,BackgroundColor3=i==1 and colors.mint or colors.card,TextColor3=i==1 and colors.bg or colors.text});round(b,9);buttons[item[1]]=b
+ for i,item in ipairs({{'loadout','출전 준비'},{'codex','마법 도감'},{'ranking','최고 점수'},{'shop','상점 · 준비 중'},{'gacha','가챠 · 준비 중'}})do
+  local b=make('TextButton',dock,{Name='Open_'..item[1],Size=UDim2.fromOffset(128,44),Position=UDim2.fromOffset(14+(i-1)*136,42),Text=item[2],Font=Enum.Font.GothamBold,TextSize=14,BackgroundColor3=i==1 and colors.mint or colors.card,TextColor3=i==1 and colors.bg or colors.text});round(b,9);buttons[item[1]]=b
  end
  local veil=make('Frame',gui,{Name='Veil',Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(6,12,21),BackgroundTransparency=.25,Visible=false,Active=true})
  local panel=make('Frame',veil,{Name='Panel',Size=UDim2.fromOffset(720,510),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=colors.bg});round(panel,18);stroke(panel)
@@ -34,10 +35,11 @@ return function(deps)
  make('UIListLayout',records,{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder})
  local empty=label(panel,'아직 기록이 없어요.\n전투를 마치면 이번 접속의 최고 점수를 확인할 수 있습니다.',UDim2.fromOffset(620,160),UDim2.fromOffset(50,200),nil,colors.muted);empty.Name='EmptyScores';empty.TextSize=18;empty.Visible=false
  local footer=label(panel,'',UDim2.fromOffset(664,50),UDim2.fromOffset(28,435),nil,colors.muted);footer.Name='Scope';footer.TextSize=13;footer.TextXAlignment=Enum.TextXAlignment.Left
+ local codex=require(script.Parent.SkillCodex)(panel)
  local function connect(signal,callback)local connection=signal:Connect(callback);table.insert(connections,connection);return connection end
  local function resize()
   local camera=workspace.CurrentCamera;if not camera then return end;local size=camera.ViewportSize
-  panelScale.Scale=math.max(.3,math.min(1,(size.X-24)/720,(size.Y-24)/510));dockScale.Scale=math.max(.3,math.min(1,(size.X-24)/700))
+  panelScale.Scale=math.max(.3,math.min(1,(size.X-24)/720,(size.Y-24)/panelHeight));dockScale.Scale=math.max(.3,math.min(1,(size.X-24)/700))
  end
  local function bindCamera()
   if viewportConnection then viewportConnection:Disconnect();viewportConnection=nil end
@@ -51,7 +53,7 @@ return function(deps)
   return false
  end
  local function closePanel()
-  if not opened then return end;opened=nil;veil.Visible=false;gui:SetAttribute('Open',false);gui:SetAttribute('Panel',nil)
+  if not opened then return end;opened=nil;codex.SetVisible(false);veil.Visible=false;gui:SetAttribute('Open',false);gui:SetAttribute('Panel',nil)
   GuiService.SelectedObject=savedSelection and savedSelection.Parent and savedSelection or nil;savedSelection=nil
   if deps.onPanelChanged then deps.onPanelChanged(false)end
  end
@@ -79,8 +81,10 @@ return function(deps)
   local content=copy[action];if not content then return false end
   local wasOpen=opened~=nil;if not wasOpen then savedSelection=GuiService.SelectedObject end
   opened=action;eyebrow.Text=content.eyebrow;eyebrow.TextColor3=content.accent;heading.Text=content.title;description.Text=content.description
-  notice.Visible=action~='ranking';records.Visible=action=='ranking';empty.Visible=action=='ranking'and #scores==0
-  if action=='ranking'then footer.Text='현재 서버 · 이번 접속 기록\n영구 저장과 전체 서버 랭킹은 준비 중입니다.';renderScores()
+  panelHeight=action=='codex'and 650 or 510;panel.Size=UDim2.fromOffset(720,panelHeight);footer.Position=UDim2.fromOffset(28,panelHeight-75);resize()
+  notice.Visible=action=='shop'or action=='gacha';records.Visible=action=='ranking';empty.Visible=action=='ranking'and #scores==0;codex.SetVisible(action=='codex')
+  if action=='codex'then footer.Text='도감은 획득·장착 기능이 아닙니다. 조건을 갖춘 증강이 레벨업 선택지에 등장할 수 있습니다.'
+  elseif action=='ranking'then footer.Text='현재 서버 · 이번 접속 기록\n영구 저장과 전체 서버 랭킹은 준비 중입니다.';renderScores()
   else note.Text=content.note;note.TextColor3=content.accent;detail.Text=content.detail;footer.Text='준비 중인 기능입니다. 결제·추첨·보상 지급은 진행되지 않습니다.'end
   veil.Visible=true;gui:SetAttribute('Open',true);gui:SetAttribute('Panel',action);syncVisibility()
   if UIS.GamepadEnabled then GuiService.SelectedObject=close end
@@ -143,7 +147,7 @@ return function(deps)
   for _,items in pairs(menuConnections)do for _,connection in ipairs(items)do connection:Disconnect()end end
   if viewportConnection then viewportConnection:Disconnect()end
   for prompt,enabled in pairs(promptStates)do if prompt.Parent then prompt.Enabled=enabled end end
-  gui:Destroy()
+  codex.Destroy();gui:Destroy()
  end
  gui.Destroying:Connect(destroy);gui:SetAttribute('Open',false);gui:SetAttribute('InLobby',false);syncVisibility()
  return {Gui=gui,Open=open,Close=function()closePanel();syncVisibility()end,Destroy=destroy}

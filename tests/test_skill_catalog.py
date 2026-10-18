@@ -134,11 +134,22 @@ ready,entry=icons.Apply(image,'unknown',fallback)
 assert(not ready and entry==nil and image.Image==''and fallback.Visible)
 assert(icons.Get('aug_ice_twin')==icons.Get('ice_twin'))
 assert(icons.Get(123)==nil)
+assert(#icons.List('all')==41 and #icons.List('auto')==9 and #icons.List('active')==4)
+assert(#icons.List('augments')==25 and #icons.List('builtin')==3 and #icons.List('invalid')==0)
+local results=icons.List('augments','빙결 얼음창');local found={}
+for _,entry in ipairs(results)do found[entry.id]=true end
+assert(found.ice_twin and found.ice_shatter and found.lightning_frozen,'Search includes parent and synergy conditions')
+assert(icons.Get('ice_shatter').condition:find('2단계 이상',1,true))
+assert(icons.Get('lightning_frozen').condition:find('서리 폭발',1,true))
+assert(icons.Get('iceRush_wide').condition:find('Q에 빙하 쇄도 선택',1,true))
+assert(#icons.List('all','[')==0,'Search uses literal text, never a Lua pattern')
+local copy=icons.List('auto');table.remove(copy);assert(#icons.List('auto')==9)
+assert(not pcall(function()icons.Get('ice').name='changed'end),'UI metadata is immutable')
 for _,id in ipairs({'basic','golem','dash'})do
  local item=icons.Get(id);assert(item.assetPath=='assets/ui/skill-icons/'..id..'.png')
  local shown=icons.Apply(image,id,fallback);assert(not shown and image.Image==''and fallback.Visible)
 end
-print('PASS: icon readiness, stale image clearing, parent badge and fallback')
+print('PASS: icon readiness, fallback, immutable codex filtering and authoritative conditions')
 '''
         suffix = ".exe" if os.name == "nt" else ""
         binary = ROOT / ".tools" / f"luau-{VERSION}" / ("luau" + suffix)
