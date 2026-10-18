@@ -33,6 +33,7 @@ return function(deps)
    for j=-1,1 do part(seal,'SealRune',Vector3.new(.12,.08,.35),frame*CFrame.new(0,0,j*.25)*CFrame.Angles(0,j*.6,0),gold)end
   end
   local lances={};local offsets={Vector3.zero,Vector3.new(5,0,0),Vector3.new(0,0,5),Vector3.new(-5,0,0),Vector3.new(0,0,-5)}
+  if(anchor:GetAttribute('Count')or 5)==7 then table.insert(offsets,Vector3.new(3.5,0,3.5));table.insert(offsets,Vector3.new(-3.5,0,-3.5))end
   for i,offset in ipairs(offsets)do
    local m=Instance.new('Model');m.Name='FallingMagicLance';m.Parent=model
    local p=part(m,'Pivot',Vector3.one*.1,CFrame.identity,white);p.Transparency=1;m.PrimaryPart=p

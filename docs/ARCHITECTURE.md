@@ -24,7 +24,7 @@ ServerScriptService
     └── Modules (src/server)
         ├── combat: Combat, Movement
         ├── world: Waves, Boss
-        ├── flow: Progression, Session
+        ├── flow: Progression, Session, Augments
         └── shared: Actors, PlayerState, EnemyModels
 StarterPlayer / StarterPlayerScripts
 └── SummonerClient (client.luau)
@@ -53,7 +53,8 @@ Workspace
 | Actors | `Block`, `Create` | 절차적 적·골렘 형상 |
 | PlayerState | `RootOf`, `LiveCount`, `Paused` | 상태를 조회하며 변경하지 않음 |
 | Movement | `RequestDash`, `Step`, `FinishDash` | 대시·무적·이동 복구 |
-| Progression | `Sync`, `Drop`, `Choose`, `Collect`, `Need`, `LevelCheck` | XP·카드·강화·경험치 구슬 |
+| Progression | `Sync`, `Drop`, `Choose`, `Reroll`, `Collect`, `Need`, `LevelCheck` | XP·카드·강화·경험치 구슬 |
+| Augments | `Choices`, `Apply`, `Eligible`, `Summary`, `Luck`, `Weights`, `Cooldown`, `ActiveCooldown`, `Damage` | 서버 전용 순수 카탈로그/선택 조건/수치 계산; 상태를 전역으로 보관하지 않음 |
 | Combat | `StepPlayer`, `StepProjectiles`, `ClearProjectiles`, `RequestWave` | 공격·골렘 AI·얼음창·적 피해 |
 | Boss | `Step`, `Resolve`, `Reset` | 보스 생성·추적·예고·공격·승패, 일반 적의 피해 경로 공유 |
 | Waves | `Spawn`, `Step`, `ResetSpawn` | 생성 간격·적 AI·접촉 피해 |
@@ -70,12 +71,13 @@ Workspace
 
 ## 네트워크 계약
 
-`SummonerNet.Action`은 클라이언트 의도입니다. 기존 요청 이름과 데이터 형식은 유지합니다.
+`SummonerNet.Action`은 클라이언트 의도입니다. 증강 도입 시 `choose`에 제안 번호를 추가했으므로 서버/HUD를 함께 배포합니다.
 
 | 요청 | 추가 인자 | 서버 검증/처리 |
 | --- | --- | --- |
 | `ready` | 없음 | 등록된 플레이어에게 상태 전송 |
-| `choose` | 선택지 `id` 문자열 | 현재 서버가 제공한 선택지에 포함되는지 확인 |
+| `choose` | 선택지 `id`, `offerRevision` | 현재 제안 번호·후보 포함·장착/단계/최대 횟수 확인 후 1회 적용 |
+| `reroll` | `offerRevision` | 진행 중 제안 번호와 남은 횟수 확인, 한 판 2회까지 재추첨·제안 번호 증가 |
 | `dash` | 수평 이동용 Vector3 | 상태·쿨다운 검증, X/Z 유효성 확인 후 정규화/정면 대체 |
 | `fireWave` | 수평 조준 방향 Vector3 (기존 인자 생략도 허용) | 벡터 유효성·상태·쿨다운 확인, 서버가 30스터드/반각 35도 범위와 피해 판정 |
 | `restart` | 없음 | 요청자 종료 상태 및 모든 참가자 종료 여부 확인 |
@@ -84,6 +86,13 @@ Workspace
 `Effect`는 `hit`, `golemCharge`, `golemHeavy`, `golemLight`, `dash`, `fire`, `fireWave`,
 `lightning`, `iceCast`, `iceHit` 연출을 전송합니다. 클라이언트 효과는 피해를 결정하지 않습니다.
 새 이벤트나 필드 변경은 생산자·소비자를 같은 PR 또는 명시적 호환 단계로 배포합니다.
+
+증강 `State` 필드는 `offerRevision`, `luck`, `offerOdds`, `augmentWeights`, `augments`, `rerolls`입니다.
+카드는 기존 ID/제목/설명/태그/단계에 `rarity`, `kind`, 선택적 `max`를 더합니다.
+`offerOdds`는 보장된 단계 강화 이후 첫 무작위 칸의 조건부 확률입니다.
+`augmentPulse(position,radius)`와 `augmentFireHit(position,radius)`는 서버 피해 판정 후의 표현 이벤트입니다.
+수량/범위 증강은 기존 시전 앵커의 `Count`, `Radius`, `Duration`, `Width`로 클라이언트와 공유합니다.
+적 레코드에는 처형 판정을 위한 `maxHp`를 저장합니다. 자세한 규칙은 [AUGMENTS.md](AUGMENTS.md)를 따릅니다.
 
 현재 프로토타입에는 `ready` 등 모든 요청을 포괄하는 별도 속도 제한이 없습니다.
 이번 구조 분리로 보안·협동 완성도를 보장하지 않습니다. 공개 출시 전에 별도 검증이 필요합니다.

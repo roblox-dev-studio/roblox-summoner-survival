@@ -1,4 +1,5 @@
 -- Automatic spells, ice projectiles, summon AI and damage. No client-owned damage.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
 	local world, enemies, rng = deps.world, deps.enemies, deps.rng
 	local block, rootOf, paused = deps.block, deps.rootOf, deps.paused
@@ -49,7 +50,7 @@ return function(deps)
 		local anchor=block(world,"IceSpearAnchor_"..nextIceShot,Vector3.new(.1,.1,.1),portalPos,Color3.fromRGB(170,237,255))
 		anchor.Transparency=1;anchor.CFrame=portal
 		anchor:SetAttribute("Launched",false)
-		table.insert(iceShots,{source=s,target=target,anchor=anchor,time=0,charge=.42,speed=36,level=s.ice})
+		table.insert(iceShots,{source=s,target=target,anchor=anchor,time=0,charge=.42,speed=36,level=s.ice,multiplier=A.Has(s,"ice_twin") and .75 or 1})
 		effect:FireAllClients("iceCast",anchor.Name,portal,.42)
 	end
 	local function advanceIceSpears(dt)
@@ -73,7 +74,17 @@ return function(deps)
 						target.frozen=math.max(target.frozen or 0,duration)
 						target.slow=math.max(target.slow,2+shot.level*.4)
 						target.model:SetAttribute("Frozen",duration>0)
-						damage(target,10+shot.level*8,shot.source)
+						local amount=(10+shot.level*8)*shot.multiplier
+                        damage(target,amount,shot.source)
+                        if A.Has(shot.source,"ice_shatter") then
+                            for _,other in ipairs(enemies)do
+                                if other~=target and other.hp>0 and (other.pos-pos).Magnitude<=5 then
+                                    if not other.isBoss and not other.isFieldBoss then other.frozen=math.max(other.frozen or 0,.35);other.model:SetAttribute("Frozen",true)end
+                                    damage(other,amount*.5,shot.source)
+                                end
+                            end
+                            effect:FireAllClients("frostHit",pos,5)
+                        end
 						if target.hp>0 and not target.isBoss and not target.isFieldBoss then
 							local forward=shot.anchor.CFrame.LookVector
 							local flat=Vector3.new(forward.X,0,forward.Z)
@@ -284,18 +295,23 @@ return function(deps)
 			local target=nearest(r.Position,46)
 
 			if target and s.lightning>0 and s.lightningClock<=0 then
-				s.lightningClock=2; local last=r.Position; local struck={}
-				for hop=1,1+s.lightning do
+				s.lightningClock=A.Cooldown(s,2); local last=r.Position; local struck={}
+				for hop=1,1+s.lightning+(A.Has(s,"lightning_fork") and 2 or 0) do
 					local hit,range=nil,35
 					for _,e in ipairs(enemies) do local d=(e.pos-last).Magnitude; if e.hp>0 and not struck[e] and d<range then hit,range=e,d end end
 					if not hit then break end
-					struck[hit]=true; effect:FireAllClients("lightning",last,hit.pos,hop); damage(hit,12+s.lightning*7,s); last=hit.pos
+					struck[hit]=true; effect:FireAllClients("lightning",last,hit.pos,hop); damage(hit,A.Damage(s,"lightning",12+s.lightning*7,hit),s); last=hit.pos
 				end
 			end
 			local iceTarget=s.ice>0 and nearest(r.Position,46)
 			if iceTarget and s.iceClock<=0 then
-				s.iceClock=1.6
+				s.iceClock=A.Cooldown(s,1.6)
 				castIceSpear(s,r,iceTarget)
+                if A.Has(s,"ice_twin")then
+                    local other,best=nil,46
+                    for _,enemy in ipairs(enemies)do local d=(enemy.pos-r.Position).Magnitude;if enemy~=iceTarget and enemy.hp>0 and d<best then other,best=enemy,d end end
+                    castIceSpear(s,r,other or iceTarget)
+                end
 			end
 			local slamReady=s.petSlamPoint and (pos-s.petSlamPoint).Magnitude<3 and (s.petHeavyCooldown or 0)<=0
 			if slamReady and not s.petAttack then

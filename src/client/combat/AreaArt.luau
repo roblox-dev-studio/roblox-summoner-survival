@@ -98,7 +98,7 @@ return function(deps)
     local trail=Instance.new('Trail');trail.Attachment0=a;trail.Attachment1=b;trail.Lifetime=.7;trail.Color=ColorSequence.new(Color3.fromRGB(255,241,180),Color3.fromRGB(255,92,33));trail.Transparency=NumberSequence.new(.25,1);trail.WidthScale=NumberSequence.new(1,0);trail.LightEmission=1;trail.Parent=core
    end
   elseif kind=='blades' then
-   for i=1,5 do
+   for i=1,(anchor:GetAttribute('Count')or 5)do
     local crystal=Instance.new('Model');crystal.Name='OrbitLight';crystal.Parent=model
     local pivot=part(crystal,'Pivot',mint,Vector3.one*.1);pivot.Transparency=1;crystal.PrimaryPart=pivot
     part(crystal,'LightCore',Color3.fromRGB(222,253,255),Vector3.one*.55)
@@ -149,7 +149,7 @@ return function(deps)
      line(p,core.CFrame:PointToWorldSpace(p1),core.CFrame:PointToWorldSpace(p2),.18)
     end
    elseif kind=='blades' then
-    local count=5;local fired=anchor:GetAttribute('Fired')or 0
+    local count=anchor:GetAttribute('Count')or 5;local fired=anchor:GetAttribute('Fired')or 0
     for i,crystal in ipairs(pieces)do
      local a=i/(count+1)*math.pi-math.pi/2
      crystal:PivotTo(anchor.CFrame*CFrame.new(math.sin(a)*4.2,3.2+math.cos(a)*1.7+math.sin(t*2+i)*.08,1.8)*CFrame.Angles(0,t*.5+i,0))

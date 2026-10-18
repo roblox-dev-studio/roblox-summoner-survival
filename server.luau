@@ -20,7 +20,7 @@ local movement = require(modules.combat.Movement)({
 local progression = require(modules.flow.Progression)({
     world = world, states = states, gems = gems, rng = rng, block = actors.Block,
     rootOf = players.RootOf, paused = players.Paused, finishDash = movement.FinishDash,
-    update = net.State, clock = clock, spellOptions = require(modules.flow.Loadout).Options, activeOptions = require(modules.flow.Loadout).ActiveOptions,
+    augments = require(modules.flow.Augments), update = net.State, clock = clock, spellOptions = require(modules.flow.Loadout).Options, activeOptions = require(modules.flow.Loadout).ActiveOptions,
 })
 local combat = require(modules.combat.Combat)({
     world = world, enemies = enemies, rng = rng, block = actors.Block,
@@ -77,7 +77,8 @@ net.Action.OnServerEvent:Connect(function(player,kind,id,activeId)
     if s.over then return end
     if kind == "basicAttack" then
         if id==nil then combat.RequestBasic(s)end
-    elseif kind == "choose" then progression.Choose(s,id)
+    elseif kind == "choose" then progression.Choose(s,id,activeId)
+    elseif kind == "reroll" then progression.Reroll(s,id)
     elseif kind == "dash" then
         if movement.RequestDash(s,id) then progression.Sync(s) end
     elseif kind == "fireWave" then

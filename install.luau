@@ -137,7 +137,7 @@ local movement = require(modules.combat.Movement)({
 local progression = require(modules.flow.Progression)({
     world = world, states = states, gems = gems, rng = rng, block = actors.Block,
     rootOf = players.RootOf, paused = players.Paused, finishDash = movement.FinishDash,
-    update = net.State, clock = clock, spellOptions = require(modules.flow.Loadout).Options, activeOptions = require(modules.flow.Loadout).ActiveOptions,
+    augments = require(modules.flow.Augments), update = net.State, clock = clock, spellOptions = require(modules.flow.Loadout).Options, activeOptions = require(modules.flow.Loadout).ActiveOptions,
 })
 local combat = require(modules.combat.Combat)({
     world = world, enemies = enemies, rng = rng, block = actors.Block,
@@ -194,7 +194,8 @@ net.Action.OnServerEvent:Connect(function(player,kind,id,activeId)
     if s.over then return end
     if kind == "basicAttack" then
         if id==nil then combat.RequestBasic(s)end
-    elseif kind == "choose" then progression.Choose(s,id)
+    elseif kind == "choose" then progression.Choose(s,id,activeId)
+    elseif kind == "reroll" then progression.Reroll(s,id)
     elseif kind == "dash" then
         if movement.RequestDash(s,id) then progression.Sync(s) end
     elseif kind == "fireWave" then
@@ -246,6 +247,7 @@ local modules=Instance.new("Folder");modules.Name="Modules";modules.Parent=entry
 -- Source: src/server/combat/ActiveSpells.luau
 addModule(modules,{"combat","ActiveSpells"},[====[
 -- Q windup and moving spear are driven by the shared server simulation.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
  local nextCast=0
  local function clear(s)
@@ -257,13 +259,13 @@ return function(deps)
    nextCast+=1
    local anchor=Instance.new('Part');anchor.Name='ActiveFireball_'..nextCast;anchor.Anchored=true;anchor.Transparency=1;anchor.Size=Vector3.one*.1;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
    local start=origin+direction*3+Vector3.new(0,1.2,0);anchor.CFrame=CFrame.lookAt(start,start+direction);anchor.Parent=deps.world
-   s.activeCast={kind=kind,time=0,origin=start,direction=direction,range=42,travelled=0,hits={},anchor=anchor};s.cooldown=7
+   s.activeCast={kind=kind,time=0,origin=start,direction=direction,range=42,travelled=0,hits={},anchor=anchor};s.cooldown=A.ActiveCooldown(s)
    deps.effect:FireAllClients('fireProjectile',anchor.Name);return true
   end
   nextCast+=1
   local anchor=Instance.new('Part');anchor.Name='ActiveCast_'..nextCast;anchor.Anchored=true;anchor.Transparency=1;anchor.Size=Vector3.one*.1;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
-  anchor.CFrame=CFrame.lookAt(origin,origin+direction);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Duration',.4);anchor:SetAttribute('Range',kind~='iceRush' and 52 or 34);anchor:SetAttribute('Launched',false);anchor.Parent=deps.world
-  s.activeCast={kind=kind,time=0,origin=origin,direction=direction,range=kind~='iceRush' and 52 or 34,travelled=0,hits={},anchor=anchor};s.cooldown=7
+  anchor.CFrame=CFrame.lookAt(origin,origin+direction);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Duration',.4);anchor:SetAttribute('Range',kind~='iceRush' and 52 or 34);anchor:SetAttribute('Launched',false);anchor:SetAttribute('Width',kind=='iceRush'and(A.Has(s,'iceRush_wide')and 9 or 6)or 2.4);anchor.Parent=deps.world
+  s.activeCast={kind=kind,time=0,origin=origin,direction=direction,range=kind~='iceRush' and 52 or 34,travelled=0,hits={},anchor=anchor};s.cooldown=A.ActiveCooldown(s)
   deps.effect:FireAllClients('activeCast',anchor.Name,kind)
   if kind~='iceRush' then deps.effect:FireAllClients(kind=='thunder'and'thunderSpear'or'aetherSpear',anchor.Name)end
   return true
@@ -295,7 +297,9 @@ return function(deps)
    if target then pos=previous+cast.direction*math.clamp(nearest,0,(pos-previous).Magnitude)end
    cast.travelled+=(pos-previous).Magnitude;cast.anchor.CFrame=CFrame.lookAt(pos,pos+cast.direction)
    if target or wall then
-    for _,e in ipairs(deps.enemies)do if e.hp>0 and (e==target or(e.pos-pos).Magnitude<=5)then deps.damage(e,75,s)end end
+    local radius=A.Has(s,'fire_blast')and 7 or 5
+    for _,e in ipairs(deps.enemies)do if e.hp>0 and (e==target or(e.pos-pos).Magnitude<=radius)then deps.damage(e,75,s)end end
+    deps.effect:FireAllClients('augmentFireHit',pos,radius)
     clear(s)
    elseif cast.travelled>=cast.range-.001 then clear(s)end
    return
@@ -312,7 +316,16 @@ return function(deps)
    if wall then pos=wall.Position end
    for _,e in ipairs(deps.enemies)do
     if e.hp>0 and not cast.hits[e] and segmentDistance(e.pos,previous,pos,cast.kind=='aetherLance'and .5 or nil)<=2.4 then
-     cast.hits[e]=true;deps.damage(e,72+(s.lightning or 0)*8,s);deps.effect:FireAllClients(cast.kind=='thunder'and'thunderHit'or'aetherHit',e.pos)
+     cast.hits[e]=true;local amount=A.Damage(s,cast.kind,72+(s.lightning or 0)*8,e);deps.damage(e,amount,s);deps.effect:FireAllClients(cast.kind=='thunder'and'thunderHit'or'aetherHit',e.pos)
+     if cast.kind=='thunder'and A.Has(s,'thunder_chain')then
+      cast.chainHits=cast.chainHits or {};cast.chainCount=cast.chainCount or 0
+      for _,other in ipairs(deps.enemies)do
+       if cast.chainCount>=2 then break end
+       if other~=e and other.hp>0 and not cast.chainHits[other]and(other.pos-e.pos).Magnitude<=12 then
+        cast.chainHits[other]=true;cast.chainCount+=1;deps.damage(other,amount*.5,s);deps.effect:FireAllClients('lightning',e.pos,other.pos,cast.chainCount)
+       end
+      end
+     end
     end
    end
    cast.travelled+=(pos-previous).Magnitude;cast.anchor.CFrame=CFrame.lookAt(pos,pos+cast.direction)
@@ -321,7 +334,7 @@ return function(deps)
   end
   if not cast.eruptionStarted then
    cast.eruptionStarted=true;cast.anchor:SetAttribute('Launched',true)
-   deps.effect:FireAllClients('activeStrike',cast.origin,cast.direction,{kind='iceRush',range=cast.range,width=6,anchorName=cast.anchor.Name})
+   deps.effect:FireAllClients('activeStrike',cast.origin,cast.direction,{kind='iceRush',range=cast.range,width=A.Has(s,'iceRush_wide')and 9 or 6,anchorName=cast.anchor.Name})
   end
   -- Each ground strip erupts and hits once as the ice travels away from the caster.
   cast.iceRow=cast.iceRow or 0
@@ -330,7 +343,7 @@ return function(deps)
    for _,e in ipairs(deps.enemies)do
     if e.hp>0 and not e.airborne and not cast.hits[e]then
      local delta=Vector3.new(e.pos.X-cast.origin.X,0,e.pos.Z-cast.origin.Z);local along=delta:Dot(cast.direction)
-     if along>=row*cast.range/7 and along<=(row+1)*cast.range/7 and(delta-cast.direction*along).Magnitude<=6 then
+     if along>=row*cast.range/7 and along<=(row+1)*cast.range/7 and(delta-cast.direction*along).Magnitude<=(A.Has(s,'iceRush_wide')and 9 or 6)then
       cast.hits[e]=true;deps.damage(e,52+(s.ice or 0)*7,s)
       if e.hp>0 then e.slow=math.max(e.slow or 0,2.5);if not e.isBoss and not e.isFieldBoss then e.frozen=math.max(e.frozen or 0,1.1);e.model:SetAttribute('Frozen',true);e.knockback=cast.direction*28;e.knockTime=.2 end end
      end
@@ -345,6 +358,7 @@ end
 -- Source: src/server/combat/ArcaneCrystals.luau
 addModule(modules,{"combat","ArcaneCrystals"},[====[
 -- Five stored crystals launch separately, then recharge on the server clock.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
  local auras,shots={},{};local nextId=0
  local function muzzle(frame,index,count)
@@ -357,30 +371,31 @@ return function(deps)
  end
  local function stepPlayer(s,root,dt)
   local level=s.blades or 0;if level<=0 then return end
+  local count=A.Has(s,"blades_volley")and 7 or 5
   local aura=auras[s]
-  if aura and aura.level~=level then aura.anchor:Destroy();auras[s]=nil;aura=nil end
+  if aura and (aura.level~=level or aura.count~=count) then aura.anchor:Destroy();auras[s]=nil;aura=nil end
   if not aura then
    nextId+=1;local anchor=Instance.new('Part');anchor.Name='CrystalAura_'..nextId;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=root.CFrame
-   anchor:SetAttribute('Radius',2);anchor:SetAttribute('Duration',1000000);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Level',level);anchor.Parent=deps.world
-   aura={anchor=anchor,time=0,index=0,level=level,recharge=0};auras[s]=aura;deps.effect:FireAllClients('areaCast',anchor.Name,'blades')
+   anchor:SetAttribute('Count',count);anchor:SetAttribute('Radius',2);anchor:SetAttribute('Duration',1000000);anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Level',level);anchor.Parent=deps.world
+   aura={anchor=anchor,time=0,index=0,level=level,recharge=0,count=count};auras[s]=aura;deps.effect:FireAllClients('areaCast',anchor.Name,'blades')
   end
   aura.time+=dt;aura.anchor.CFrame=root.CFrame;aura.anchor:SetAttribute('Elapsed',aura.time);aura.anchor:SetAttribute('Level',level)
   aura.recharge=math.max(0,aura.recharge-dt)
   if aura.recharge>0 then return end
-  if aura.index>=5 then aura.index=0;aura.anchor:SetAttribute('Fired',0)end
+  if aura.index>=count then aura.index=0;aura.anchor:SetAttribute('Fired',0)end
   s.crystalClock=math.max(0,(s.crystalClock or 0)-dt);if s.crystalClock>0 then return end
   local candidates={}
   for _,e in ipairs(deps.enemies)do if e.hp>0 and (e.pos-root.Position).Magnitude<48 then table.insert(candidates,e)end end
   table.sort(candidates,function(a,b)return (a.pos-root.Position).Magnitude<(b.pos-root.Position).Magnitude end)
   if #candidates==0 then return end
   aura.index+=1
-  local target=candidates[(aura.index-1)%math.min(5,#candidates)+1]
-  local pos=muzzle(root.CFrame,aura.index,5);local delta=target.pos-pos;if delta.Magnitude<.01 then delta=root.CFrame.LookVector end
+  local target=candidates[(aura.index-1)%math.min(count,#candidates)+1]
+  local pos=muzzle(root.CFrame,aura.index,count);local delta=target.pos-pos;if delta.Magnitude<.01 then delta=root.CFrame.LookVector end
   nextId+=1;local anchor=Instance.new('Part');anchor.Name='CrystalBolt_'..nextId;anchor.Size=Vector3.one*.1;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.CFrame=CFrame.lookAt(pos,pos+delta);anchor.Parent=deps.world
   s.crystalClock=.18
   aura.anchor:SetAttribute('Fired',aura.index)
-  if aura.index==5 then aura.recharge=4.4-level*.35;s.crystalClock=0 end
-  table.insert(shots,{source=s,level=level,anchor=anchor,time=0,direction=delta.Unit,target=target})
+  if aura.index==count then aura.recharge=A.Cooldown(s,4.4-level*.35);s.crystalClock=0 end
+  table.insert(shots,{source=s,level=level,anchor=anchor,time=0,direction=delta.Unit,target=target,hits={},remaining=A.Has(s,"blades_pierce")and 2 or 1})
   deps.effect:FireAllClients('crystalBolt',anchor.Name)
  end
  local function segmentDistance(p,a,b)
@@ -400,11 +415,17 @@ return function(deps)
     local to=from+shot.direction*48*dt
     local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={deps.world,shot.source.player.Character};params.RespectCanCollide=true
     local wall=workspace:Raycast(from,to-from,params);if wall then to=wall.Position end
-    local hit,best=nil,math.huge
-    for _,e in ipairs(deps.enemies)do if e.hp>0 then local d,t=segmentDistance(e.pos,from,to);if d<=1.3 and t<best then hit,best=e,t end end end
-    if hit then deps.damage(hit,10+shot.level*4,shot.source);deps.effect:FireAllClients('crystalHit',hit.pos);remove=true
-    elseif wall or shot.time>=2 then remove=true
-    else shot.anchor.CFrame=CFrame.lookAt(to,to+shot.direction)end
+    local contacts={}
+    for _,e in ipairs(deps.enemies)do if e.hp>0 and not shot.hits[e]then local d,t=segmentDistance(e.pos,from,to);if d<=1.3 then table.insert(contacts,{enemy=e,t=t})end end end
+    table.sort(contacts,function(a,b)return a.t<b.t end)
+    for _,contact in ipairs(contacts)do
+     local hit=contact.enemy
+     shot.hits[hit]=true;shot.remaining-=1;shot.target=nil
+     deps.damage(hit,10+shot.level*4,shot.source);deps.effect:FireAllClients('crystalHit',hit.pos)
+     if shot.remaining<=0 then remove=true;break end
+    end
+    if wall or shot.time>=2 then remove=true end
+    if not remove then shot.anchor.CFrame=CFrame.lookAt(to,to+shot.direction)end
    end
    if remove then if shot.anchor.Parent then shot.anchor:Destroy()end;table.remove(shots,i)end
   end
@@ -415,6 +436,7 @@ end
 -- Source: src/server/combat/AreaSpells.luau
 addModule(modules,{"combat","AreaSpells"},[====[
 -- All spell timing and damage belong to the shared server simulation clock.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
  local enemies,world,effect=deps.enemies,deps.world,deps.effect
  local nextCast=0
@@ -433,20 +455,22 @@ return function(deps)
  end
  local function clear(s)
   for _,cast in ipairs(s.areaCasts or {})do if cast.anchor.Parent then cast.anchor:Destroy()end end
-  s.areaCasts={};s.shield=0
+  s.areaCasts={};s.shield=0;s.areaEchoes={}
  end
  local function start(s,kind,point,level)
   local radius=kind=='meteor' and 14+level or(kind=='frost' and 12+level or(kind=='blades' and 11+level*.7 or 4))
+  if kind=='meteor'and A.Has(s,'meteor_wide')then radius*=1.35 elseif kind=='frost'and A.Has(s,'frost_wide')then radius*=1.3 end
   local duration=kind=='meteor' and 3.2 or(kind=='frost' and .75 or(kind=='blades' and 6 or 5))
+  if kind=='ward'and A.Has(s,'ward_reservoir')then duration=7 end
   nextCast+=1
   local anchor=Instance.new('Part');anchor.Name='AreaCast_'..nextCast;anchor:SetAttribute('Kind',kind);anchor.Size=Vector3.one*.1;anchor.Position=point;anchor.Transparency=1;anchor.Anchored=true;anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false
   anchor:SetAttribute('Elapsed',0);anchor:SetAttribute('Radius',radius);anchor:SetAttribute('Duration',duration);anchor:SetAttribute('Level',level)
   if kind=='ward' then
-   s.shield=30+level*12
+   s.shield=(30+level*12)*(A.Has(s,'ward_reservoir')and 1.5 or 1)
    if s.player and type(s.player.UserId)=='number'then anchor:SetAttribute('OwnerUserId',s.player.UserId)end
   end
   anchor.Parent=world
-  table.insert(s.areaCasts,{kind=kind,pos=point,level=level,radius=radius,duration=duration,time=0,hits={},anchor=anchor})
+  table.insert(s.areaCasts,{kind=kind,pos=point,level=level,radius=radius,duration=duration,time=0,hits={},anchor=anchor,shield=s.shield or 0})
   effect:FireAllClients('areaCast',anchor.Name,kind)
  end
  local function hit(cast,s,amount)
@@ -461,7 +485,15 @@ return function(deps)
   end
  end
  local function step(s,root,dt)
-  s.areaCasts=s.areaCasts or {}
+  s.areaCasts=s.areaCasts or {};s.areaEchoes=s.areaEchoes or {}
+  for i=#s.areaEchoes,1,-1 do
+   local echo=s.areaEchoes[i];echo.delay-=dt
+   if echo.delay<=0 then
+    if echo.kind=='frost'then echo.pos=Vector3.new(root.Position.X,.35,root.Position.Z)end
+    hit(echo,s,echo.amount);effect:FireAllClients(echo.kind=='meteor'and'meteorHit'or'frostHit',echo.pos,echo.radius)
+    table.remove(s.areaEchoes,i)
+   end
+  end
   for i=#s.areaCasts,1,-1 do
    local cast=s.areaCasts[i];cast.time+=dt
    if cast.kind~='meteor' then cast.pos=Vector3.new(root.Position.X,.35,root.Position.Z);cast.anchor.Position=cast.pos end
@@ -471,7 +503,13 @@ return function(deps)
     if cast.kind=='meteor' or cast.kind=='frost' then
      hit(cast,s,cast.kind=='meteor' and 65+cast.level*22 or 18+cast.level*8)
      effect:FireAllClients(cast.kind=='meteor' and 'meteorHit' or 'frostHit',cast.pos,cast.radius)
-    elseif cast.kind=='ward' then s.shield=0 end
+     if A.Has(s,cast.kind..'_echo')then
+      table.insert(s.areaEchoes,{kind=cast.kind,pos=cast.pos,radius=cast.radius,level=cast.level,amount=(cast.kind=='meteor'and 65+cast.level*22 or 18+cast.level*8)*.5,delay=cast.kind=='meteor'and .65 or .6})
+     end
+    elseif cast.kind=='ward' then
+     s.shield=0
+     if A.Has(s,'ward_pulse')then hit({kind='ward',pos=cast.pos,radius=8},s,cast.shield*.75);effect:FireAllClients('augmentPulse',cast.pos,8)end
+    end
     cast.anchor:Destroy();table.remove(s.areaCasts,i)
    end
   end
@@ -482,11 +520,11 @@ return function(deps)
     if s[key]<=0 then
      local point=kind=='ward' and Vector3.new(root.Position.X,.35,root.Position.Z) or targetPoint(root.Position)
      if kind=='frost' then
-      point=nil;for _,e in ipairs(enemies)do if e.hp>0 and not e.airborne and flat(e.pos-root.Position).Magnitude<=12+level then point=e.pos;break end end
+      point=nil;for _,e in ipairs(enemies)do if e.hp>0 and not e.airborne and flat(e.pos-root.Position).Magnitude<=(12+level)*(A.Has(s,"frost_wide")and 1.3 or 1)then point=e.pos;break end end
      end
      if point then
       start(s,kind,kind=='meteor' and point or Vector3.new(root.Position.X,.35,root.Position.Z),level)
-      s[key]=(kind=='meteor' and 9 or(kind=='blades' and 8.5 or(kind=='frost' and 6 or 12)))-level*.3
+      s[key]=A.Cooldown(s,(kind=='meteor' and 9 or(kind=='blades' and 8.5 or(kind=='frost' and 6 or 12)))-level*.3)
      end
     end
    end
@@ -542,6 +580,7 @@ end
 -- Source: src/server/combat/Combat.luau
 addModule(modules,{"combat","Combat"},[====[
 -- Automatic spells, ice projectiles, summon AI and damage. No client-owned damage.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
 	local world, enemies, rng = deps.world, deps.enemies, deps.rng
 	local block, rootOf, paused = deps.block, deps.rootOf, deps.paused
@@ -592,7 +631,7 @@ return function(deps)
 		local anchor=block(world,"IceSpearAnchor_"..nextIceShot,Vector3.new(.1,.1,.1),portalPos,Color3.fromRGB(170,237,255))
 		anchor.Transparency=1;anchor.CFrame=portal
 		anchor:SetAttribute("Launched",false)
-		table.insert(iceShots,{source=s,target=target,anchor=anchor,time=0,charge=.42,speed=36,level=s.ice})
+		table.insert(iceShots,{source=s,target=target,anchor=anchor,time=0,charge=.42,speed=36,level=s.ice,multiplier=A.Has(s,"ice_twin") and .75 or 1})
 		effect:FireAllClients("iceCast",anchor.Name,portal,.42)
 	end
 	local function advanceIceSpears(dt)
@@ -616,7 +655,17 @@ return function(deps)
 						target.frozen=math.max(target.frozen or 0,duration)
 						target.slow=math.max(target.slow,2+shot.level*.4)
 						target.model:SetAttribute("Frozen",duration>0)
-						damage(target,10+shot.level*8,shot.source)
+						local amount=(10+shot.level*8)*shot.multiplier
+                        damage(target,amount,shot.source)
+                        if A.Has(shot.source,"ice_shatter") then
+                            for _,other in ipairs(enemies)do
+                                if other~=target and other.hp>0 and (other.pos-pos).Magnitude<=5 then
+                                    if not other.isBoss and not other.isFieldBoss then other.frozen=math.max(other.frozen or 0,.35);other.model:SetAttribute("Frozen",true)end
+                                    damage(other,amount*.5,shot.source)
+                                end
+                            end
+                            effect:FireAllClients("frostHit",pos,5)
+                        end
 						if target.hp>0 and not target.isBoss and not target.isFieldBoss then
 							local forward=shot.anchor.CFrame.LookVector
 							local flat=Vector3.new(forward.X,0,forward.Z)
@@ -827,18 +876,23 @@ return function(deps)
 			local target=nearest(r.Position,46)
 
 			if target and s.lightning>0 and s.lightningClock<=0 then
-				s.lightningClock=2; local last=r.Position; local struck={}
-				for hop=1,1+s.lightning do
+				s.lightningClock=A.Cooldown(s,2); local last=r.Position; local struck={}
+				for hop=1,1+s.lightning+(A.Has(s,"lightning_fork") and 2 or 0) do
 					local hit,range=nil,35
 					for _,e in ipairs(enemies) do local d=(e.pos-last).Magnitude; if e.hp>0 and not struck[e] and d<range then hit,range=e,d end end
 					if not hit then break end
-					struck[hit]=true; effect:FireAllClients("lightning",last,hit.pos,hop); damage(hit,12+s.lightning*7,s); last=hit.pos
+					struck[hit]=true; effect:FireAllClients("lightning",last,hit.pos,hop); damage(hit,A.Damage(s,"lightning",12+s.lightning*7,hit),s); last=hit.pos
 				end
 			end
 			local iceTarget=s.ice>0 and nearest(r.Position,46)
 			if iceTarget and s.iceClock<=0 then
-				s.iceClock=1.6
+				s.iceClock=A.Cooldown(s,1.6)
 				castIceSpear(s,r,iceTarget)
+                if A.Has(s,"ice_twin")then
+                    local other,best=nil,46
+                    for _,enemy in ipairs(enemies)do local d=(enemy.pos-r.Position).Magnitude;if enemy~=iceTarget and enemy.hp>0 and d<best then other,best=enemy,d end end
+                    castIceSpear(s,r,other or iceTarget)
+                end
 			end
 			local slamReady=s.petSlamPoint and (pos-s.petSlamPoint).Magnitude<3 and (s.petHeavyCooldown or 0)<=0
 			if slamReady and not s.petAttack then
@@ -863,6 +917,7 @@ end
 -- Source: src/server/combat/HomingMissiles.luau
 addModule(modules,{"combat","HomingMissiles"},[====[
 -- Single-target pressure. Each projectile hits one enemy; no explosion damage.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
  local shots={};local nextShot=0
  local function target(origin)
@@ -883,8 +938,8 @@ return function(deps)
   local level=s.missile or 0;if level<=0 then return end
   s.missileClock=math.max(0,(s.missileClock or 0)-dt);if s.missileClock>0 then return end
   local enemy=target(root.Position);if not enemy then return end
-  s.missileClock=3.8-level*.2
-  local count=2+math.floor(level/2)
+  s.missileClock=A.Cooldown(s,3.8-level*.2)
+  local count=2+math.floor(level/2)+(A.Has(s,"missile_salvo")and 2 or 0)
   for index=1,count do
    local pos=root.Position+root.CFrame.RightVector*((index-(count+1)/2)*1.6)+Vector3.new(0,1.2,0)
    nextShot+=1
@@ -903,7 +958,7 @@ return function(deps)
     else
      local delta=shot.target.pos-shot.anchor.Position;local travel=44*dt
      if delta.Magnitude<=travel+1.3 then
-      deps.damage(shot.target,18+shot.level*7,shot.source)
+      deps.damage(shot.target,A.Damage(shot.source,"missile",18+shot.level*7,shot.target),shot.source)
       deps.effect:FireAllClients('missileHit',shot.target.pos);remove=true
      else
       local move=delta.Unit*travel
@@ -923,6 +978,7 @@ end
 -- Source: src/server/combat/LightSpells.luau
 addModule(modules,{"combat","LightSpells"},[====[
 -- Returning crescent boomerang, on the shared server simulation.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
  local casts={};local serial=0
  local function clear(source)
@@ -933,9 +989,9 @@ return function(deps)
   for _,e in ipairs(deps.enemies)do local d=(e.pos-point).Magnitude;if e.hp>0 and not e.airborne and d<range then best,range=e,d end end
   return best
  end
- local function start(s,kind,pos,level,direction)
+ local function start(s,kind,pos,level,direction,curve)
   serial+=1;local a=Instance.new('Part');a.Name='LightCast_'..serial;a.Size=Vector3.one*.1;a.Transparency=1;a.Anchored=true;a.CanCollide=false;a.CanQuery=false;a.CanTouch=false;a.CFrame=CFrame.lookAt(pos,pos+(direction or Vector3.zAxis));a:SetAttribute('Elapsed',0);a:SetAttribute('Level',level);a:SetAttribute('Radius',3);a:SetAttribute('Returning',false);a.Parent=deps.world
-  table.insert(casts,{source=s,kind=kind,anchor=a,level=level,time=0,distance=0,origin=pos,direction=direction,hits={},returnHits={},pulse=0,returning=false})
+  table.insert(casts,{source=s,kind=kind,anchor=a,level=level,time=0,distance=0,origin=pos,direction=direction,hits={},returnHits={},pulse=0,returning=false,curve=curve or 1,multiplier=A.Has(s,"lightRing_twin")and .7 or 1})
   deps.effect:FireAllClients('lightCast',a.Name,kind)
  end
  local function stepPlayer(s,root,dt)
@@ -948,8 +1004,10 @@ return function(deps)
      local target=nearest(root.Position,46)
      if target then
        local delta=Vector3.new(target.pos.X-root.Position.X,0,target.pos.Z-root.Position.Z);local direction=delta.Magnitude>.01 and delta.Unit or root.CFrame.LookVector
-       start(s,kind,root.Position+Vector3.new(0,.8,0),level,direction)
-      s[key]=4.8-level*.25
+       if A.Has(s,"lightRing_twin")then
+        for _,side in ipairs({-1,1})do start(s,kind,root.Position+Vector3.new(0,.8,0),level,CFrame.Angles(0,math.rad(12*side),0):VectorToWorldSpace(direction),side)end
+       else start(s,kind,root.Position+Vector3.new(0,.8,0),level,direction)end
+      s[key]=A.Cooldown(s,4.8-level*.25)
      end
     end
    end
@@ -965,11 +1023,11 @@ return function(deps)
       c.returnAge=(c.returnAge or 0)+dt
       local u=math.clamp(c.returnAge/c.returnDuration,0,1)
       local goal=root.Position+Vector3.new(0,.8,0)
-      to=c.returnStart:Lerp(goal,u)-c.direction:Cross(Vector3.yAxis)*math.sin(u*math.pi)*2
+      to=c.returnStart:Lerp(goal,u)-c.direction:Cross(Vector3.yAxis)*math.sin(u*math.pi)*2*c.curve
       if u>=1 then remove=true end
      else
       local distance=math.min(38,c.distance+34*dt)
-      to=c.origin+c.direction*distance+c.direction:Cross(Vector3.yAxis)*math.sin(distance/38*math.pi)*1.8
+      to=c.origin+c.direction*distance+c.direction:Cross(Vector3.yAxis)*math.sin(distance/38*math.pi)*1.8*c.curve
       local ray=RaycastParams.new();ray.FilterType=Enum.RaycastFilterType.Exclude;ray.FilterDescendantsInstances={deps.world,c.source.player.Character};ray.RespectCanCollide=true
       wall=workspace:Raycast(from,to-from,ray);if wall then to=wall.Position end
       c.distance=wall and math.clamp((to-c.origin):Dot(c.direction),0,38)or distance
@@ -981,7 +1039,7 @@ return function(deps)
      local delta=to-from;local length=delta:Dot(delta);local hits=c.returning and c.returnHits or c.hits
      for _,e in ipairs(deps.enemies)do if e.hp>0 and not hits[e]then
       local t=length>.0001 and math.clamp((e.pos-from):Dot(delta)/length,0,1)or 0
-      if(e.pos-from-delta*t).Magnitude<=3.3 then hits[e]=true;deps.damage(e,18+c.level*8,c.source);deps.effect:FireAllClients('lightHit',e.pos,'lightRing')end
+      if(e.pos-from-delta*t).Magnitude<=3.3 then hits[e]=true;deps.damage(e,A.Damage(c.source,"lightRing",(18+c.level*8)*c.multiplier,e,c.returning),c.source);deps.effect:FireAllClients('lightHit',e.pos,'lightRing')end
      end end
      if delta.Magnitude>.001 then c.anchor.CFrame=CFrame.lookAt(to,to+delta.Unit)end
      if not c.returning and(wall or c.distance>=38-.001)then c.returning=true;c.returnStart=to;c.returnAge=0;c.returnDuration=math.max(.1,(to-root.Position-Vector3.new(0,.8,0)).Magnitude/40);c.anchor:SetAttribute('Returning',true)end
@@ -1051,6 +1109,7 @@ end
 -- Source: src/server/combat/SkyLances.luau
 addModule(modules,{"combat","SkyLances"},[====[
 -- Narrow falling lances: server-time flight and one hit per enemy per lance.
+local A=require(script.Parent.Parent.flow.Augments)
 return function(deps)
  local casts={};local nextId=0
  local offsets={Vector3.zero,Vector3.new(5,0,0),Vector3.new(0,0,5),Vector3.new(-5,0,0),Vector3.new(0,0,-5)}
@@ -1071,13 +1130,13 @@ return function(deps)
       local delta=tip-lance.last;local length=delta:Dot(delta)
       for _,e in ipairs(deps.enemies)do if e.hp>0 and not lance.hits[e] then
        local t=length>.0001 and math.clamp((e.pos-lance.last):Dot(delta)/length,0,1)or 0
-       if (e.pos-lance.last-delta*t).Magnitude<=3.3 then lance.hits[e]=true;deps.damage(e,25+c.level*8,s)end
+       if (e.pos-lance.last-delta*t).Magnitude<=3.3 then lance.hits[e]=true;deps.damage(e,A.Damage(s,"skyLances",25+c.level*8,e),s)end
       end end
       if u>=1 then lance.done=true;deps.effect:FireAllClients('skyLanceHit',lance.point,3.3)end
      end
      lance.last=tip
     end
-    if c.time>=2.65 then c.anchor:Destroy();table.remove(casts,i)end
+    if c.time>=c.duration then c.anchor:Destroy();table.remove(casts,i)end
    end
   end
   local level=s.skyLances or 0;if level<=0 then return end
@@ -1099,10 +1158,12 @@ return function(deps)
   local ray=RaycastParams.new();ray.FilterType=Enum.RaycastFilterType.Exclude;ray.FilterDescendantsInstances={deps.world,s.player.Character};ray.RespectCanCollide=true
   if workspace:Raycast(point+Vector3.new(0,3,0),Vector3.new(0,55,0),ray)then s.skyLancesClock=1;return end
   nextId+=1;local a=Instance.new('Part');a.Name='SkyLanceCast_'..nextId;a.Size=Vector3.one*.1;a.Transparency=1;a.Anchored=true;a.CanCollide=false;a.CanQuery=false;a.CanTouch=false;a.Position=point
-  a:SetAttribute('Level',level);a:SetAttribute('Elapsed',0);a:SetAttribute('Duration',2.65);a:SetAttribute('Radius',8.3);a.Parent=deps.world
-  local c={source=s,anchor=a,time=0,level=level,lances={}}
-  for _,offset in ipairs(offsets)do local p=point+offset;table.insert(c.lances,{point=p,last=p+Vector3.new(0,44,0),hits={}})end
-  table.insert(casts,c);s.skyLancesClock=11-level*.4
+  local count=A.Has(s,'skyLances_rain')and 7 or 5;local duration=2.65+(count-5)*.16
+  a:SetAttribute('Count',count);a:SetAttribute('Level',level);a:SetAttribute('Elapsed',0);a:SetAttribute('Duration',duration);a:SetAttribute('Radius',8.3);a.Parent=deps.world
+  local c={source=s,anchor=a,time=0,level=level,lances={},duration=duration}
+  local positions=table.clone(offsets);if count==7 then table.insert(positions,Vector3.new(3.5,0,3.5));table.insert(positions,Vector3.new(-3.5,0,-3.5))end
+  for _,offset in ipairs(positions)do local p=point+offset;table.insert(c.lances,{point=p,last=p+Vector3.new(0,44,0),hits={}})end
+  table.insert(casts,c);s.skyLancesClock=A.Cooldown(s,11-level*.4)
   deps.effect:FireAllClients('areaCast',a.Name,'skyLances')
  end
  return {Step=step,Clear=clear}
@@ -1116,6 +1177,148 @@ local profiles={
 }
 local function get(id)return profiles[id]or profiles.starlightWand end
 return {Get=get,Default='starlightWand'}
+]====])
+-- Source: src/server/flow/Augments.luau
+addModule(modules,{"flow","Augments"},[====[
+-- Pure server-owned catalog, offer lottery and bounded stat helpers.
+local A = {}
+local definitions = {
+ {id="ice_twin",spell="ice",rarity="rare",name="쌍빙창",desc="얼음창을 2발 발사. 다른 적을 우선하고 각 발은 피해 75%."},
+ {id="ice_shatter",spell="ice",rarity="epic",name="빙쇄",desc="얼음창 적중 시 반경 5에 50% 파편 피해와 짧은 빙결."},
+ {id="lightning_fork",spell="lightning",rarity="rare",name="갈래 번개",desc="연쇄 번개의 최대 타깃 +2. 같은 적은 한 번만 타격."},
+ {id="lightning_frozen",spell="lightning",rarity="epic",name="빙결 전도",desc="빙결 또는 둔화 중인 적에게 연쇄 번개 피해 +60%.",requiresAny={"ice","frost"}},
+ {id="meteor_wide",spell="meteor",rarity="rare",name="거대 운석",desc="메테오 폭발 반경 +35%. 예고와 폭발도 함께 확대."},
+ {id="meteor_echo",spell="meteor",rarity="epic",name="운석의 여진",desc="메테오 착탄 0.65초 후 같은 지점에 50% 피해의 후속 폭발."},
+ {id="blades_volley",spell="blades",rarity="rare",name="칠성 결정",desc="충전되는 비전 결정 5개 → 7개. 순서대로 발사."},
+ {id="blades_pierce",spell="blades",rarity="epic",name="관통 결정",desc="각 결정이 적을 한 번 더 관통. 같은 적 재타격 없음."},
+ {id="frost_wide",spell="frost",rarity="rare",name="광역 한파",desc="서리 폭발 탐지·피해·빙결 반경 +30%."},
+ {id="frost_echo",spell="frost",rarity="epic",name="이중 서리",desc="서리 폭발 0.6초 후 현재 위치에서 50% 피해의 추가 냉기 파동."},
+ {id="ward_reservoir",spell="ward",rarity="rare",name="깊은 결계",desc="수호 결계 흡수량 +50%, 지속시간 5초 → 7초."},
+ {id="ward_pulse",spell="ward",rarity="epic",name="결계 해방",desc="결계 소진·만료 시 반경 8에 최초 흡수량의 75% 피해. 취소 시 발동 안 함."},
+ {id="missile_salvo",spell="missile",rarity="rare",name="추적 탄막",desc="추적 마탄 시전마다 탄환 +2. 각 탄환은 한 대상만 타격."},
+ {id="missile_hunter",spell="missile",rarity="epic",name="거수 사냥꾼",desc="추적 마탄이 정예·필드보스·드래곤에게 피해 +50%."},
+ {id="skyLances_rain",spell="skyLances",rarity="rare",name="칠성 창우",desc="천공의 창 5자루 → 7자루. 추가 두 창은 대각선에 낙하."},
+ {id="skyLances_execute",spell="skyLances",rarity="epic",name="천공의 심판",desc="체력 50% 이하 적에게 천공의 창 피해 +50%."},
+ {id="lightRing_twin",spell="lightRing",rarity="rare",name="쌍월",desc="광륜을 좌우 12도로 2개 발사. 각각 기존 피해의 70%."},
+ {id="lightRing_return",spell="lightRing",rarity="epic",name="귀환의 칼날",desc="돌아오는 광륜 피해 +75%. 출발·귀환 각각 적당 1회."},
+ {id="fire_blast",active="fire",rarity="rare",name="작열 화염탄",desc="Q 화염탄 폭발 반경 5 → 7. 착탄 범위가 화면에 표시됨."},
+ {id="thunder_chain",active="thunder",rarity="epic",name="뇌창 전도",desc="Q 뇌창 적중 시 근처 최대 2명에 50% 전류. 시전당 추가 타격 2회 제한."},
+ {id="aether_execute",active="aetherLance",rarity="rare",name="성운 처형",desc="체력 50% 이하 적에게 Q 성운창 피해 +50%."},
+ {id="iceRush_wide",active="iceRush",rarity="rare",name="빙하 대로",desc="Q 빙하 쇄도 폭 +50%. 기둥 연출과 판정 함께 확대."},
+ {id="quick_cast",rarity="common",name="신속 시전",desc="자동 마법 재사용 주기 -8%p. 최대 3회, Q·골렘·비행 시간 제외.",max=3},
+ {id="active_focus",rarity="common",name="집중된 주문",desc="Q 재사용 주기 -15%p. 최대 2회, 7초 → 최저 4.9초.",max=2},
+ {id="lucky_charm",rarity="common",name="행운의 부적",desc="행운 +20. 다음 무작위 카드의 희귀·영웅 등급 가중치 증가.",max=3},
+}
+local byId={}
+for _,d in ipairs(definitions) do byId[d.id]=d end
+A.Definitions=definitions
+A.Labels={ice="빙결 얼음창",lightning="연쇄 번개",meteor="메테오",blades="비전 결정",skyLances="천공의 창",frost="서리 폭발",missile="추적 마탄",ward="수호 결계",lightRing="성운 광륜",golem="골렘"}
+A.SpellOrder={"ice","lightning","meteor","blades","skyLances","frost","missile","ward","lightRing","golem"}
+local descriptions={ice="피해 +8 · 빙결 +0.1초 · 둔화 +0.4초",lightning="피해 +7 · 연쇄 타깃 +1",meteor="피해 +22 · 반경 +1 · 주기 -0.3초",blades="결정 피해 +4 · 재충전 -0.35초",skyLances="창 피해 +8 · 주기 -0.4초",frost="피해 +8 · 반경 +1 · 빙결 +0.2초",missile="피해 +7 · 짝수 단계에 탄환 +1",ward="흡수량 +12 · 주기 -0.3초",lightRing="피해 +8 · 주기 -0.25초",golem="내려찍기·강타 피해와 범위 증가"}
+function A.Count(s,id) return (s.augments and s.augments[id]) or 0 end
+function A.Has(s,id) return A.Count(s,id)>0 end
+function A.Luck(s) return math.min(60,A.Count(s,"lucky_charm")*20) end
+function A.Cooldown(s,base) return base*(1-.08*math.min(3,A.Count(s,"quick_cast"))) end
+function A.ActiveCooldown(s) return 7*(1-.15*math.min(2,A.Count(s,"active_focus"))) end
+function A.Damage(s,kind,base,e,returning)
+ if kind=="lightning" and A.Has(s,"lightning_frozen") and ((e.frozen or 0)>0 or (e.slow or 0)>0)then base*=1.6 end
+ if kind=="missile" and A.Has(s,"missile_hunter") and (e.elite or e.isBoss or e.isFieldBoss)then base*=1.5 end
+ if ((kind=="skyLances" and A.Has(s,"skyLances_execute"))or(kind=="aetherLance"and A.Has(s,"aether_execute")))and e.maxHp and e.hp<=e.maxHp*.5 then base*=1.5 end
+ if kind=="lightRing"and returning and A.Has(s,"lightRing_return")then base*=1.75 end
+ return base
+end
+function A.Weights(s)
+ local luck=A.Luck(s)
+ return {common=70-.25*luck,rare=25+.2*luck,epic=5+.05*luck}
+end
+function A.Eligible(s,d)
+ if A.Count(s,d.id)>=(d.max or 1) then return false end
+ if d.spell and ((s[d.spell]or 0)<(d.rarity=="epic" and 2 or 1) or (s.loadout and not table.find(s.loadout,d.spell))) then return false end
+ if d.active and (s.activeSkill or "fire")~=d.active then return false end
+ if d.requiresAny then
+  local found=false
+  for _,id in ipairs(d.requiresAny)do if (s[id]or 0)>0 and (not s.loadout or table.find(s.loadout,id))then found=true end end
+  if not found then return false end
+ end
+ return true
+end
+local function item(d,s)
+ return {id="aug_"..d.id,title=d.name,desc=d.desc,tag=d.active and "Q 전용" or (d.spell and A.Labels[d.spell] or "공통 증강"),rarity=d.rarity,level=A.Count(s,d.id)+1,max=d.max or 1,kind="augment"}
+end
+function A.Pool(s)
+ local levels,pool={},{}
+ for _,id in ipairs(A.SpellOrder)do
+  local level=s[id]or 0
+  if level>0 and level<5 and (id=="golem" or not s.loadout or table.find(s.loadout,id))then
+   table.insert(levels,{id=id,title=A.Labels[id].." 강화",desc=descriptions[id],tag="단계 성장",rarity="common",level=level+1,kind="level"})
+  end
+ end
+ for _,d in ipairs(definitions)do if A.Eligible(s,d)then table.insert(pool,item(d,s))end end
+ for _,d in ipairs({
+  {id="vitality",title="생명의 축복",desc="최대 체력 +15 · 체력 30 회복"},
+  {id="agility",title="바람의 발걸음",desc="이동 속도 +2 · 최대 3회",max=3},
+  {id="magnet",title="경험치 자석",desc="수집 반경 +3 · 최대 3회",max=3},
+ })do if not d.max or (s[d.id]or 0)<d.max then
+  table.insert(pool,{id=d.id,title=d.title,desc=d.desc,tag="생존·수집",rarity="common",level=(s[d.id]or 0)+1,kind="utility"})
+ end end
+ return levels,pool
+end
+local function probabilities(pool,weights)
+ local available,total={},0
+ for _,v in ipairs(pool)do available[v.rarity]=true end
+ for tier in pairs(available)do total+=weights[tier]end
+ local p={common=0,rare=0,epic=0}
+ for tier in pairs(available)do p[tier]=weights[tier]/total*100 end
+ return p
+end
+function A.Choices(s,rng)
+ local levels,pool=A.Pool(s)
+ local result={}
+ -- One level card is guaranteed while an equipped spell/summon can still grow.
+ if #levels>0 then table.insert(result,table.remove(levels,rng:NextInteger(1,#levels)))end
+ for _,v in ipairs(levels)do table.insert(pool,v)end
+ local weights=A.Weights(s)
+ local firstOdds=probabilities(pool,weights)
+ while #result<3 and #pool>0 do
+  local p=probabilities(pool,weights)
+  local roll=rng:NextNumber()*100
+  local tier,cumulative="common",0
+  -- Also handle an inclusive RNG upper endpoint without selecting an empty tier.
+  for _,candidate in ipairs({"common","rare","epic"})do
+   if p[candidate]>0 then tier=candidate;cumulative+=p[candidate];if roll<cumulative then break end end
+  end
+  local eligible={}
+  for i,v in ipairs(pool)do if v.rarity==tier then table.insert(eligible,i)end end
+  local chosen=eligible[rng:NextInteger(1,#eligible)]
+  table.insert(result,table.remove(pool,chosen))
+ end
+ -- Three distinct bounded choices remain even after every upgrade is exhausted.
+ for _,d in ipairs({{id="recovery",title="긴급 회복",desc="최대 체력의 35% 회복"},{id="overheal",title="완전 회복",desc="체력을 모두 회복"}})do
+  if #result>=3 then break end
+  table.insert(result,{id=d.id,title=d.title,desc=d.desc,tag="성장 완료 보충",rarity="common",level=1,kind="utility"})
+ end
+ return result,firstOdds
+end
+function A.Apply(s,id)
+ local key=string.match(id,"^aug_(.+)$")
+ if key then
+  local d=byId[key];if not d or not A.Eligible(s,d)then return false end
+  s.augments=s.augments or {};s.augments[key]=A.Count(s,key)+1
+  return true
+ end
+ if A.Labels[id]then
+  if (s[id]or 0)<=0 or s[id]>=5 or (id~="golem" and s.loadout and not table.find(s.loadout,id))then return false end
+ elseif id=="agility" or id=="magnet" then if (s[id]or 0)>=3 then return false end
+ elseif id~="vitality" and id~="recovery" and id~="overheal"then return false end
+ if id~="recovery" and id~="overheal"then s[id]=(s[id]or 0)+1 end
+ return true
+end
+function A.Summary(s)
+ local result={}
+ for _,d in ipairs(definitions)do if A.Count(s,d.id)>0 then table.insert(result,{name=d.name,count=A.Count(s,d.id),desc=d.desc,rarity=d.rarity})end end
+ return result
+end
+return A
 ]====])
 -- Source: src/server/flow/Loadout.luau
 addModule(modules,{"flow","Loadout"},[====[
@@ -1163,44 +1366,19 @@ return function(deps)
 	local finishDash, update, clock = deps.finishDash, deps.update, deps.clock
 	local spellOptions=deps.spellOptions
 	local function need(s) return 5+(s.level-1)*3 end
-	local labels={fire="화염탄",lightning="연쇄 번개",ice="빙결 얼음창",golem="골렘",meteor="메테오",blades="비전 결정",frost="서리 폭발",ward="수호 결계",missile="추적 마탄",skyLances="천공의 창",lightRing="성운 광륜"}
+	local augments=deps.augments or require(script.Parent.Augments)
 	local function choices(s)
-		local pool={}
-		for _,id in ipairs({"lightning","ice","golem","meteor","blades","frost","ward","missile","skyLances","lightRing"}) do
-			local lv=s[id] or 0
-			if lv<5 and (not s.loadout or id=="golem" or table.find(s.loadout,id)) then
-				local description
-				if id=="lightning" then description=lv==0 and "주변 적을 연결하는 번개를 자동 발사" or "피해량과 연쇄 타격 수 증가"
-				elseif id=="meteor" then description=lv==0 and "밀집한 적을 향해 운석 낙하 · 넓은 폭발" or "운석 피해 +18 · 범위 증가 · 대기시간 감소"
-				elseif id=="blades" then description="다섯 결정 피해 증가 · 재충전 시간 감소"
-				elseif id=="skyLances" then description="낙하 창 피해 증가 · 재사용 대기시간 감소"
-				elseif id=="lightRing" then description="왕복 관통 피해 증가 · 재사용 대기시간 감소"
-				elseif id=="frost" then description="냉기 피해·범위·빙결 시간 증가"
-				elseif id=="missile" then description="단일 대상 마탄 피해 증가 · 강화 시 발사 수 증가"
-				elseif id=="ward" then description="보호막 흡수량 증가 · 재사용 시간 감소"
-				elseif id=="ice" then description=lv==0 and "얼음창 자동 발사 · 적을 밀쳐내고 빙결" or "피해량과 빙결·둔화 지속시간 증가"
-				else
-					description=lv==2 and "대지 강타에 바위 파편 추가 · 피해와 범위 증가" or (lv==4 and "대지 강타를 두 번 연속 사용 · 피해와 범위 증가" or "내려찍기와 대지 강타의 피해·범위 증가")
-				end
-				table.insert(pool,{id=id,title=labels[id]..(lv==0 and " 배우기" or " 강화"),desc=description,tag=lv==0 and "새로운 마법" or (id=="golem" and "소환수 강화" or "마법 강화"),level=lv+1})
-			end
-		end
-		local fallback={
-			{id="vitality",title="생명의 축복",desc="최대 체력 +15 · 체력 30 회복",tag="생존 강화",level=s.vitality+1},
-			{id="agility",title="바람의 발걸음",desc="이동 속도 +2",tag="생존 강화",level=s.agility+1},
-			{id="magnet",title="경험치 자석",desc="경험치를 끌어오는 범위 +3",tag="수집 강화",level=s.magnet+1},
-		}
-		for _,v in ipairs(fallback) do if #pool>=3 then break end; table.insert(pool,v) end
-		for i=#pool,2,-1 do local j=rng:NextInteger(1,i); pool[i],pool[j]=pool[j],pool[i] end
-		local result={}; for i=1,math.min(3,#pool) do result[i]=pool[i] end
-		return result
-	end
+        s.offerRevision=(s.offerRevision or 0)+1
+        local offers,odds=augments.Choices(s,rng)
+        s.offerOdds=odds
+        return offers
+    end
 	local function sync(s)
 		local _,h=rootOf(s)
         local remaining=clock.phase=="boss" and math.floor(clock.bossElapsed) or clock.roundLength-math.floor(clock.elapsed)
         local b=clock.boss;local f=clock.fieldBoss
 		update:FireClient(s.player,{time=math.max(0,remaining),phase=clock.phase,lobby=s.lobby==true,queued=s.queued==true,bossTestQueued=s.bossTestQueued==true,bossTest=s.bossTest==true,fieldBossTestQueued=s.fieldBossTestQueued==true,fieldBossTest=s.fieldBossTest==true,fieldBoss=f and {name=f.name,hp=math.max(0,f.hp),maxHp=f.maxHp,action=f.action}or nil,loadout=s.loadout,spellOptions=s.lobby and spellOptions or nil,activeOptions=s.lobby and deps.activeOptions or nil,activeSkill=s.activeSkill or "fire",activeName=s.activeName or "화염탄",lobbyMessage=s.lobbyMessage,shield=s.shield or 0,boss=b and {name=b.name,hp=math.max(0,b.hp),maxHp=b.maxHp,stage=b.phase,airborne=b.airborne} or nil,level=s.level,xp=s.xp,need=need(s),hp=h and math.ceil(h.Health) or 0,maxHp=h and h.MaxHealth or 100,
-			kills=s.kills,fire=s.fire,lightning=s.lightning,ice=s.ice,meteor=s.meteor or 0,blades=s.blades or 0,frost=s.frost or 0,ward=s.ward or 0,missile=s.missile or 0,skyLances=s.skyLances or 0,lightRing=s.lightRing or 0,golem=s.golem,offers=s.offers,over=s.over,result=s.result,cooldown=math.max(0,math.ceil(s.cooldown)),dashCooldown=math.ceil((s.dashCooldown or 0)*10)/10,golemCooldown=math.max(0,math.ceil(s.petHeavyCooldown or 0)),paused=paused()})
+			kills=s.kills,fire=s.fire,lightning=s.lightning,ice=s.ice,meteor=s.meteor or 0,blades=s.blades or 0,frost=s.frost or 0,ward=s.ward or 0,missile=s.missile or 0,skyLances=s.skyLances or 0,lightRing=s.lightRing or 0,golem=s.golem,offers=s.offers,offerRevision=s.offerRevision,luck=augments.Luck(s),offerOdds=s.offerOdds,augmentWeights=augments.Weights(s),augments=augments.Summary(s),rerolls=s.rerolls==nil and 2 or s.rerolls,over=s.over,result=s.result,cooldown=math.max(0,math.ceil(s.cooldown)),dashCooldown=math.ceil((s.dashCooldown or 0)*10)/10,golemCooldown=math.max(0,math.ceil(s.petHeavyCooldown or 0)),paused=paused()})
 	end
 	local function levelCheck(s)
 		if s.over or s.offers or s.lobby then return end
@@ -1217,14 +1395,17 @@ return function(deps)
 		p.CFrame*=CFrame.Angles(0,math.pi/4,math.pi/4)
 		table.insert(gems,{part=p,pos=p.Position})
 	end
-	local function choose(s,id)
+	local function choose(s,id,revision)
 		if s.over or s.lobby then return end
-		if not s.offers or type(id)~="string" then return end
+		if not s.offers or type(id)~="string" or revision~=s.offerRevision then return end
 		local valid=false; for _,v in ipairs(s.offers) do if v.id==id then valid=true; break end end
 		if not valid then return end
+		if not augments.Apply(s,id) then return end
 		if id=="vitality" then
-			s.vitality+=1; local _,h=rootOf(s); if h then h.MaxHealth+=15; h.Health=math.min(h.MaxHealth,h.Health+30) end
-		else s[id]=(s[id] or 0)+1 end
+			 local _,h=rootOf(s); if h then h.MaxHealth+=15; h.Health=math.min(h.MaxHealth,h.Health+30) end
+		elseif id=="recovery" or id=="overheal" then
+            local _,h=rootOf(s);if h then h.Health=math.min(h.MaxHealth,h.Health+h.MaxHealth*(id=="recovery" and .35 or 1))end
+        end
 		s.offers=nil
 		local _,h=rootOf(s); if h then h.WalkSpeed=22+s.agility*2 end
 		levelCheck(s); sync(s)
@@ -1267,6 +1448,12 @@ return function(deps)
     end
 
 	return {
+        Reroll = function(s,revision)
+            if s.over or s.lobby or not s.offers or revision~=s.offerRevision then return end
+            local remaining=s.rerolls==nil and 2 or s.rerolls
+            if remaining<=0 then return end
+            s.rerolls=remaining-1;s.offers=choices(s);sync(s)
+        end,
         FieldBossReward = function(s)
             if s.fieldBossRewarded or s.bossTest or s.over or s.lobby then return end
             local _,h=rootOf(s);if not h then return end
@@ -1307,6 +1494,7 @@ return function(deps)
 	end
 	local function addPlayer(player)
 		local s={player=player,level=1,xp=0,kills=0,fire=0,lightning=0,ice=0,meteor=0,blades=0,frost=0,ward=0,missile=0,skyLances=0,lightRing=0,weaponId="starlightWand",golem=1,vitality=0,agility=0,magnet=0,cooldown=0,fireClock=0,lightningClock=0,iceClock=0,golemClock=0,over=false}
+		s.augments={};s.rerolls=2;s.offerRevision=0
 		s.activeSkill=savedActive[player] or 'fire';s.activeName=loadouts.ActiveNames[s.activeSkill]
 		s.lobby=true;s.loadout=table.clone(saved[player] or loadouts.Defaults)
 		states[player]=s
@@ -2052,7 +2240,7 @@ return function(deps)
    local crest=Instance.new('Part');crest.Name='EliteCrown';crest.Shape=Enum.PartType.Ball;crest.Size=Vector3.new(.6,.6,.6);crest.Position=pos+Vector3.new(0,4.8,0);crest.Material=Enum.Material.Neon;crest.Color=Color3.fromRGB(255,215,111);crest.Anchored=true;crest.CanCollide=false;crest.CanTouch=false;crest.CanQuery=false;crest.Parent=m
   end
   m:SetAttribute('HP',hp)
-  table.insert(enemies,{model=m,pos=pos,hp=hp,kind=kind,elite=elite,speed=(9+math.min(4.8,elapsed/36))*speedScale,hitClock=0,slow=0,castClock=rng:NextNumber(1,3),seed=nextEnemy})
+  table.insert(enemies,{model=m,pos=pos,hp=hp,maxHp=hp,kind=kind,elite=elite,speed=(9+math.min(4.8,elapsed/36))*speedScale,hitClock=0,slow=0,castClock=rng:NextNumber(1,3),seed=nextEnemy})
  end
  local function spawn(dt,alive,elapsed)
   if elapsed>=roundLength or(deps.clock and deps.clock.phase~='survival')then return end
@@ -2251,7 +2439,7 @@ return function(deps)
   local model=Instance.new('Model');model.Name=kind..'Charge';model.Parent=fx
   local parts={};for i=1,24 do parts[i]=part(model,'PortalRune',Vector3.one*.1,CFrame.new(),cyan)end
   local orb=part(model,'GatheringCore',Vector3.one*.6,anchor.CFrame,white,Enum.PartType.Ball)
-  local length=anchor:GetAttribute('Range')or 34;local width=kind=='thunder' and 2.4 or 6
+  local length=anchor:GetAttribute('Range')or 34;local width=anchor:GetAttribute('Width')or(kind=='thunder' and 2.4 or 6)
   for _,side in ipairs({-1,1})do
    local a=anchor.CFrame:PointToWorldSpace(Vector3.new(side*width,-2,0));local b=a+anchor.CFrame.LookVector*length
    local p=line(model,a,b,.1,cyan);p.Transparency=.55
@@ -2472,7 +2660,7 @@ return function(deps)
     local trail=Instance.new('Trail');trail.Attachment0=a;trail.Attachment1=b;trail.Lifetime=.7;trail.Color=ColorSequence.new(Color3.fromRGB(255,241,180),Color3.fromRGB(255,92,33));trail.Transparency=NumberSequence.new(.25,1);trail.WidthScale=NumberSequence.new(1,0);trail.LightEmission=1;trail.Parent=core
    end
   elseif kind=='blades' then
-   for i=1,5 do
+   for i=1,(anchor:GetAttribute('Count')or 5)do
     local crystal=Instance.new('Model');crystal.Name='OrbitLight';crystal.Parent=model
     local pivot=part(crystal,'Pivot',mint,Vector3.one*.1);pivot.Transparency=1;crystal.PrimaryPart=pivot
     part(crystal,'LightCore',Color3.fromRGB(222,253,255),Vector3.one*.55)
@@ -2523,7 +2711,7 @@ return function(deps)
      line(p,core.CFrame:PointToWorldSpace(p1),core.CFrame:PointToWorldSpace(p2),.18)
     end
    elseif kind=='blades' then
-    local count=5;local fired=anchor:GetAttribute('Fired')or 0
+    local count=anchor:GetAttribute('Count')or 5;local fired=anchor:GetAttribute('Fired')or 0
     for i,crystal in ipairs(pieces)do
      local a=i/(count+1)*math.pi-math.pi/2
      crystal:PivotTo(anchor.CFrame*CFrame.new(math.sin(a)*4.2,3.2+math.cos(a)*1.7+math.sin(t*2+i)*.08,1.8)*CFrame.Angles(0,t*.5+i,0))
@@ -2934,7 +3122,9 @@ return function(deps)
 		elseif kind=="activeCast" then activeArt.Charge(a,b)
 		elseif kind=="activeStrike" then activeArt.Strike(a,b,c)
 		elseif kind=="areaCast" then areaArt.Cast(a,b)
-		elseif kind=="meteorHit" then art.Rupture(a,b,false);areaArt.MeteorImpact(a,b)
+		elseif kind=="augmentPulse" then art.Rupture(a,b,false)
+        elseif kind=="augmentFireHit" then art.Rupture(a,b,false)
+        elseif kind=="meteorHit" then art.Rupture(a,b,false);areaArt.MeteorImpact(a,b)
 		elseif kind=="frostHit" then areaArt.FrostImpact(a,b)
 		elseif kind=="wardHit" then areaArt.Burst(a,b and 5 or 2.5,Color3.fromRGB(255,222,152))
 		elseif kind=="iceCast" then iceProjectile(a,b,c)
@@ -3902,6 +4092,7 @@ return function(deps)
    for j=-1,1 do part(seal,'SealRune',Vector3.new(.12,.08,.35),frame*CFrame.new(0,0,j*.25)*CFrame.Angles(0,j*.6,0),gold)end
   end
   local lances={};local offsets={Vector3.zero,Vector3.new(5,0,0),Vector3.new(0,0,5),Vector3.new(-5,0,0),Vector3.new(0,0,-5)}
+  if(anchor:GetAttribute('Count')or 5)==7 then table.insert(offsets,Vector3.new(3.5,0,3.5));table.insert(offsets,Vector3.new(-3.5,0,-3.5))end
   for i,offset in ipairs(offsets)do
    local m=Instance.new('Model');m.Name='FallingMagicLance';m.Parent=model
    local p=part(m,'Pivot',Vector3.one*.1,CFrame.identity,white);p.Transparency=1;m.PrimaryPart=p
@@ -4129,7 +4320,7 @@ return function(deps)
 	make("UISizeConstraint",encounter,{MaxSize=Vector2.new(320,26)});round(encounter,8)
 	local title=label(encounter,"SURVIVAL / 드래곤 등장까지",UDim2.new(1,-76,1,0),UDim2.fromOffset(10,0),Enum.Font.GothamBold,palette.mint);title.TextSize=11;title.TextXAlignment=Enum.TextXAlignment.Left
 	local timer=label(encounter,"02:00",UDim2.fromOffset(60,26),UDim2.new(1,-70,0,0),Enum.Font.GothamBold);timer.TextSize=16;timer.TextXAlignment=Enum.TextXAlignment.Right
-	local top=make("Frame",gui,{Name="PlayerPanel",Size=UDim2.fromOffset(340,116),Position=UDim2.new(0,12,1,-12),AnchorPoint=Vector2.new(0,1),BackgroundColor3=palette.bg,BackgroundTransparency=.12})
+	local top=make("Frame",gui,{Name="PlayerPanel",Size=UDim2.fromOffset(340,146),Position=UDim2.new(0,12,1,-12),AnchorPoint=Vector2.new(0,1),BackgroundColor3=palette.bg,BackgroundTransparency=.12})
 	round(top,10);stroke(top)
 	local info=label(top,"Lv.1  체력 150/150  처치 0",UDim2.new(1,-24,0,18),UDim2.fromOffset(12,6),Enum.Font.GothamBold,palette.text);info.TextSize=12;info.TextXAlignment=Enum.TextXAlignment.Left
 	local healthBack=make("Frame",top,{Size=UDim2.new(1,-24,0,6),Position=UDim2.fromOffset(12,30),BackgroundColor3=Color3.fromRGB(49,48,59),BorderSizePixel=0});round(healthBack,3)
@@ -4159,26 +4350,41 @@ return function(deps)
  end)
 	local function layoutActions()
 		local width=workspace.CurrentCamera.ViewportSize.X
-		top.Size=UDim2.fromOffset(math.clamp(width-152,180,340),116)
+		top.Size=UDim2.fromOffset(math.clamp(width-152,180,340),146)
 		info.TextSize=width<500 and 10 or 12
 		skills.TextSize=width<500 and 10 or 11
 	end
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutActions);layoutActions()
-	local overlay=make("Frame",gui,{Name="ChoiceOverlay",Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(6,12,19),BackgroundTransparency=.18,Visible=false,ZIndex=10})
-	local modal=make("Frame",overlay,{Size=UDim2.new(.88,0,.82,0),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,ZIndex=11}); round(modal,18); stroke(modal,palette.mint); make("UISizeConstraint",modal,{MaxSize=Vector2.new(570,480)})
-	local modalTitle=label(modal,"LEVEL UP",UDim2.new(1,-32,0,32),UDim2.new(0,16,0,14),Enum.Font.GothamBold,palette.mint); modalTitle.TextSize=25; modalTitle.ZIndex=12
+	local rarityColors={common=Color3.fromRGB(190,214,222),rare=Color3.fromRGB(113,194,255),epic=Color3.fromRGB(219,154,255)}
+    local rarityNames={common="일반",rare="희귀",epic="영웅"}
+    local buildButton=make("TextButton",top,{Name="AugmentSummary",Size=UDim2.new(1,-24,0,25),Position=UDim2.fromOffset(12,116),BackgroundColor3=palette.card,TextColor3=palette.mint,Text="행운 +0 · 증강 0 · 보기",TextSize=12,Font=Enum.Font.GothamBold});round(buildButton,6)
+    local build=make("Frame",gui,{Name="AugmentBuild",Size=UDim2.new(.9,0,.82,0),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,Visible=false,ZIndex=40});round(build,14);make("UISizeConstraint",build,{MaxSize=Vector2.new(620,570)})
+    local buildTitle=label(build,"이번 판 증강",UDim2.new(1,-80,0,40),UDim2.fromOffset(16,8),Enum.Font.GothamBold,palette.mint);buildTitle.ZIndex=41
+    local close=make("TextButton",build,{Size=UDim2.fromOffset(52,32),Position=UDim2.new(1,-66,0,10),BackgroundColor3=palette.card,TextColor3=palette.text,Text="닫기",TextSize=13,ZIndex=41});round(close,6)
+    local buildScroll=make("ScrollingFrame",build,{Name="BuildList",Size=UDim2.new(1,-32,1,-64),Position=UDim2.fromOffset(16,52),BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,ZIndex=41})
+    local buildText=label(buildScroll,"",UDim2.new(1,-12,0,0),UDim2.new(),nil,palette.text);buildText.AutomaticSize=Enum.AutomaticSize.Y;buildText.TextSize=14;buildText.TextXAlignment=Enum.TextXAlignment.Left;buildText.TextYAlignment=Enum.TextYAlignment.Top;buildText.ZIndex=42
+    buildButton.Activated:Connect(function()build.Visible=not build.Visible end);close.Activated:Connect(function()build.Visible=false end)
+    local overlay=make("Frame",gui,{Name="ChoiceOverlay",Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(6,12,19),BackgroundTransparency=.18,Visible=false,ZIndex=10})
+	local modal=make("Frame",overlay,{Size=UDim2.new(.88,0,.82,0),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,ZIndex=11}); round(modal,18); stroke(modal,palette.mint); make("UISizeConstraint",modal,{MaxSize=Vector2.new(650,620)})
+	local modalTitle=label(modal,"증강 선택",UDim2.new(1,-32,0,32),UDim2.new(0,16,0,14),Enum.Font.GothamBold,palette.mint); modalTitle.TextSize=25; modalTitle.ZIndex=12
 	local modalHint=label(modal,"이번 성장을 선택하세요",UDim2.new(1,-32,0,24),UDim2.new(0,16,0,48),nil,palette.muted); modalHint.TextSize=14; modalHint.ZIndex=12
-	local cards=make("Frame",modal,{Size=UDim2.new(1,-32,1,-94),Position=UDim2.new(0,16,0,80),BackgroundTransparency=1,ZIndex=12})
+	local luckInfo=label(modal,"",UDim2.new(1,-32,0,38),UDim2.fromOffset(16,73),nil,palette.muted);luckInfo.Name="LuckInfo";luckInfo.TextSize=11;luckInfo.ZIndex=12
+    local cards=make("ScrollingFrame",modal,{Name="AugmentCards",Size=UDim2.new(1,-32,1,-176),Position=UDim2.new(0,16,0,116),BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,ZIndex=12})
+    local reroll=make("TextButton",modal,{Name="Reroll",Size=UDim2.new(.5,-22,0,36),Position=UDim2.new(0,16,1,-46),BackgroundColor3=palette.card,TextColor3=palette.mint,Font=Enum.Font.GothamBold,TextSize=13,Text="무료 새로고침 · 2회",ZIndex=13});round(reroll,8)
+    local inspect=make("TextButton",modal,{Name="InspectBuild",Size=UDim2.new(.5,-22,0,36),Position=UDim2.new(.5,6,1,-46),BackgroundColor3=palette.card,TextColor3=palette.text,Text="보유 증강·행운 설명",TextSize=13,ZIndex=13});round(inspect,8)
+    inspect.Activated:Connect(function()build.Visible=true end)
 	make("UIListLayout",cards,{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder})
 	local buttons={}
 	local waiting=false
+    local offerRevision=0
+    reroll.Activated:Connect(function()if not waiting and reroll.Active then waiting=true;net.Action:FireServer("reroll",offerRevision)end end)
 	for i=1,3 do
-		local b=make("TextButton",cards,{Name="Choice"..i,Size=UDim2.new(1,0,1/3,-7),BackgroundColor3=palette.card,Text="",LayoutOrder=i,ZIndex=13,AutoButtonColor=true}); round(b,12); stroke(b)
+		local b=make("TextButton",cards,{Name="Choice"..i,Size=UDim2.new(1,-8,0,112),BackgroundColor3=palette.card,Text="",LayoutOrder=i,ZIndex=13,AutoButtonColor=true}); round(b,12); stroke(b)
 		local tag=label(b,"마법 강화",UDim2.new(1,-28,.25,0),UDim2.new(0,14,0,4),Enum.Font.GothamBold,palette.mint); tag.TextSize=11; tag.TextXAlignment=Enum.TextXAlignment.Left; tag.ZIndex=14
 		local name=label(b,"화염탄 강화",UDim2.new(1,-28,.3,0),UDim2.new(0,14,.27,0),Enum.Font.GothamBold); name.TextSize=20; name.TextXAlignment=Enum.TextXAlignment.Left; name.ZIndex=14
 		local desc=label(b,"피해량 증가",UDim2.new(1,-28,.29,0),UDim2.new(0,14,.63,0),nil,palette.muted); desc.TextSize=13; desc.TextXAlignment=Enum.TextXAlignment.Left; desc.ZIndex=14
-		buttons[i]={button=b,tag=tag,name=name,desc=desc}
-		b.Activated:Connect(function() if b:GetAttribute("ChoiceId") and not waiting then waiting=true; net.Action:FireServer("choose",b:GetAttribute("ChoiceId")) end end)
+		buttons[i]={button=b,tag=tag,name=name,desc=desc,border=b:FindFirstChildOfClass("UIStroke")}
+		b.Activated:Connect(function() if b:GetAttribute("ChoiceId") and not waiting then waiting=true; net.Action:FireServer("choose",b:GetAttribute("ChoiceId"),offerRevision) end end)
 	end
 	local ending=make("Frame",gui,{Name="Ending",Size=UDim2.fromScale(1,1),BackgroundColor3=palette.bg,BackgroundTransparency=.08,Visible=false,ZIndex=20})
 	local resultTitle=label(ending,"생존 성공!",UDim2.new(.9,0,0,70),UDim2.fromScale(.5,.32),Enum.Font.GothamBold,palette.mint); resultTitle.AnchorPoint=Vector2.new(.5,.5); resultTitle.TextSize=38; resultTitle.ZIndex=21
@@ -4190,6 +4396,12 @@ return function(deps)
 	local lastChoice=""
 	net.State.OnClientEvent:Connect(function(s)
         returnButton.Visible=s.lobby~=true and s.over~=true
+        local augments=s.augments or {};local ranks=0;local descriptions={}
+        for _,a in ipairs(augments)do ranks+=a.count;table.insert(descriptions,string.format("[%s] %s ×%d\n%s",rarityNames[a.rarity]or"일반",a.name,a.count,a.desc))end
+        buildButton.Text=string.format("행운 +%d · 증강 %d · 보기",s.luck or 0,ranks)
+        local weights=s.augmentWeights or {common=70,rare=25,epic=5}
+        buildText.Text=string.format("행운 +%d / 최대 60\n일반 %.0f · 희귀 %.0f · 영웅 %.0f 등급 가중치\n강화 가능한 마법 1장은 보장. 나머지는 유효 등급 안에서 추첨합니다.\n해당 등급 후보가 없으면 남은 등급으로 확률을 재분배합니다.\n행운은 피해·아이템 드롭에 영향을 주지 않습니다. 매 판 초기화됩니다.\n\n",s.luck or 0,weights.common,weights.rare,weights.epic)..(#descriptions>0 and table.concat(descriptions,"\n\n")or"아직 선택한 증강이 없습니다.")
+        if s.lobby then build.Visible=false end
         if s.lobby then returning=false;returnButton.Text='도전 중단 · 로비'end
         deps.input.SetBasicBlocked(s.lobby==true or s.over==true or s.offers~=nil or s.paused==true)
         title.Text=s.phase=="boss" and "DRAGON / 시간 제한 없음" or "SURVIVAL / 드래곤 등장까지"
@@ -4222,15 +4434,19 @@ return function(deps)
 		ending.Visible=s.over==true; overlay.Visible=s.offers~=nil and not s.over
 		if s.offers then
 			local ids={}; for _,v in ipairs(s.offers) do table.insert(ids,v.id..v.level) end
-			local key=s.level..table.concat(ids)
+			local key=tostring(s.offerRevision or s.level)..table.concat(ids)
+            offerRevision=s.offerRevision or 0
 			if key~=lastChoice then waiting=false; lastChoice=key end
-			modalHint.Text=s.paused and "전투 일시 정지 · 하나를 선택하세요" or "선택하는 동안 보호됩니다 · 하나를 선택하세요"
+			local odds=s.offerOdds or {common=100,rare=0,epic=0}
+            luckInfo.Text=string.format("행운 +%d · 첫 무작위 칸: 일반 %.1f%% / 희귀 %.1f%% / 영웅 %.1f%%\n다음 칸은 선택된 카드 제외 후 재계산 · 단계 강화 1장 보장(가능 시)",s.luck or 0,odds.common,odds.rare,odds.epic)
+            reroll.Text=string.format("무료 새로고침 · %d회",s.rerolls or 0);reroll.Active=(s.rerolls or 0)>0;reroll.TextColor3=reroll.Active and palette.mint or palette.muted
+            modalHint.Text=s.paused and "전투 일시 정지 · 하나를 선택하세요" or "선택하는 동안 보호됩니다 · 하나를 선택하세요"
 			for i,v in ipairs(buttons) do
 				local offer=s.offers[i]; v.button.Visible=offer~=nil
-				if offer then v.button:SetAttribute("ChoiceId",offer.id); v.tag.Text=offer.tag.."  /  Lv."..offer.level; v.name.Text=offer.title; v.desc.Text=offer.desc end
+				if offer then v.button:SetAttribute("ChoiceId",offer.id); v.tag.Text=(rarityNames[offer.rarity]or"일반").." · "..offer.tag.."  /  "..offer.level..(offer.kind=="level"and"단계"or"회");v.tag.TextColor3=rarityColors[offer.rarity]or palette.mint;if v.border then v.border.Color=v.tag.TextColor3;v.border.Thickness=offer.rarity=="epic"and 2 or 1 end; v.name.Text=offer.title; v.desc.Text=offer.desc end
 			end
 		else waiting=false; lastChoice="" end
-		if s.over then resultTitle.Text=s.result=="victory" and "드래곤 격파!" or "다시 도전!"; resultInfo.Text=string.format("레벨 %d  ·  처치 %d\n이번에 완성한 조합으로 다시 도전해 보세요",s.level,s.kills) end
+		if s.over then resultTitle.Text=s.result=="victory" and "드래곤 격파!" or "다시 도전!"; resultInfo.Text=string.format("레벨 %d  ·  처치 %d  ·  증강 %d  ·  행운 +%d\n이번 판 증강은 로비 복귀 시 초기화됩니다.",s.level,s.kills,ranks,s.luck or 0) end
 	end)
 
 	return {

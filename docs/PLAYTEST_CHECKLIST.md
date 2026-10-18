@@ -35,6 +35,17 @@
 
 ## 재현 가능한 fixture
 
+### 증강과 행운
+
+- 카탈로그 25개: 자동9종×2, Q4종×1, 공통3. 장착/단계/빙결 조합 조건, 최대 횟수, 3장 중복 금지, 성장 카드 1장 보장.
+- 새로고침 2회 소진, 오래된 제안 번호·다른 카드·반복 선택 거부. 서버 `offerOdds`와 첫 무작위 칸 확률 표시 일치.
+- 행운 0/20/40/60, 후보 없는 영웅 등급 재분배, 피해/드롭 불변. 보유창 설명·로비 복귀 초기화.
+- 쌍빙창/파편, 추가 번개/빙결 보너스, 운석·서리 여진/취소, 결계 소진·만료/취소, 7결정·동일 프레임 2명 관통, 추가 마탄/정예 보너스, 7창/처형, 쌍월/귀환 피해, Q4종 범위·추가타·처형, 주기 하한.
+- 서버 fixture `tests/studio_augments.luau`, 기존 area/active/crystals/missiles/sky/light 회귀 및 `studio_field_reward`를 실행합니다. 판정 검사는 시각 품질 판정과 구분합니다.
+- 실제 로비 출발 → 경험치 획득 → 카드/재추첨 → 증강 적용 공격 → 보유창 → 로비 복귀 → 초기 상태 재출발. 실제 두 클라이언트와 저사양 부하는 별도 필수 검수입니다.
+
+### 기존 전투 회귀
+
 Server: studio_basic_attack, studio_light_spells, studio_active_spells, studio_lobby, studio_retreat. Client: studio_ward_follow, studio_glacial_art, studio_elemental_art. 기존 studio_area_spells / studio_homing_missiles / studio_boss_combat / studio_enemies도 변경 영역에 따라 실행합니다. fixture 실행은 본인 임시 객체만 만들고 제거해야 합니다.
 
 화염 파동 렌더러는 개선을 위한 비활성 코드로 남아 있으므로 elemental fixture에서만 직접 검사할 수 있습니다. 이 성공은 파동이 게임 선택지에 다시 추가됐다는 뜻이 아닙니다.

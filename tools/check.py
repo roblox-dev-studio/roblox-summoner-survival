@@ -43,6 +43,7 @@ def main():
     if failures:
         raise SystemExit("\n".join(failures))
     subprocess.run([str(tool_dir / ("luau" + suffix)), "tests/progression.spec.luau"], cwd=ROOT, check=True)
+    subprocess.run([str(tool_dir / ("luau" + suffix)), "tests/augments.spec.luau"], cwd=ROOT, check=True)
     print(f"PASS: {len(sources)} Luau files compile; no unexpected globals. Studio playtest still required.")
 
 
