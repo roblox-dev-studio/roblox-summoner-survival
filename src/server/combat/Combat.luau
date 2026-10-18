@@ -17,7 +17,7 @@ return function(deps)
 		effect:FireAllClients("hit",e.pos,amount)
 		if e.hp<=0 then
 			s.kills+=1
-			if not e.isBoss then drop(e.pos);if e.elite then drop(e.pos+Vector3.new(1,0,0));drop(e.pos-Vector3.new(1,0,0))end; e.model:Destroy() end
+			if not e.isBoss and not e.isFieldBoss then drop(e.pos);if e.elite then drop(e.pos+Vector3.new(1,0,0));drop(e.pos-Vector3.new(1,0,0))end; e.model:Destroy() end
 		end
 	end
 	areaSpells=require(script.Parent.AreaSpells)({world=world,enemies=enemies,effect=effect,damage=damage})
@@ -69,12 +69,12 @@ return function(deps)
 					if delta.Magnitude<=step+1 then
 						local target=shot.target;local pos=target.pos
 						local duration=.55+shot.level*.1
-						duration=target.isBoss and 0 or duration
+						duration=(target.isBoss or target.isFieldBoss) and 0 or duration
 						target.frozen=math.max(target.frozen or 0,duration)
 						target.slow=math.max(target.slow,2+shot.level*.4)
 						target.model:SetAttribute("Frozen",duration>0)
 						damage(target,10+shot.level*8,shot.source)
-						if target.hp>0 and not target.isBoss then
+						if target.hp>0 and not target.isBoss and not target.isFieldBoss then
 							local forward=shot.anchor.CFrame.LookVector
 							local flat=Vector3.new(forward.X,0,forward.Z)
 							if flat.Magnitude>.01 then target.knockback=flat.Unit*34;target.knockTime=.23 end
@@ -99,7 +99,7 @@ return function(deps)
 				damage(e,amount,s)
 				if e.hp>0 then
 					if slow then e.slow=math.max(e.slow,slow) end
-					if knock and knock>0 and not e.isBoss then
+					if knock and knock>0 and not e.isBoss and not e.isFieldBoss then
 						local dir=Vector3.new(e.pos.X-pos.X,0,e.pos.Z-pos.Z)
 						if dir.Magnitude>.01 then e.pos+=dir.Unit*knock end
 						local flat=Vector3.new(e.pos.X,0,e.pos.Z)
@@ -136,7 +136,7 @@ return function(deps)
 					if e.hp>0 and (e.pos-candidate.pos).Magnitude<radius then count+=1; total+=e.pos end
 				end
 				local emergency=danger>=3 and ownerDistance<12
-				if count>=3 or emergency or candidate.model:GetAttribute("IsBoss")==true then
+				if count>=3 or emergency or (candidate.model:GetAttribute("IsBoss")==true or candidate.isFieldBoss) then
 					local score=count*100-petDistance-ownerDistance*.2+(emergency and 200 or 0)+(candidate==s.petSlamTarget and 20 or 0)
 					if score>bestScore then best,bestPoint,bestScore=candidate,total/count,score end
 				end

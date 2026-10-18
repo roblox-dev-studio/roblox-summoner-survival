@@ -72,7 +72,9 @@ return function(deps)
         if s.lobby then returning=false;returnButton.Text='도전 중단 · 로비'end
         deps.input.SetBasicBlocked(s.lobby==true or s.over==true or s.offers~=nil or s.paused==true)
         title.Text=s.phase=="boss" and "DRAGON / 시간 제한 없음" or "SURVIVAL / 드래곤 등장까지"
-        bossPanel.Visible=s.phase=="boss" and s.boss~=nil and not s.over
+        bossPanel.Visible=(s.boss~=nil or s.fieldBoss~=nil)and not s.over and not s.lobby
+        bossHealth.BackgroundColor3=s.boss and Color3.fromRGB(187,110,255)or palette.gold
+        if s.fieldBoss and not s.boss then local f=s.fieldBoss;bossHealth.Size=UDim2.fromScale(math.clamp(f.hp/f.maxHp,0,1),1);bossTitle.Text=string.format("%s · %d / %d",f.name,math.ceil(f.hp),f.maxHp)end
         if s.boss then
             bossHealth.Size=UDim2.fromScale(math.clamp(s.boss.hp/s.boss.maxHp,0,1),1)
             bossTitle.Text=string.format("흑염룡 · 아그니스 · %d단계 · %d / %d",s.boss.stage or 1,math.ceil(s.boss.hp),s.boss.maxHp)..(s.boss.airborne and " · 비행 중" or "")

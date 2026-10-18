@@ -85,7 +85,7 @@ return function(deps)
      local delta=Vector3.new(e.pos.X-cast.origin.X,0,e.pos.Z-cast.origin.Z);local along=delta:Dot(cast.direction)
      if along>=row*cast.range/7 and along<=(row+1)*cast.range/7 and(delta-cast.direction*along).Magnitude<=6 then
       cast.hits[e]=true;deps.damage(e,52+(s.ice or 0)*7,s)
-      if e.hp>0 then e.slow=math.max(e.slow or 0,2.5);if not e.isBoss then e.frozen=math.max(e.frozen or 0,1.1);e.model:SetAttribute('Frozen',true);e.knockback=cast.direction*28;e.knockTime=.2 end end
+      if e.hp>0 then e.slow=math.max(e.slow or 0,2.5);if not e.isBoss and not e.isFieldBoss then e.frozen=math.max(e.frozen or 0,1.1);e.model:SetAttribute('Frozen',true);e.knockback=cast.direction*28;e.knockTime=.2 end end
      end
     end
    end

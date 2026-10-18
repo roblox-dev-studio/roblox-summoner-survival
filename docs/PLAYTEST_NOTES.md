@@ -493,3 +493,86 @@ Native UI: started with default four auto spells, pressed Q; temporary Client ob
 ## PR integration verification · 2026-10-18
 
 Branch codex/light-skills-four-loadout, baseline8316189. Fetched team/main and confirmed no divergence (0/0) before PR. Final installer/source checks and git diff --check passed. Re-ran eight fixtures on existing Studio4d3ba923-f331-4ae3-aeff-afd675a25092: Server basic_attack/light_spells/active_spells/lobby/retreat and Client ward_follow/glacial_art/elemental_art, all passed. Client error log empty after run. Final fire appearance is the restored first red-rim version. Consolidated current architecture and playtest checklist; iteration observations above are history. No secrets detected in project scan; attached reference files remain reference-only manifests. Existing preview-max golem effects and starting-health150 values are intentional user-requested prototype settings carried from baseline. Fresh Baseplate full installation, true multiplayer/device/performance and final aesthetic/balance acceptance are not verified in this integration run.
+
+
+## 2026-10-18 후방 꼬리 반격·강화 보스전 버튼
+
+소스: main4e95ca1 기반 codex/dragon-rear-tail-boss-test 작업 트리. Studio가 재연결되어 현재 제목 없는 경험/place121990382108426의 ID는36d9ae01-92b0-4f38-abcf-dfe9961372a5입니다. server 진입점과 Boss/Session/Progression/Lobby를 편집 모드에 갱신하고 Play 재시작했습니다.
+
+검사: installer 재생성/소스 일치, Python6개/Luau56개/장착·성장·Q 검증, git diff --check 통과. Server 엔진 fixture rear_tail(정면/후방·준비 안전/제자리/단일 피해/대상 방향 마무리/재사용/거리), boss_test_start(권한/검증/강화·생존 건너뜀/일반전 복원/모드 일치), 갱신한 boss_combat 전체 패턴/승패/정리, 기존 lobby/retreat 모두 통과했습니다. 이전 boss_combat의 화염 파동 즉시 피해 가정도 현재 화염탄 실제 비행 규칙으로 갱신했습니다.
+
+실제 UI: 초기 배치에서 보스전 버튼이 SkillPreview에 가려져 갤러리가 열리는 문제를 관찰한 뒤 패널/버튼/문구 위치를 수정했습니다. 수정 후 실제 BossTest 버튼 클릭으로 State bossTest=true, phase=boss, level21, golem5, 선택4개 모두5단계, dragon mesh Ready, 월드 모델은 골렘+드래곤만 확인했습니다. 테스트 플레이 후 패배 화면→로비→일반 전투 시작을 실제 클릭하여 bossTest=false/phase=survival/level1/golem1/드래곤 없음 확인, 다시 로비 복귀했습니다. 관찰용 로컬 Folder/연결 제거, Client 오류 없음. Studio는 로비의 보스전 테스트 버튼을 쓸 수 있게 두었습니다.
+
+미검증: 새 Baseplate 전체 설치, 실제2명 동시 테스트/모바일/패드, 최대 이펙트 부하와 실제 후방 선회·꼬리 타격의 체감/밸런스. 엔진 fixture의 가짜 참가자는 실제 협동을 증명하지 않습니다. 외부 에셋/업로드 없음.
+
+
+## 2026-10-18 몹 미리보기·테스트 보스2배 체력
+
+소스:4e95ca1 기반 codex/dragon-rear-tail-boss-test 작업 트리(앞 작업 포함). Studio36d9ae01-92b0-4f38-abcf-dfe9961372a5/place121990382108426. server/client 진입점, Boss, 신규 EnemyGallery/EnemyPreview/EnemyPreviewScene, SkillPreview를 편집 모드에 갱신하고 재생했습니다. 신규 모듈은 src에 저장하고 install.luau에 패키징합니다.
+
+엔진: rear_tail(새 테스트5,760/일반2,880 회귀 포함), boss_test_start, Client enemy_preview 모두 통과. 카탈로그6종/시각 템플릿에 코드 없음/복제 외형 일치/정예 스케일·왕관/이동/돌진 경로/마법탄/폭발 범위/정리를 검사했습니다. 실제 UI로 몹 선택/정예/공격 시연·이동 중 일시정지, 몹→스킬→몹→드래곤 전환과 이전 모델 제거를 확인했습니다. 실제 보스 테스트 출발 후 MaxHP5,760, 몹 뷰어 열린1.1초 동안 State 전투 시간3→3 정지, 닫고 로비 복귀를 확인했습니다. 실제 몹 버튼 클릭과 돌진형 공격 시연 화면을 관찰했고 Client 오류 없음. 배경이 로비에 비쳐 보이던 부분을 불투명하게 정리했습니다. 최종 로비에서 몹 뷰어를 열어두었습니다.
+
+모델은 실전 factory로 생성하지만 시연은 설명용 로컬 궤적입니다. 실제 AI·충돌/피해·다중 클라이언트·기기별 패드/모바일/성능·새 Baseplate 전체 설치는 별도 미검증입니다. 외부 에셋/업로드 없음. 검사 도구는 Python6개/Luau59개/장착·성장·Q 검증, 설치기 일치와 diff 공백 검사 통과.
+
+## 2026-10-18 잿빛 해골 병사 적용
+
+- Source: main baseline4e95ca186a2eaba31fef66a70db51af7f4e30d30 + codex/dragon-rear-tail-boss-test의 미커밋 변경. 기존 보스/미리보기 작업을 보존하고 SkeletonMesh/EnemyPresentation, 생성 데이터, 접촉 모션 속성을 추가했습니다. 원본 KayKit1.0 고정 SHA15b62b9bad122f72926c10fb14d622c73819fa54,CC0와3개 원본 해시를 기록했습니다.
+- Environment: 연결 Studio36d9ae01-92b0-4f38-abcf-dfe9961372a5, 제목 없는 경험(place121990382108426), Mesh/Image APIs 활성, Edit에서 파일별 동기화 후 Play 재시작.
+- Engine fixtures: studio_skeleton(client) PASS — 네이티브 HasSkinnedMesh/42Bone,16개 독립 포즈/공유 MeshContent, 원본 걷기·주먹 모션,정예 발 높이,메시 정리/fallback 복원. 16개×24포즈 루프 약.00293초를 관측했지만 실제 전체 프레임/렌더링 성능 수치로 해석하지 않습니다.
+- studio_skeleton_contact(server) PASS — 기존 접촉 피해8/재사용 대기/.95초 규칙,빙결 중 공격 중단,공격 시퀀스 증가. 테스트 fixture의 누락 slow=0을 보완 후 재실행했습니다.
+- studio_enemy_preview(client) PASS —6종 클론/정예/이동/돌진/마법탄/폭발/전환 정리. 실제 원본 모델에 추가된 로컬 메시+Bone을 별도로 계산하도록 동일성 검사를 갱신했습니다.
+- Native visual review: N에서 해골의 투구·뼈·붉은 목도리/망토, 보행 시 다리·상체 회전과 공격 시연을 확인했습니다. 일반 생존전을 시작해 stalker8마리가 모두 SkeletonMeshStatus=Ready/SkeletonMotion=walk인 것을 확인했고 실제 화면에서 여러 해골 추적/표시를 확인했습니다. 전투를 중단하고 로비로 복귀 후 해골 공격 미리보기를 열어 두었습니다.
+- Static: installer 재생성,8개 Python 검사/진행 회귀/73개 Luau 컴파일 및 전역 검사 PASS.
+- Limits: 현재 연결된 개발 place에서 개별 모듈을 갱신했습니다. 새 disposable Baseplate 전체 설치는 이번에 실행하지 않았습니다. 게시 환경/Mesh API 실패 강제 주입/84마리 장시간·모바일·협동 성능은 미검증입니다. 사망 전용 모션/무기/나머지5종 새 외형은 이번 범위가 아닙니다. Output의 기존 Roblox UIBlox FoundationProvider 경고는 남아 있으며 새 해골 런타임 오류는 관측하지 않았습니다.
+
+## 2026-10-18 정예 무장·나머지5종 적용
+
+- Source: baseline4e95ca1 + 같은 codex/dragon-rear-tail-boss-test 미커밋 변경. 기존 보스/미리보기/해골 작업을 보존했습니다. 원작 KayKit1.0 SHA15b62b9bad122f72926c10fb14d622c73819fa54의 Mage/Rogue/Minion 및5개 무기를 추가하고 원본/팔레트/CC0/해시/변환 경로를 기록했습니다. 사냥개/폭탄은 직접 제작했습니다.
+- Environment: Studio36d9ae01-92b0-4f38-abcf-dfe9961372a5(place121990382108426), Edit 소스 동기화 후 Play 재시작. 임시127.0.0.1 전용 소스 서버로 신뢰된 로컬 파일만 전달했고 HttpEnabled는 작업 후 원래 값으로 복원했습니다. 게임 런타임은 로컬 HTTP 서버에 의존하지 않습니다.
+- Initial failure/fix: 전체 종류를 캐시할 때 EditableMesh 예산 부족을 재현했습니다. 공유 법선/색/UV,RemoveUnused,fixed-size 복사 후 동적 원본 제거로 줄였습니다. 추가로 MCP fixture의 별도 require 캐시가 LocalScript 캐시와 중복되는 경우를 재현하여 fixture 종료 시 미사용 자산 해제/중복 destroy 보호를 추가했습니다. 한도를 낮춰 검사를 우회하지 않았습니다.
+- Engine fixtures PASS: studio_enemy_roster(client)6종×일반/정예12변형,장비 개수/손 부착/공격 중 장비 추종/폭탄 도화선/사냥개 다리·꼬리·정예 바닥 높이/정리. studio_skeleton(client)16개 독립 포즈·네이티브 스킨·공유 MeshContent·정예 높이·정리. studio_enemy_preview(client)6종/정예/걷기/돌진/투사체/폭발/전환 정리. studio_skeleton_contact(server)기존 피해8·대기/동결·공격 시퀀스. studio_enemy_cast_cues(server)실제 시전 준비/발사 탄환/자폭 예고와 도화선/동결 규칙.
+- Native UI: N에서6종을 차례로 열고 V의 드래곤 메시도 정상 생성됨을 확인했습니다. 이후 일반 생존전에서 서버 템플릿 일반6+정예6의 시각 검사용 모델12개를 실제 world에 잠시 놓아 기존 LocalScript 표시기가 전부 Ready/기대 장비 개수로 표시함을 확인했습니다. 이12개는 서버 AI 목록에 넣지 않은 시각 통합 검사이며 혼합 웨이브 전체 AI 공략 시험과 구별합니다. 검사 모델12개를 모두 지우고 로비로 복귀했습니다. 마지막 재검증 세션에서 SkeletonMesh/EnemyGear/EnemyPresentation 예산·런타임 경고는0개였습니다.
+- studio_enemy_live_roster(client) PASS: 실제 LocalScript watcher에서 일반6/정예6/동시12/장비 표시/정리를 확인했습니다. 원시 렌더러 모듈을 추가 require하지 않는 통합 fixture입니다. 마지막에 N의 쌍검 도적 걷기 미리보기를 열어 두었습니다.
+- Static:8개 Python 검사/진행 회귀/131개 Luau 컴파일·전역 검사 및 installer 일치 PASS. 최종 재생성 후 재검사했습니다.
+- Limits: 새 disposable Baseplate 전체 설치를 실행하지 못했습니다(Studio 앱 UI 접근 도구가 timeoutReached). 현재 연결 개발 place에서 검증했습니다. 게시 환경·84마리 장시간·모바일·협동 성능과 별도 사망 모션은 미검증입니다. 전체 설치기/출처·재현 자료는 Git 소스로 보관합니다.
+
+## 2026-10-18 보행 동기화 완화·필드보스 구상
+
+- Source: baseline4e95ca1 + 현재 브랜치의 기존 미커밋 변경을 유지했습니다. EnemyMotion을 추가하고 EnemyPresentation/EnemyPreviewScene에서 개체별 위상·템포·부드러운 좌우 흔들림/평활 속도를 사용합니다. 서버 전투 소스/난이도/판정 변경은 없습니다.
+- Environment: 연결 Studio36d9ae01-92b0-4f38-abcf-dfe9961372a5,place121990382108426. Edit에서3개 클라이언트 모듈 동기화 후 Play 재시작.
+- studio_enemy_motion(client) PASS:20개 서로 다른 시작 위상,안정 시드,템포±6%,흔들림.1스터드 이내,20Hz 위치/24Hz 표시 공백에서 보행 유지,빙결 시 위상/흔들림 고정,정지 후 안정.
+- 기존 studio_enemy_preview 및 studio_enemy_live_roster(client) PASS:6종/일반·정예/시연/장비/동시12개 실제 watcher 표시/정리.
+- 실제 일반 생존전을 시작했습니다. 첫 관찰은 레벨업 선택 중 전투가 멈춰 idle 상태였으므로 보행 검증으로 세지 않았습니다. 선택 후 다시 관찰하여 걷는 같은 stalker8마리의 왼쪽 아래다리 pitch가8가지 서로 다른 값인 것을 확인했고 화면에서 여러 보행 자세를 확인했습니다. 로비 복귀 후 쌍검 도적의 걷기 미리보기를 열어 두었습니다. 자연스러움의 최종 평가는 사용자 확인이 필요합니다.
+- Static: installer 재생성/일치,8개 Python 검사/진행 회귀/132개 Luau 문법·전역 검사 PASS.
+- FIELD_BOSS_DESIGN.md는 미구현 제안입니다:약60초 해골 군단장,횡베기/방패 돌진부터,후속 일회성 함성,처치 강화·회복 보상,105초 퇴각·120초 드래곤. 해당 등장/패턴/보상 코드를 추가하지 않았습니다.
+- Limits: 현재 연결 개발 place에서 검증했습니다. 새 disposable Baseplate 전체 설치/모바일/84마리 최대 부하/협동은 이번에도 미검증입니다.
+
+## 2026-10-18 해골 병사 좌측 기울기 확인·보정
+
+- Source: 기존 baseline4e95ca1 이후 미커밋 작업 유지. SkeletonMesh의 공유 Warrior walk clip 전처리만 추가했습니다. 필드보스 문서에는 사용자 설계 방향 동의를 기록했으며 필드보스 구현은 추가하지 않았습니다.
+- Engine: Studio36d9ae01-92b0-4f38-abcf-dfe9961372a5(place121990382108426). 원본34개 walk 프레임의 hips→head 좌우 기울기가 min/max/mean 모두 약−4.09605도,23개 idle 프레임은약0도임을 측정했습니다. 원본 모션의 고정 바이어스를 확인했습니다.
+- 보정 후 studio_skeleton_posture(client) PASS: walk 최대 기울기 약.00001834도,원본 foot transform 유지/발 애니메이션/idle 수직 유지. EnemyMotion/20개 개체별 위상·부드러운 흔들림·빙결·정지 fixture와6종 일반·정예/장비/정리 roster fixture도 PASS.
+- Native UI: N에서 병사의 걷기 미리보기를 열어 상체와 장비 표시를 확인하고 그대로 열어 두었습니다. 원본의 한쪽 기울기만 제거하고 기존 양방향 sway는 유지했으므로 걷는 순간에 작은 좌우 기울기는 보일 수 있습니다.
+- Static: installer 재생성/8개 Python 검사/진행 회귀/132개 Luau 컴파일·전역 검사 PASS. diff 공백 검사와 installer 일치 확인.
+- Limits: 현재 연결 개발 place 검증이며 새 Baseplate 전체 설치/모바일/최대 부하/협동은 미검증입니다.
+
+## 2026-10-18 사용자 재지적: 남은 머리 기울기 수정
+
+- 이전에 상체 위치선만 수직으로 맞추고 머리 회전을 놓쳤으므로 앞선 완료 판단은 불충분했습니다. 원본 Walk head.UpVector 측면 각도가약11.62~16.59도/평균14.15도임을 확인했습니다. Walking_A/B/C/D를 오프라인 비교하여 A의 머리/상체 수직 회전과 좌우 균형을 확인했습니다.
+- Warrior walk를 동일 CC0 원본의 Walking_A로 교체하고 spine 임시 보정을 삭제했습니다. 추가 시각 roll도 삭제하고 위상/템포/수평 흔들림/yaw는 유지했습니다. 원본 에셋/해시는 그대로이며 변환기/현재 클립 manifest/생성 데이터/installer를 갱신했습니다.
+- Studio36d9ae01-92b0-4f38-abcf-dfe9961372a5(place121990382108426)에서 모듈/데이터 동기화 후 Play 재시작. studio_skeleton_posture PASS: 머리 최대 측면 회전 약.0000061도,몸통 위치선 평균−.0975도/최대±2.243도,발 원본 트랙/idle 유지. studio_enemy_motion 및6종 roster/장비 fixture도 PASS.
+- Native UI: 걷기 중 실제 표시된 head.UpVector≈(0,1,0),mesh.UpVector=(0,1,0),미리보기 카메라에 투영한 머리 기울기≈0도 측정. 화면에서 얼굴/투구가 수직인 걷기를 확인하고 그 미리보기를 열어 두었습니다.
+- Static:8개 Python 검사/진행 회귀/132개 Luau 문법·전역 검사/installer 일치 PASS. 기존 개발 place 검증이며 새 Baseplate/모바일/최대 부하/협동은 미검증입니다.
+
+## 2026-10-18 · 망령 기마 군단장 첫 구현
+
+- 소스: `codex/dragon-rear-tail-boss-test`, 작업 기준 커밋 `4e95ca186a2eaba31fef66a70db51af7f4e30d30` 위 미커밋 변경 포함. `server.luau`/`client.luau`/`src/**/*.luau` 경로+내용 정렬 SHA-256: `ea1c270a4897a35364cd933080a066e57719ff0484374cb26061550f21c4e7ed`. 이전 적/보스 수정은 보존했습니다.
+- 환경: macOS, 연결된 Studio `36d9ae01-92b0-4f38-abcf-dfe9961372a5`, 제목 없는 경험 placeId121990382108426, Edit/Client/Server. GUI 도구의 RobloxStudio 접근이 timeoutReached로 실패해 새 Baseplate를 열지 못했습니다. 현재 사용자가 작업 중인 설치 프로젝트에서 모듈을 갱신해 시험했으며 **새 빈 프로젝트 전체 설치 검증은 남아 있습니다.**
+- 정적 검사: 설치기 재생성/소스 일치, Python8개, 기존 성장/장착/Q 회귀, Luau144개 문법·전역 검사 통과. 실제 기기/협동 검증을 대신하지 않습니다.
+- 엔진 격리 검사 `studio_field_boss`: 60초 전 미등장/등장 위치 분리, 별도 isFieldBoss, 방향 고정 부채꼴 예고, 한 번 피해, 돌진 실제 이동/대시 무적, 중복 없는 생존자 보상,105초 퇴각 무보상, 재시작, 최종 보스 전환 정리, 드래곤 테스트 제외 통과. 가짜 참가자2명의 체력1,980→이탈 시 비율 유지1,200/600 및 두 생존자 각각 보상도 통과했습니다. 실제2인 네트워크 플레이는 아닙니다.
+- `studio_field_reward`: 기존 카드 객체 유지, 정확한 추가 레벨 XP,20% 회복, 선택 완료 후 다음 카드/기존 XP 유지, 중복·종료·로비·드래곤 테스트 제외 통과. 첫 테스트의 상태 대역에 cooldown이 빠져 실패한 부분은 실제 세션과 같은 기본값으로 고쳐 재검사했습니다.
+- `studio_boss_test_start`: 생산 환경 기본 차단, 입력 검증, 기존 드래곤5단계/일반1단계/필드3단계, 혼합 준비 거부와 복귀 초기화 통과. `studio_dragon_rear_tail`, `studio_boss_combat` 기존 검사도 통과했습니다.
+- `studio_commander_visual`: 실제 LocalScript watcher로 원본 기수 스킨/검·방패,67개 군마·장식 부품, 이동 및 몸통 이동 외 발 관절 변화, 착석 높이, 횡베기/돌진 상체 동작, 제거 통과. 처음 원거리 카메라에서 동작 검사가 실패해 테스트가 카메라를 임시로 근처에 놓고 복구하도록 수정했습니다.
+- 시각 확인: 로비 버튼 배치, 기수/군마 비율을 조정한 정면·측면, 말 머리/기수 분리, 실제 필드 HP·예고 표시를 화면으로 확인했습니다. 최종 미술 품질이나 자연스러움이 완성됐다는 판정은 아닙니다. 원본 뿔투구/수입 방패를 사용한 기수와 절차 군마의 첫 아트입니다.
+- 실제 UI: 필드보스 버튼 → 선택4개/골렘3단계로 군단장 등장, Ready 메시/군마 렌더, 처치 뒤 강화창과 생존 진행 확인. 별도 전투에서 도전 중단 버튼 → 로비 표시, 군단장/예고 제거, CameraType Custom 복구 확인. 테스트용 카메라/모델은 제거했습니다.
+- 남은 검증: 새 Baseplate 전체 설치, 일반전120초 전 구간 자연 흐름, 실제2인 참가/이탈·보상 동기화, 모바일/실제 패드, 프레임 성능, 소리와 난이도/재미 조정. 낙마2단계·군단 소환·필드보스 도감은 미구현입니다.

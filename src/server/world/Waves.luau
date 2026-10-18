@@ -27,16 +27,17 @@ return function(deps)
   if elapsed>=roundLength or(deps.clock and deps.clock.phase~='survival')then return end
   spawnClock-=dt
   if spawnClock>0 or #enemies>=84 then return end
-  spawnClock=math.max(.28,.8-elapsed*.0035)/math.max(1,alive*.65)
+  local fieldActive=deps.clock and deps.clock.fieldBoss~=nil
+  spawnClock=math.max(.28,.8-elapsed*.0035)/math.max(1,alive*.65)/(fieldActive and .6 or 1)
   local pool={'stalker','stalker','stalker','stalker','stalker','stalker'}
   if elapsed>=12 then table.insert(pool,'skitter');table.insert(pool,'skitter');table.insert(pool,'skitter')end
   if elapsed>=28 then table.insert(pool,'brute');table.insert(pool,'brute')end
   if elapsed>=42 then table.insert(pool,'caster');table.insert(pool,'caster')end
-  if elapsed>=60 then table.insert(pool,'ember')end
+  if elapsed>=60 and not fieldActive then table.insert(pool,'ember')end
   if elapsed>=32 then table.insert(pool,'charger');table.insert(pool,'charger')end
   local a=rng:NextNumber(0,math.pi*2)
   create(pool[rng:NextInteger(1,#pool)],Vector3.new(math.cos(a)*77,3,math.sin(a)*77),elapsed)
-  if elapsed>=nextPack then
+  if elapsed>=nextPack and not fieldActive then
    nextPack=elapsed+18
    -- A readable pair of flanking groups; no spawning directly on the player.
    for side=0,1 do for member=1,3 do
@@ -50,6 +51,7 @@ return function(deps)
   if h and not s.offers and(s.invulnerable or 0)<=0 then applyDamage(s,h,amount,deps.effect);return true end
  end
  local function shoot(e,direction)
+  e.model:SetAttribute('AttackSequence',(e.model:GetAttribute('AttackSequence')or 0)+1)
   if #shots>=20 then return end
   local p=Instance.new('Part');p.Name='EnemyArcaneBolt';p.Shape=Enum.PartType.Ball;p.Size=Vector3.one*.75;p.Color=Color3.fromRGB(226,126,255);p.Material=Enum.Material.Neon;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Position=e.pos+Vector3.new(0,1.1,0);p.Parent=deps.world
   local a=Instance.new('Attachment');a.Position=Vector3.new(0,.2,0);a.Parent=p;local b=Instance.new('Attachment');b.Position=Vector3.new(0,-.2,0);b.Parent=p
@@ -75,7 +77,7 @@ return function(deps)
   time+=dt;stepShots(dt)
   for i=#enemies,1,-1 do
    local e=enemies[i]
-   if e.isBoss then continue end
+   if e.isBoss or e.isFieldBoss then continue end
    if e.hp<=0 then table.remove(enemies,i);continue end
    local target,dist=nil,math.huge
    for _,s in pairs(states)do local r=rootOf(s);if r then local d=flat(r.Position-e.pos).Magnitude;if d<dist then target,dist=s,d end end end
@@ -132,12 +134,13 @@ return function(deps)
     move=(move+tangent*.65).Unit
    end
    if moving and dist>2.5 then e.pos=bound(e.pos+move*math.min(dist-2.5,speed*dt))end
+   if e.model.Parent then e.model:SetAttribute('Preparing',(e.windup or 0)>0);e.model:SetAttribute('Detonating',e.detonating==true)end
    if e.model.Parent and diff.Magnitude>.01 then
     local bob=e.kind=='caster'and math.sin(time*2+e.seed)*.25 or math.sin(time*(e.kind=='skitter'and 9 or 4)+e.seed)*.08
     e.model:PivotTo(CFrame.lookAt(e.pos+Vector3.new(0,bob,0),e.pos+Vector3.new(0,bob,0)+move))
    end
    if e.kind~='caster'and e.kind~='ember'and dist<4 and e.hitClock<=0 and e.frozen<=0 then
-    if harm(target,e.kind=='brute'and 11 or(e.kind=='charger'and 12 or(e.kind=='skitter'and 6 or 8)))then e.hitClock=.95 end
+    if harm(target,e.kind=='brute'and 11 or(e.kind=='charger'and 12 or(e.kind=='skitter'and 6 or 8)))then e.hitClock=.95;e.model:SetAttribute('AttackSequence',(e.model:GetAttribute('AttackSequence')or 0)+1)end
    end
   end
  end

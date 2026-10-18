@@ -3,6 +3,8 @@ return function(deps)
  local block=deps.block
  local function make(name,kind,world)
   local m=Instance.new('Model');m.Name=name
+  local visualAssets={commander='OriginalSpectralHorse_KayKitRider',stalker='KayKitSkeletonWarrior',skitter='KayKitSkeletonRogue',brute='KayKitSkeletonWarriorHeavy',caster='KayKitSkeletonMage',ember='KayKitSkeletonMinionBomber',charger='AshHound'}
+  m:SetAttribute('VisualAsset',visualAssets[kind])
   local root=block(m,'Core',Vector3.one,CFrame.identity.Position,Color3.new());root.Transparency=1;root.Position=Vector3.new(0,3,0);m.PrimaryPart=root
   local function p(label,size,position,color,shape,rotation)
    local cf=CFrame.new(position)*(rotation or CFrame.identity)
@@ -24,7 +26,7 @@ return function(deps)
     neon('Eye',Vector3.new(.3,.28,.3),Vector3.new(side*.6,2.2,-2.5),Color3.fromRGB(182,255,163),'ball')
     p('Fang',Vector3.new(.3,.6,.8),Vector3.new(side*.4,1.6,-2.6),Color3.fromRGB(214,239,203),'wedge')
    end
-  elseif kind=='brute'or kind=='charger'then
+  elseif kind=='brute'or kind=='charger'or kind=='commander'then
    local armor=kind=='charger'and Color3.fromRGB(145,56,65)or Color3.fromRGB(73,101,126)
    p('ArmoredShell',Vector3.new(kind=='charger'and 3.2 or 4.6,kind=='charger'and 2.4 or 3,kind=='charger'and 5.8 or 4.8),Vector3.new(0,3,.4),armor,'ball')
    p('Head',Vector3.new(2.1,1.7,2.2),Vector3.new(0,2.3,-2),Color3.fromRGB(36,49,69),'ball')

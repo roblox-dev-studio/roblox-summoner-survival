@@ -38,7 +38,7 @@ return function(deps)
   end end
   if not target then return end
   local lead=Vector3.zero
-  if not target.isBoss and target.kind~='caster'and not target.detonating and(target.frozen or 0)<=0 then
+  if not target.isBoss and not target.isFieldBoss and target.kind~='caster'and not target.detonating and(target.frozen or 0)<=0 then
    local delta=Vector3.new(root.Position.X-target.pos.X,0,root.Position.Z-target.pos.Z)
    if delta.Magnitude>.01 then lead=delta.Unit*math.min(math.max(0,delta.Magnitude-3),(target.speed or 0)*1.3)end
   end
