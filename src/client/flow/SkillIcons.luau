@@ -42,6 +42,7 @@ entries["iceRush_wide"]=table.freeze({iconKey="iceRush",name="빙하 대로",sta
 entries["quick_cast"]=table.freeze({iconKey="quick_cast",name="신속 시전",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/quick_cast.png",rarity="common",badge="일반 · 신속 시전"})
 entries["active_focus"]=table.freeze({iconKey="active_focus",name="집중된 주문",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/active_focus.png",rarity="common",badge="일반 · 집중된 주문"})
 entries["lucky_charm"]=table.freeze({iconKey="lucky_charm",name="행운의 부적",status="local_ready_unpublished",assetPath="assets/ui/skill-icons/lucky_charm.png",rarity="common",badge="일반 · 행운의 부적"})
+local fallbackLabels={["ice"]="얼음",["lightning"]="번개",["meteor"]="운석",["blades"]="결정",["skyLances"]="천공",["frost"]="서리",["missile"]="마탄",["ward"]="결계",["lightRing"]="광륜",["fire"]="화염",["thunder"]="뇌창",["aetherLance"]="성운",["iceRush"]="빙하",["basic"]="마법탄",["golem"]="골렘",["dash"]="대시",["quick_cast"]="시전",["active_focus"]="집중",["lucky_charm"]="행운",["vitality"]="체력",["agility"]="이동",["magnet"]="자석",["recovery"]="회복",["overheal"]="완치"}
 table.freeze(entries)
 local function get(id)
  if type(id)~='string'then return nil end
@@ -53,7 +54,10 @@ local function apply(imageLabel,id,fallback)
  local ready=type(assetId)=='string'and string.match(assetId,'^[1-9]%d*$')~=nil
  imageLabel.Image=ready and('rbxassetid://'..assetId)or ''
  imageLabel.Visible=ready
- if fallback then fallback.Visible=not ready end
+ if fallback then
+  fallback.Text=fallbackLabels[entry and entry.iconKey or id]or '강화'
+  fallback.TextScaled=true;fallback.TextWrapped=false;fallback.Visible=not ready
+ end
  return ready,entry
 end
 return table.freeze({Get=get,Apply=apply})

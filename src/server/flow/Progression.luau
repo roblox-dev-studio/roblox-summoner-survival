@@ -4,10 +4,13 @@ return function(deps)
 	local block, rootOf, paused = deps.block, deps.rootOf, deps.paused
 	local finishDash, update, clock = deps.finishDash, deps.update, deps.clock
 	local spellOptions=deps.spellOptions
+	-- Session recreates player state between runs. Never reuse an offer token here.
+	local nextOfferRevision=0
 	local function need(s) return 5+(s.level-1)*3 end
 	local augments=deps.augments or require(script.Parent.Augments)
 	local function choices(s)
-        s.offerRevision=(s.offerRevision or 0)+1
+        nextOfferRevision+=1
+        s.offerRevision=nextOfferRevision
         local offers,odds=augments.Choices(s,rng)
         s.offerOdds=odds
         return offers
