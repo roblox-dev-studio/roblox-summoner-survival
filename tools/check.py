@@ -10,7 +10,7 @@ ROBLOX_GLOBALS = {
     "game", "workspace", "script", "Instance", "Enum", "Vector2", "Vector3", "CFrame",
     "Color3", "UDim", "UDim2", "Random", "RaycastParams", "TweenInfo", "NumberRange",
     "NumberSequence", "NumberSequenceKeypoint", "ColorSequence", "ColorSequenceKeypoint",
-    "task", "warn", "Content",
+    "task", "warn", "Content", "Font", "Rect",
 }
 
 

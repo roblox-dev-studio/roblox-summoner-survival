@@ -3,6 +3,7 @@ import argparse
 import json
 import re
 from pathlib import Path
+from gui_model import compile_model
 
 ROOT = Path(__file__).resolve().parent.parent
 ENTRYPOINTS = (
@@ -49,6 +50,7 @@ def build(root=ROOT):
     if header.count("-- @ARENA@") != 1:
         raise ValueError("Missing or duplicate arena placeholder")
     output = header.replace("-- @ARENA@", (root / "arena.luau").read_text(encoding="utf-8").rstrip())
+    output += '\n' + compile_model(root / 'assets/ui/augment-choice.rbxmx')
     output += '\n-- Generated below. Edit src/ and entrypoints, then rebuild.\n'
     output += '''local function addModule(parent, path, source)
     for i=1,#path-1 do

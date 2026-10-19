@@ -4,6 +4,13 @@ return function(deps)
 	local theme = require(script.Parent.Parent:WaitForChild("Theme"))
 	local palette, make, round, stroke, label = theme.Palette, theme.Make, theme.Round, theme.Stroke, theme.Label
 	local icons=require(script.Parent.SkillIcons)
+	local playerGui=player:WaitForChild("PlayerGui")
+	local function hideDesignPreview(child)
+		if child.Name=="AugmentDesignPreview" and child:IsA("ScreenGui") then child.Enabled=false end
+	end
+	-- StarterGui may replicate after the HUD starts. Only hide the runtime copy.
+	local previewConnection=playerGui.ChildAdded:Connect(hideDesignPreview)
+	for _,child in ipairs(playerGui:GetChildren()) do hideDesignPreview(child) end
 	local gui=Instance.new("ScreenGui"); gui.Name="SummonerHUD"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=false; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; gui.Parent=player:WaitForChild("PlayerGui")
 	local encounter=make("Frame",gui,{Name="EncounterPanel",Size=UDim2.new(.8,0,0,26),Position=UDim2.new(1,-12,0,6),AnchorPoint=Vector2.new(1,0),BackgroundColor3=palette.bg,BackgroundTransparency=.15})
 	make("UISizeConstraint",encounter,{MaxSize=Vector2.new(320,26)});round(encounter,8)
@@ -44,7 +51,6 @@ return function(deps)
 		skills.TextSize=width<500 and 10 or 11
 	end
 	local resizeConnection=workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutActions);layoutActions()
-	local rarityColors={common=Color3.fromRGB(190,214,222),rare=Color3.fromRGB(113,194,255),epic=Color3.fromRGB(219,154,255)}
     local rarityNames={common="일반",rare="희귀",epic="영웅"}
     local buildButton=make("TextButton",top,{Name="AugmentSummary",Size=UDim2.new(1,-24,0,25),Position=UDim2.fromOffset(12,116),BackgroundColor3=palette.card,TextColor3=palette.mint,Text="행운 +0 · 증강 0 · 보기",TextSize=12,Font=Enum.Font.GothamBold});round(buildButton,6)
     local build=make("Frame",gui,{Name="AugmentBuild",Size=UDim2.new(.9,0,.82,0),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,Visible=false,ZIndex=40});round(build,14);make("UISizeConstraint",build,{MaxSize=Vector2.new(620,570)})
@@ -53,31 +59,13 @@ return function(deps)
     local buildScroll=make("ScrollingFrame",build,{Name="BuildList",Size=UDim2.new(1,-32,1,-64),Position=UDim2.fromOffset(16,52),BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,ZIndex=41})
     local buildText=label(buildScroll,"",UDim2.new(1,-12,0,0),UDim2.new(),nil,palette.text);buildText.AutomaticSize=Enum.AutomaticSize.Y;buildText.TextSize=14;buildText.TextXAlignment=Enum.TextXAlignment.Left;buildText.TextYAlignment=Enum.TextYAlignment.Top;buildText.ZIndex=42
     buildButton.Activated:Connect(function()build.Visible=not build.Visible end);close.Activated:Connect(function()build.Visible=false end)
-    local overlay=make("Frame",gui,{Name="ChoiceOverlay",Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(6,12,19),BackgroundTransparency=.18,Visible=false,ZIndex=10})
-	local modal=make("Frame",overlay,{Size=UDim2.new(.88,0,.82,0),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,ZIndex=11}); round(modal,18); stroke(modal,palette.mint); make("UISizeConstraint",modal,{MaxSize=Vector2.new(650,620)})
-	local modalTitle=label(modal,"증강 선택",UDim2.new(1,-32,0,32),UDim2.new(0,16,0,14),Enum.Font.GothamBold,palette.mint); modalTitle.TextSize=25; modalTitle.ZIndex=12
-	local modalHint=label(modal,"이번 성장을 선택하세요",UDim2.new(1,-32,0,24),UDim2.new(0,16,0,48),nil,palette.muted); modalHint.TextSize=14; modalHint.ZIndex=12
-	local luckInfo=label(modal,"",UDim2.new(1,-32,0,38),UDim2.fromOffset(16,73),nil,palette.muted);luckInfo.Name="LuckInfo";luckInfo.TextSize=11;luckInfo.ZIndex=12
-    local cards=make("ScrollingFrame",modal,{Name="AugmentCards",Size=UDim2.new(1,-32,1,-176),Position=UDim2.new(0,16,0,116),BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,ZIndex=12})
-    local reroll=make("TextButton",modal,{Name="Reroll",Size=UDim2.new(.5,-22,0,36),Position=UDim2.new(0,16,1,-46),BackgroundColor3=palette.card,TextColor3=palette.mint,Font=Enum.Font.GothamBold,TextSize=13,Text="무료 새로고침 · 2회",ZIndex=13});round(reroll,8)
-    local inspect=make("TextButton",modal,{Name="InspectBuild",Size=UDim2.new(.5,-22,0,36),Position=UDim2.new(.5,6,1,-46),BackgroundColor3=palette.card,TextColor3=palette.text,Text="보유 증강·행운 설명",TextSize=13,ZIndex=13});round(inspect,8)
-    inspect.Activated:Connect(function()build.Visible=true end)
-	make("UIListLayout",cards,{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder})
-	local buttons={}
-	local waiting=false
-    local offerRevision=0
-    reroll.Activated:Connect(function()if not waiting and reroll.Active then waiting=true;net.Action:FireServer("reroll",offerRevision)end end)
-	for i=1,3 do
-		local b=make("TextButton",cards,{Name="Choice"..i,Size=UDim2.new(1,-8,0,112),BackgroundColor3=palette.card,Text="",LayoutOrder=i,ZIndex=13,AutoButtonColor=true}); round(b,12); stroke(b)
-		local tile=make('Frame',b,{Name='IconTile',Size=UDim2.fromOffset(68,68),Position=UDim2.fromOffset(12,22),BackgroundColor3=Color3.fromRGB(17,28,43),ZIndex=14});round(tile,9)
-		local fallback=label(tile,'✦',UDim2.fromScale(1,1),UDim2.new(),Enum.Font.GothamBold,palette.mint);fallback.Name='IconFallback';fallback.TextSize=32;fallback.ZIndex=15
-		local image=make('ImageLabel',tile,{Name='SkillIcon',Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit,Visible=false,ZIndex=15});round(image,9)
-		local tag=label(b,"마법 강화",UDim2.new(1,-108,.25,0),UDim2.new(0,94,0,4),Enum.Font.GothamBold,palette.mint); tag.TextSize=11; tag.TextXAlignment=Enum.TextXAlignment.Left; tag.ZIndex=14
-		local name=label(b,"화염탄 강화",UDim2.new(1,-108,.3,0),UDim2.new(0,94,.27,0),Enum.Font.GothamBold); name.TextSize=19; name.TextXAlignment=Enum.TextXAlignment.Left; name.ZIndex=14
-		local desc=label(b,"피해량 증가",UDim2.new(1,-108,.29,0),UDim2.new(0,94,.63,0),nil,palette.muted); desc.TextSize=13; desc.TextXAlignment=Enum.TextXAlignment.Left; desc.ZIndex=14
-		buttons[i]={button=b,tag=tag,name=name,desc=desc,image=image,fallback=fallback,border=b:FindFirstChildOfClass("UIStroke")}
-		b.Activated:Connect(function() if b:GetAttribute("ChoiceId") and not waiting then waiting=true; net.Action:FireServer("choose",b:GetAttribute("ChoiceId"),offerRevision) end end)
-	end
+    local choice = require(script.Parent.AugmentChoice)({
+        parent=gui,
+        template=game:GetService("ReplicatedStorage"):WaitForChild("SummonerUI"):WaitForChild("ChoiceOverlay"),
+        icons=icons,
+        send=function(...) net.Action:FireServer(...) end,
+        inspect=function() build.Visible=true end,
+    })
 	local ending=make("Frame",gui,{Name="Ending",Size=UDim2.fromScale(1,1),BackgroundColor3=palette.bg,BackgroundTransparency=.08,Visible=false,ZIndex=20})
 	local resultTitle=label(ending,"생존 성공!",UDim2.new(.9,0,0,70),UDim2.fromScale(.5,.32),Enum.Font.GothamBold,palette.mint); resultTitle.AnchorPoint=Vector2.new(.5,.5); resultTitle.TextSize=38; resultTitle.ZIndex=21
 	local resultInfo=label(ending,"",UDim2.new(.9,0,0,60),UDim2.fromScale(.5,.48),nil,palette.text); resultInfo.AnchorPoint=Vector2.new(.5,.5); resultInfo.TextSize=19; resultInfo.ZIndex=21
@@ -85,7 +73,6 @@ return function(deps)
 	again.Activated:Connect(function() net.Action:FireServer("returnToLobby") end)
 	pulse.Activated:Connect(deps.input.FireWave)
 	dashButton.Activated:Connect(deps.input.Dash)
-	local lastChoice=""
 	local stateConnection=net.State.OnClientEvent:Connect(function(s)
         returnButton.Visible=s.lobby~=true and s.over~=true
         local augments=s.augments or {};local ranks=0;local descriptions={}
@@ -123,25 +110,13 @@ return function(deps)
 		golemStatus.Text=(s.golemCooldown or 0)>0 and "대지 강타 · 자동 · "..s.golemCooldown.."초" or "대지 강타 · 자동 · 적 탐색 중"
 		if (s.shield or 0)>0 then golemStatus.Text="수호 결계 "..math.ceil(s.shield).." · "..golemStatus.Text end
 		pulse.BackgroundColor3=s.cooldown>0 and Color3.fromRGB(101,131,139) or palette.mint
-		ending.Visible=s.over==true; overlay.Visible=s.offers~=nil and not s.over
-		if s.offers then
-			local ids={}; for _,v in ipairs(s.offers) do table.insert(ids,v.id..v.level) end
-			local key=tostring(s.offerRevision or s.level)..table.concat(ids)
-            offerRevision=s.offerRevision or 0
-			if key~=lastChoice then waiting=false; lastChoice=key end
-			local odds=s.offerOdds or {common=100,rare=0,epic=0}
-            luckInfo.Text=string.format("행운 +%d · 첫 무작위 칸: 일반 %.1f%% / 희귀 %.1f%% / 영웅 %.1f%%\n다음 칸은 선택된 카드 제외 후 재계산 · 단계 강화 1장 보장(가능 시)",s.luck or 0,odds.common,odds.rare,odds.epic)
-            reroll.Text=string.format("무료 새로고침 · %d회",s.rerolls or 0);reroll.Active=(s.rerolls or 0)>0;reroll.TextColor3=reroll.Active and palette.mint or palette.muted
-            modalHint.Text=s.paused and "전투 일시 정지 · 하나를 선택하세요" or "선택하는 동안 보호됩니다 · 하나를 선택하세요"
-			for i,v in ipairs(buttons) do
-				local offer=s.offers[i]; v.button.Visible=offer~=nil
-				if offer then v.button:SetAttribute("ChoiceId",offer.id); v.tag.Text=(rarityNames[offer.rarity]or"일반").." · "..offer.tag.."  /  "..offer.level..(offer.kind=="level"and"단계"or"회");v.tag.TextColor3=rarityColors[offer.rarity]or palette.mint;if v.border then v.border.Color=v.tag.TextColor3;v.border.Thickness=offer.rarity=="epic"and 2 or 1 end; v.name.Text=offer.title; v.desc.Text=offer.desc;icons.Apply(v.image,offer.id,v.fallback);v.fallback.TextColor3=v.tag.TextColor3 end
-			end
-		else waiting=false; lastChoice="" end
+        ending.Visible=s.over==true
+        choice.Render(s)
+        gui.DisplayOrder=choice.Gui.Visible and 100 or 0 -- Choice modal sits above debug launchers/touch controls.
 		if s.over then resultTitle.Text=s.result=="victory" and "드래곤 격파!" or "다시 도전!"; resultInfo.Text=string.format("레벨 %d  ·  처치 %d  ·  증강 %d  ·  행운 +%d\n이번 판 증강은 로비 복귀 시 초기화됩니다.",s.level,s.kills,ranks,s.luck or 0) end
 	end)
 
-	gui.Destroying:Connect(function()resizeConnection:Disconnect();stateConnection:Disconnect()end)
+	gui.Destroying:Connect(function()resizeConnection:Disconnect();stateConnection:Disconnect();previewConnection:Disconnect()end)
 	return {
 		Gui = gui,
 	}

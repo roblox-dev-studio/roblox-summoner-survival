@@ -1,5 +1,26 @@
 # 개발 중 플레이 점검 기록
 
+## 2026-10-19 · GUI 편집 검증의 누락·캐시 수정 (#17 후속)
+
+- PR #18 `fca21ca` 후속. `AugmentChoice.luau` SHA-256 `2b81d9e05d7232d3dfa7e4e631f21c3a9aaed208c469382befab1af50ffd4491`, `apply_augment_ui.luau` SHA-256 `f64589ca43985f4ba64309c3f6ae6765ccadb5ecda9811500844ca5d2c2968c6`. GUI 그림·배치·게임 규칙 변경 없음.
+- **재현1:** 복사한 GUI에서 `AugmentCards.Layout`을 제거해도 Python 빌드와 Edit의 바인더 생성이 모두 허용했습니다(`missing_card_layout_accepted=True`, `missingCardLayoutAccepted=true`). 필수 UIListLayout을 양쪽 계약에 추가했습니다.
+- **재현2:** 같은 Edit VM에서 바인더 Source를 수정해도 `require`가 이전 검증 함수를 반환했습니다. `editedSourceContainsLayout=true`인데 `cachedValidationStillAcceptsMissingLayout=true`였습니다. apply는 현재 바인더/아이콘 ModuleScript를 잠깐 복사해 검증한 뒤 복사본을 제거하도록 수정했습니다.
+- **실제 엔진:** 기존 독립 Studio `740ae662-a0b3-432d-bf1b-3492fee76fa5` Edit에서 `studio_augment_authoring` 통과. 오래된 허용형 모듈을 require 캐시에 남기고 Source를 최신으로 바꾼 조건에서도 정렬 누락/동봉 Script 거부, 실패 시 이전 템플릿의 동일 Instance 보존, 정상 적용 시 편집한 제목·색 복사, preview 재실행의 편집 보존을 확인했습니다. 테스트 종료 시 GUI/모듈/Selection을 복구했습니다.
+- **렌더 보류:** 사용자가 잠금 해제가 어렵다고 알려 준 Mac에서 Heartbeat30/0.5초, PreRender0을 관찰했습니다. 새 Play VM의 클라이언트 검사에서 선택/재추첨/숨김 경계 검사는 진행됐지만 배치 갱신이 멈춰 세로 복원 검사에서 중단됐습니다. 렌더 프레임을 기다리는 명시적 사전 조건을 추가한 뒤 `UI layout check blocked: no rendered frames`로 중단됨을 확인했습니다. 전체 client fixture 통과나 신규 화면 검수로 기록하지 않습니다. 이전 unlocked 시각 증거는 아래 기록의 별도 리비전입니다.
+- **검사/정리:** Python21개·Luau182개 및 변경한 편집 도구/Studio fixture3개의 별도 문법 검사, 기존 성장/증강/몬스터/점수 회귀와 설치기 일치 통과. Play 중지. Native Save to File 내보내기·새 Baseplate 최종 설치/저장·재열기·실기기 터치/패드 검수는 계속 보류합니다. Mac 잠금을 우회하거나 다른 Studio를 조작하지 않았습니다.
+
+## 2026-10-19 · 편집 가능한 증강 GUI와 기능 연결 분리 (#17)
+
+- 기준 main `6ce8e75`, 브랜치 `feat/editable-augment-ui`. 진입점·맵·src·GUI 원본의 경로/내용을 정렬하고 각각 NUL로 구분한 SHA-256: `eae2021c973be44ebe0d623947afb4a540b190a6a09eec950d48dbbad41abc62`. 기존 결과 화면을 유지하며 별도 PR #16의 결과 요약은 포함하지 않습니다.
+- **설치/환경:** 새 빈 Baseplate `AugmentUIReview.rbxlx`, Studio `740ae662-a0b3-432d-bf1b-3492fee76fa5`, placeId0에 생성 설치기를 전체 실행했습니다. 이후 수정한 HUD/AugmentChoice와 GUI ZIndex를 Edit에서 갱신하고 새 Play VM에서 아래 결과를 확인했습니다. 최신 수정 후 별도 두 번째 빈 place 전체 설치 및 place 저장/재열기는 미검증입니다.
+- **엔진 fixture:** `studio_augment_ui` 통과. 사람이 바꾼 배경·위치·폰트/희귀도 팔레트 유지, 원본 미변경, 없는 카드 숨김, 선택·재추첨 중복 차단, 같은 제안 번호로 입력 잠금이 풀리지 않음, 0회/로비/종료 후 이전 카드 거절을 확인했습니다. 844×390/390×844의 실제 GUI 레이아웃에서 가로 스크롤·하단 버튼 분리·세로 원본 복원·텍스트 높이를 확인했습니다. `studio_skill_icon_ui` 통과: 기존 로비/업로드 대체명/요청 없는 렌더 회귀와 늦게 복제된 디자인 미리보기 숨김을 포함합니다. 격리 상태/전송 기록기를 쓰는 엔진 검사입니다.
+- **일반 전투와 실제 입력:** XP/카드/처치를 주입하지 않고 출전, 16처치·레벨2에서 3장 생성. 마우스로 새로고침을 눌러 제안1→2·횟수2→1, 첫 카드 선택으로 마탄1→2와 offers 제거, overlay=false/DisplayOrder0을 확인했습니다. D키0.4초 입력으로 X1.708→10.470 이동, 32처치까지 전투 진행을 확인했습니다. 실제 로비 버튼으로 레벨1·새로고침2·마탄0으로 초기화한 뒤 다시 출전하여 레벨2 카드를 받았습니다.
+- **시뮬레이터와 시각 검수:** iPhone14 세로 viewport389×761에서 카드3장·설명·하단 버튼을 직접 확인했습니다. 가로749×389에서는 확률 문구가 접히고 135.9높이 스크롤 영역에126높이 카드1장씩 보입니다. 실제 휠 입력으로 CanvasPosition.Y266.10까지 이동해 세 번째 `aug_iceRush_wide`를 클릭, 서버에 빙하 대로1회와 선택창 닫힘을 확인했습니다. 테스트 초기에 개발용 런처/터치 버튼이 선택창을 가려 DisplayOrder100/ZIndex35로 수정했고, 늦게 복제된 디자인 미리보기가 남는 문제도 수정했습니다. 수정 후 사진: [PC](images/augment-ui/desktop.jpg)(1799×1080), [세로](images/augment-ui/portrait.jpg)(498×1080), [가로](images/augment-ui/landscape.jpg)(1920×886). 실제 Studio 렌더이며 PC/휴대폰은 서로 다른 판의 카드입니다. 동일 조건 전후 비교나 실기기 검증은 아닙니다.
+- **종료 회귀:** 시뮬레이터를 기본으로 복원한 뒤 서버에서 Humanoid.Health=0으로 통제된 사망을 유발했습니다. 종료창 표시/선택창 숨김, 실제 종료창 로비 버튼으로 레벨1·새로고침2 초기화 확인. 자연 전투 사망이나 승리 후 전체 재도전 검증으로 세지 않습니다. 마지막 출전 요청 직후 첫 상태만 받아 재출전 완료 여부는 그 관찰로 판정하지 않았습니다. 앞선 일반 퇴각 후 재출전은 실제 레벨2까지 확인했습니다.
+- **편집 경로:** preview 명령을 두 번 실행해 기존 편집을 보존하고 apply 명령의 엔진 구조 검증/로컬 템플릿 교체를 확인했습니다. XML 원본의 텍스트·폰트·색/9-slice·그라디언트 패키징과 누락 슬롯/스크립트 거부는 Python 검사로 확인했습니다. Studio 네이티브 Save to File → `.rbxmx` 내보내기 → 재빌드 왕복은 아직 직접 검증하지 않았습니다. GUI를 내보낸 뒤 재설치하는 팀원 인수가 필요합니다.
+- **자동 검사:** 설치기·카탈로그 일치, Python20개, Luau182개 문법/전역, 성장·증강·몬스터·점수 회귀와 공백 검사 통과. GUI 자산에는 스크립트가 없습니다. 시험 후 Play 중지·시뮬레이터 복원. 임시 관찰자는 Play 종료와 함께 제거됐으며 Edit 미리보기는 편집용으로 남겼습니다.
+- **남은 한계:** 작업용 기본 디자인이며 사람의 미술 승인을 받은 화면이 아닙니다. 기존 PNG19장은 업로드 ID 미등록으로 글자 대체 표시입니다. 실제 휴대폰 터치/패드/협동/저사양 성능·청취·재미, 전체 로비/HUD 디자인은 미검증입니다. 공개 게시·구매·외부 자산 추가 없음.
+
 ## 2026-10-16 모듈 분리 검증
 
 단일 서버·클라이언트 코드를 서버 7개, 클라이언트 5개 ModuleScript로 분리했습니다.

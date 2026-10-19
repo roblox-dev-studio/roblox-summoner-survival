@@ -92,3 +92,10 @@ CI는 PR 코드를 실행하므로 `pull_request_target`이나 쓰기 토큰·�
 참고: [Roblox 협업](https://create.roblox.com/docs/projects/collaboration),
 [서버·클라이언트 경계 검증](https://create.roblox.com/docs/scripting/security/client-server-boundary),
 [Codex AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+
+## UI 디자인과 기능 연결
+
+증강 선택창은 [UI_WORKFLOW.md](docs/UI_WORKFLOW.md)의 GUI 원본/슬롯 계약을 따릅니다.
+사람이 시안과 Studio GUI를 다듬고, AI는 승인된 모양을 보존하며 상태·입력을 연결합니다.
+한 화면의 PC/모바일 검수를 마친 뒤 다른 화면으로 확대합니다. GUI 파일에 스크립트를 넣거나
+코드로 사람의 편집을 다시 덮어쓰지 않습니다. Rojo 도입은 별도 이슈로 다룹니다.

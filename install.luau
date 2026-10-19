@@ -1,5 +1,6 @@
 -- Run in a NEW, empty Studio project's Command Bar, in edit mode.
 assert(not game:GetService("RunService"):IsRunning(), "Stop Play before installing")
+assert(not game.ReplicatedStorage:FindFirstChild("SummonerUI"), "SummonerUI already exists; installation cancelled")
 assert(not workspace:FindFirstChild("SummonerArena"), "SummonerArena already exists; installation cancelled")
 assert(not game.ReplicatedStorage:FindFirstChild("SummonerNet"), "SummonerNet already exists; installation cancelled")
 assert(not game.ServerScriptService:FindFirstChild("SummonerServer"), "SummonerServer already exists; installation cancelled")
@@ -277,6 +278,466 @@ do
         end
         model:Destroy()
     end
+end
+
+-- Source: assets/ui/augment-choice.rbxmx
+do
+local nodes={}
+local function enumValue(kind,value)
+    for _,item in ipairs(kind:GetEnumItems()) do if item.Value==value then return item end end
+    error("Invalid GUI enum: "..tostring(kind).." / "..tostring(value))
+end
+nodes[1]=Instance.new("Frame")
+nodes[1]["Name"]="ChoiceOverlay"
+nodes[1]["Size"]=UDim2.new(1,0,1,0)
+nodes[1]["BackgroundColor3"]=Color3.new(0.0196078431373,0.0352941176471,0.0588235294118)
+nodes[1]["BackgroundTransparency"]=0.18
+nodes[1]["BorderSizePixel"]=0
+nodes[1]["Visible"]=false
+nodes[1]["Active"]=true
+nodes[1]["ZIndex"]=35
+nodes[2]=Instance.new("Folder")
+nodes[2]["Name"]="RarityPalette"
+nodes[3]=Instance.new("Color3Value")
+nodes[3]["Name"]="common"
+nodes[3]["Value"]=Color3.new(0.745098039216,0.839215686275,0.870588235294)
+nodes[4]=Instance.new("Color3Value")
+nodes[4]["Name"]="rare"
+nodes[4]["Value"]=Color3.new(0.443137254902,0.760784313725,1)
+nodes[5]=Instance.new("Color3Value")
+nodes[5]["Name"]="epic"
+nodes[5]["Value"]=Color3.new(0.858823529412,0.603921568627,1)
+nodes[6]=Instance.new("Frame")
+nodes[6]["Name"]="Modal"
+nodes[6]["Size"]=UDim2.new(0.94,0,0.9,0)
+nodes[6]["Position"]=UDim2.new(0.5,0,0.5,0)
+nodes[6]["AnchorPoint"]=Vector2.new(0.5,0.5)
+nodes[6]["BackgroundColor3"]=Color3.new(0.078431372549,0.0980392156863,0.137254901961)
+nodes[6]["BorderSizePixel"]=0
+nodes[6]["ZIndex"]=11
+nodes[7]=Instance.new("UICorner")
+nodes[7]["Name"]="Corner"
+nodes[7]["CornerRadius"]=UDim.new(0,14)
+nodes[8]=Instance.new("UIStroke")
+nodes[8]["Name"]="Border"
+nodes[8]["Color"]=Color3.new(0.435294117647,0.38431372549,0.282352941176)
+nodes[8]["Thickness"]=1
+nodes[9]=Instance.new("UISizeConstraint")
+nodes[9]["Name"]="Bounds"
+nodes[9]["MaxSize"]=Vector2.new(680,660)
+nodes[10]=Instance.new("TextLabel")
+nodes[10]["Name"]="Title"
+nodes[10]["Text"]="새로운 힘을 선택하세요"
+nodes[10]["Size"]=UDim2.new(1,-40,0,32)
+nodes[10]["Position"]=UDim2.new(0,20,0,18)
+nodes[10]["BackgroundTransparency"]=1
+nodes[10]["Font"]=enumValue(nodes[10]["Font"].EnumType,20)
+nodes[10]["TextColor3"]=Color3.new(0.937254901961,0.827450980392,0.58431372549)
+nodes[10]["TextSize"]=25
+nodes[10]["TextWrapped"]=true
+nodes[10]["TextXAlignment"]=enumValue(nodes[10]["TextXAlignment"].EnumType,0)
+nodes[10]["TextYAlignment"]=enumValue(nodes[10]["TextYAlignment"].EnumType,1)
+nodes[10]["ZIndex"]=14
+nodes[11]=Instance.new("TextLabel")
+nodes[11]["Name"]="Hint"
+nodes[11]["Text"]="전투 일시 정지 · 세 가지 중 하나를 선택하세요"
+nodes[11]["Size"]=UDim2.new(1,-40,0,24)
+nodes[11]["Position"]=UDim2.new(0,20,0,56)
+nodes[11]["BackgroundTransparency"]=1
+nodes[11]["Font"]=enumValue(nodes[11]["Font"].EnumType,19)
+nodes[11]["TextColor3"]=Color3.new(0.737254901961,0.76862745098,0.819607843137)
+nodes[11]["TextSize"]=16
+nodes[11]["TextWrapped"]=true
+nodes[11]["TextXAlignment"]=enumValue(nodes[11]["TextXAlignment"].EnumType,0)
+nodes[11]["TextYAlignment"]=enumValue(nodes[11]["TextYAlignment"].EnumType,1)
+nodes[11]["ZIndex"]=14
+nodes[12]=Instance.new("TextLabel")
+nodes[12]["Name"]="LuckInfo"
+nodes[12]["Text"]="행운 +0 · 첫 무작위 칸: 일반 70% / 희귀 25% / 영웅 5%\n다음 칸은 제외 후 재계산 · 단계 강화 1장 보장(가능 시)"
+nodes[12]["Size"]=UDim2.new(1,-40,0,36)
+nodes[12]["Position"]=UDim2.new(0,20,0,88)
+nodes[12]["BackgroundTransparency"]=1
+nodes[12]["Font"]=enumValue(nodes[12]["Font"].EnumType,19)
+nodes[12]["TextColor3"]=Color3.new(0.647058823529,0.698039215686,0.760784313725)
+nodes[12]["TextSize"]=11
+nodes[12]["TextWrapped"]=true
+nodes[12]["TextXAlignment"]=enumValue(nodes[12]["TextXAlignment"].EnumType,0)
+nodes[12]["TextYAlignment"]=enumValue(nodes[12]["TextYAlignment"].EnumType,1)
+nodes[12]["ZIndex"]=14
+nodes[13]=Instance.new("ScrollingFrame")
+nodes[13]["Name"]="AugmentCards"
+nodes[13]["Size"]=UDim2.new(1,-32,1,-210)
+nodes[13]["Position"]=UDim2.new(0,16,0,136)
+nodes[13]["BackgroundTransparency"]=1
+nodes[13]["BorderSizePixel"]=0
+nodes[13]["CanvasSize"]=UDim2.new(0,0,0,0)
+nodes[13]["AutomaticCanvasSize"]=enumValue(nodes[13]["AutomaticCanvasSize"].EnumType,2)
+nodes[13]["ScrollBarThickness"]=4
+nodes[13]["ScrollBarImageColor3"]=Color3.new(0.435294117647,0.38431372549,0.282352941176)
+nodes[13]["ZIndex"]=12
+nodes[14]=Instance.new("UIListLayout")
+nodes[14]["Name"]="Layout"
+nodes[14]["Padding"]=UDim.new(0,12)
+nodes[14]["SortOrder"]=enumValue(nodes[14]["SortOrder"].EnumType,2)
+nodes[15]=Instance.new("TextButton")
+nodes[15]["Name"]="Choice1"
+nodes[15]["Size"]=UDim2.new(1,-8,0,126)
+nodes[15]["BackgroundColor3"]=Color3.new(0.125490196078,0.152941176471,0.2)
+nodes[15]["Text"]=""
+nodes[15]["LayoutOrder"]=1
+nodes[15]["ZIndex"]=13
+nodes[15]["AutoButtonColor"]=true
+nodes[16]=Instance.new("UICorner")
+nodes[16]["Name"]="Corner"
+nodes[16]["CornerRadius"]=UDim.new(0,10)
+nodes[17]=Instance.new("UIStroke")
+nodes[17]["Name"]="Border"
+nodes[17]["Color"]=Color3.new(0.435294117647,0.38431372549,0.282352941176)
+nodes[17]["Thickness"]=1
+nodes[18]=Instance.new("Frame")
+nodes[18]["Name"]="IconTile"
+nodes[18]["Size"]=UDim2.new(0,58,0,58)
+nodes[18]["Position"]=UDim2.new(0,12,0,34)
+nodes[18]["BackgroundColor3"]=Color3.new(0.0705882352941,0.0980392156863,0.145098039216)
+nodes[18]["BorderSizePixel"]=0
+nodes[18]["ZIndex"]=14
+nodes[19]=Instance.new("UICorner")
+nodes[19]["Name"]="Corner"
+nodes[19]["CornerRadius"]=UDim.new(0,8)
+nodes[20]=Instance.new("TextLabel")
+nodes[20]["Name"]="IconFallback"
+nodes[20]["Text"]="운석"
+nodes[20]["Size"]=UDim2.new(1,0,1,0)
+nodes[20]["Position"]=UDim2.new(0,0,0,0)
+nodes[20]["BackgroundTransparency"]=1
+nodes[20]["Font"]=enumValue(nodes[20]["Font"].EnumType,20)
+nodes[20]["TextColor3"]=Color3.new(0.937254901961,0.827450980392,0.58431372549)
+nodes[20]["TextSize"]=20
+nodes[20]["TextWrapped"]=true
+nodes[20]["TextXAlignment"]=enumValue(nodes[20]["TextXAlignment"].EnumType,2)
+nodes[20]["TextYAlignment"]=enumValue(nodes[20]["TextYAlignment"].EnumType,1)
+nodes[20]["ZIndex"]=14
+nodes[21]=Instance.new("ImageLabel")
+nodes[21]["Name"]="SkillIcon"
+nodes[21]["Size"]=UDim2.new(1,0,1,0)
+nodes[21]["BackgroundTransparency"]=1
+nodes[21]["Image"]=""
+nodes[21]["ScaleType"]=enumValue(nodes[21]["ScaleType"].EnumType,3)
+nodes[21]["Visible"]=false
+nodes[21]["ZIndex"]=15
+nodes[22]=Instance.new("UICorner")
+nodes[22]["Name"]="Corner"
+nodes[22]["CornerRadius"]=UDim.new(0,8)
+nodes[23]=Instance.new("TextLabel")
+nodes[23]["Name"]="Tag"
+nodes[23]["Text"]="영웅 · 메테오 / 1회"
+nodes[23]["Size"]=UDim2.new(1,-98,0,20)
+nodes[23]["Position"]=UDim2.new(0,84,0,10)
+nodes[23]["BackgroundTransparency"]=1
+nodes[23]["Font"]=enumValue(nodes[23]["Font"].EnumType,20)
+nodes[23]["TextColor3"]=Color3.new(0.745098039216,0.839215686275,0.870588235294)
+nodes[23]["TextSize"]=11
+nodes[23]["TextWrapped"]=true
+nodes[23]["TextXAlignment"]=enumValue(nodes[23]["TextXAlignment"].EnumType,0)
+nodes[23]["TextYAlignment"]=enumValue(nodes[23]["TextYAlignment"].EnumType,1)
+nodes[23]["ZIndex"]=14
+nodes[24]=Instance.new("TextLabel")
+nodes[24]["Name"]="Title"
+nodes[24]["Text"]="운석의 여진"
+nodes[24]["Size"]=UDim2.new(1,-98,0,30)
+nodes[24]["Position"]=UDim2.new(0,84,0,31)
+nodes[24]["BackgroundTransparency"]=1
+nodes[24]["Font"]=enumValue(nodes[24]["Font"].EnumType,20)
+nodes[24]["TextColor3"]=Color3.new(0.933333333333,0.917647058824,0.878431372549)
+nodes[24]["TextSize"]=21
+nodes[24]["TextWrapped"]=true
+nodes[24]["TextXAlignment"]=enumValue(nodes[24]["TextXAlignment"].EnumType,0)
+nodes[24]["TextYAlignment"]=enumValue(nodes[24]["TextYAlignment"].EnumType,1)
+nodes[24]["ZIndex"]=14
+nodes[25]=Instance.new("TextLabel")
+nodes[25]["Name"]="Description"
+nodes[25]["Text"]="운석이 떨어진 자리에 한 번 더 폭발합니다."
+nodes[25]["Size"]=UDim2.new(1,-98,0,52)
+nodes[25]["Position"]=UDim2.new(0,84,0,64)
+nodes[25]["BackgroundTransparency"]=1
+nodes[25]["Font"]=enumValue(nodes[25]["Font"].EnumType,19)
+nodes[25]["TextColor3"]=Color3.new(0.729411764706,0.76862745098,0.83137254902)
+nodes[25]["TextSize"]=14
+nodes[25]["TextWrapped"]=true
+nodes[25]["TextXAlignment"]=enumValue(nodes[25]["TextXAlignment"].EnumType,0)
+nodes[25]["TextYAlignment"]=enumValue(nodes[25]["TextYAlignment"].EnumType,0)
+nodes[25]["ZIndex"]=14
+nodes[26]=Instance.new("TextButton")
+nodes[26]["Name"]="Choice2"
+nodes[26]["Size"]=UDim2.new(1,-8,0,126)
+nodes[26]["BackgroundColor3"]=Color3.new(0.125490196078,0.152941176471,0.2)
+nodes[26]["Text"]=""
+nodes[26]["LayoutOrder"]=2
+nodes[26]["ZIndex"]=13
+nodes[26]["AutoButtonColor"]=true
+nodes[27]=Instance.new("UICorner")
+nodes[27]["Name"]="Corner"
+nodes[27]["CornerRadius"]=UDim.new(0,10)
+nodes[28]=Instance.new("UIStroke")
+nodes[28]["Name"]="Border"
+nodes[28]["Color"]=Color3.new(0.435294117647,0.38431372549,0.282352941176)
+nodes[28]["Thickness"]=1
+nodes[29]=Instance.new("Frame")
+nodes[29]["Name"]="IconTile"
+nodes[29]["Size"]=UDim2.new(0,58,0,58)
+nodes[29]["Position"]=UDim2.new(0,12,0,34)
+nodes[29]["BackgroundColor3"]=Color3.new(0.0705882352941,0.0980392156863,0.145098039216)
+nodes[29]["BorderSizePixel"]=0
+nodes[29]["ZIndex"]=14
+nodes[30]=Instance.new("UICorner")
+nodes[30]["Name"]="Corner"
+nodes[30]["CornerRadius"]=UDim.new(0,8)
+nodes[31]=Instance.new("TextLabel")
+nodes[31]["Name"]="IconFallback"
+nodes[31]["Text"]="얼음"
+nodes[31]["Size"]=UDim2.new(1,0,1,0)
+nodes[31]["Position"]=UDim2.new(0,0,0,0)
+nodes[31]["BackgroundTransparency"]=1
+nodes[31]["Font"]=enumValue(nodes[31]["Font"].EnumType,20)
+nodes[31]["TextColor3"]=Color3.new(0.937254901961,0.827450980392,0.58431372549)
+nodes[31]["TextSize"]=20
+nodes[31]["TextWrapped"]=true
+nodes[31]["TextXAlignment"]=enumValue(nodes[31]["TextXAlignment"].EnumType,2)
+nodes[31]["TextYAlignment"]=enumValue(nodes[31]["TextYAlignment"].EnumType,1)
+nodes[31]["ZIndex"]=14
+nodes[32]=Instance.new("ImageLabel")
+nodes[32]["Name"]="SkillIcon"
+nodes[32]["Size"]=UDim2.new(1,0,1,0)
+nodes[32]["BackgroundTransparency"]=1
+nodes[32]["Image"]=""
+nodes[32]["ScaleType"]=enumValue(nodes[32]["ScaleType"].EnumType,3)
+nodes[32]["Visible"]=false
+nodes[32]["ZIndex"]=15
+nodes[33]=Instance.new("UICorner")
+nodes[33]["Name"]="Corner"
+nodes[33]["CornerRadius"]=UDim.new(0,8)
+nodes[34]=Instance.new("TextLabel")
+nodes[34]["Name"]="Tag"
+nodes[34]["Text"]="희귀 · 얼음창 / 1회"
+nodes[34]["Size"]=UDim2.new(1,-98,0,20)
+nodes[34]["Position"]=UDim2.new(0,84,0,10)
+nodes[34]["BackgroundTransparency"]=1
+nodes[34]["Font"]=enumValue(nodes[34]["Font"].EnumType,20)
+nodes[34]["TextColor3"]=Color3.new(0.745098039216,0.839215686275,0.870588235294)
+nodes[34]["TextSize"]=11
+nodes[34]["TextWrapped"]=true
+nodes[34]["TextXAlignment"]=enumValue(nodes[34]["TextXAlignment"].EnumType,0)
+nodes[34]["TextYAlignment"]=enumValue(nodes[34]["TextYAlignment"].EnumType,1)
+nodes[34]["ZIndex"]=14
+nodes[35]=Instance.new("TextLabel")
+nodes[35]["Name"]="Title"
+nodes[35]["Text"]="쌍빙창"
+nodes[35]["Size"]=UDim2.new(1,-98,0,30)
+nodes[35]["Position"]=UDim2.new(0,84,0,31)
+nodes[35]["BackgroundTransparency"]=1
+nodes[35]["Font"]=enumValue(nodes[35]["Font"].EnumType,20)
+nodes[35]["TextColor3"]=Color3.new(0.933333333333,0.917647058824,0.878431372549)
+nodes[35]["TextSize"]=21
+nodes[35]["TextWrapped"]=true
+nodes[35]["TextXAlignment"]=enumValue(nodes[35]["TextXAlignment"].EnumType,0)
+nodes[35]["TextYAlignment"]=enumValue(nodes[35]["TextYAlignment"].EnumType,1)
+nodes[35]["ZIndex"]=14
+nodes[36]=Instance.new("TextLabel")
+nodes[36]["Name"]="Description"
+nodes[36]["Text"]="얼음창을 두 발 발사합니다. 각 탄환 피해는 조정됩니다."
+nodes[36]["Size"]=UDim2.new(1,-98,0,52)
+nodes[36]["Position"]=UDim2.new(0,84,0,64)
+nodes[36]["BackgroundTransparency"]=1
+nodes[36]["Font"]=enumValue(nodes[36]["Font"].EnumType,19)
+nodes[36]["TextColor3"]=Color3.new(0.729411764706,0.76862745098,0.83137254902)
+nodes[36]["TextSize"]=14
+nodes[36]["TextWrapped"]=true
+nodes[36]["TextXAlignment"]=enumValue(nodes[36]["TextXAlignment"].EnumType,0)
+nodes[36]["TextYAlignment"]=enumValue(nodes[36]["TextYAlignment"].EnumType,0)
+nodes[36]["ZIndex"]=14
+nodes[37]=Instance.new("TextButton")
+nodes[37]["Name"]="Choice3"
+nodes[37]["Size"]=UDim2.new(1,-8,0,126)
+nodes[37]["BackgroundColor3"]=Color3.new(0.125490196078,0.152941176471,0.2)
+nodes[37]["Text"]=""
+nodes[37]["LayoutOrder"]=3
+nodes[37]["ZIndex"]=13
+nodes[37]["AutoButtonColor"]=true
+nodes[38]=Instance.new("UICorner")
+nodes[38]["Name"]="Corner"
+nodes[38]["CornerRadius"]=UDim.new(0,10)
+nodes[39]=Instance.new("UIStroke")
+nodes[39]["Name"]="Border"
+nodes[39]["Color"]=Color3.new(0.435294117647,0.38431372549,0.282352941176)
+nodes[39]["Thickness"]=1
+nodes[40]=Instance.new("Frame")
+nodes[40]["Name"]="IconTile"
+nodes[40]["Size"]=UDim2.new(0,58,0,58)
+nodes[40]["Position"]=UDim2.new(0,12,0,34)
+nodes[40]["BackgroundColor3"]=Color3.new(0.0705882352941,0.0980392156863,0.145098039216)
+nodes[40]["BorderSizePixel"]=0
+nodes[40]["ZIndex"]=14
+nodes[41]=Instance.new("UICorner")
+nodes[41]["Name"]="Corner"
+nodes[41]["CornerRadius"]=UDim.new(0,8)
+nodes[42]=Instance.new("TextLabel")
+nodes[42]["Name"]="IconFallback"
+nodes[42]["Text"]="행운"
+nodes[42]["Size"]=UDim2.new(1,0,1,0)
+nodes[42]["Position"]=UDim2.new(0,0,0,0)
+nodes[42]["BackgroundTransparency"]=1
+nodes[42]["Font"]=enumValue(nodes[42]["Font"].EnumType,20)
+nodes[42]["TextColor3"]=Color3.new(0.937254901961,0.827450980392,0.58431372549)
+nodes[42]["TextSize"]=20
+nodes[42]["TextWrapped"]=true
+nodes[42]["TextXAlignment"]=enumValue(nodes[42]["TextXAlignment"].EnumType,2)
+nodes[42]["TextYAlignment"]=enumValue(nodes[42]["TextYAlignment"].EnumType,1)
+nodes[42]["ZIndex"]=14
+nodes[43]=Instance.new("ImageLabel")
+nodes[43]["Name"]="SkillIcon"
+nodes[43]["Size"]=UDim2.new(1,0,1,0)
+nodes[43]["BackgroundTransparency"]=1
+nodes[43]["Image"]=""
+nodes[43]["ScaleType"]=enumValue(nodes[43]["ScaleType"].EnumType,3)
+nodes[43]["Visible"]=false
+nodes[43]["ZIndex"]=15
+nodes[44]=Instance.new("UICorner")
+nodes[44]["Name"]="Corner"
+nodes[44]["CornerRadius"]=UDim.new(0,8)
+nodes[45]=Instance.new("TextLabel")
+nodes[45]["Name"]="Tag"
+nodes[45]["Text"]="일반 · 공통 / 1회"
+nodes[45]["Size"]=UDim2.new(1,-98,0,20)
+nodes[45]["Position"]=UDim2.new(0,84,0,10)
+nodes[45]["BackgroundTransparency"]=1
+nodes[45]["Font"]=enumValue(nodes[45]["Font"].EnumType,20)
+nodes[45]["TextColor3"]=Color3.new(0.745098039216,0.839215686275,0.870588235294)
+nodes[45]["TextSize"]=11
+nodes[45]["TextWrapped"]=true
+nodes[45]["TextXAlignment"]=enumValue(nodes[45]["TextXAlignment"].EnumType,0)
+nodes[45]["TextYAlignment"]=enumValue(nodes[45]["TextYAlignment"].EnumType,1)
+nodes[45]["ZIndex"]=14
+nodes[46]=Instance.new("TextLabel")
+nodes[46]["Name"]="Title"
+nodes[46]["Text"]="행운의 부적"
+nodes[46]["Size"]=UDim2.new(1,-98,0,30)
+nodes[46]["Position"]=UDim2.new(0,84,0,31)
+nodes[46]["BackgroundTransparency"]=1
+nodes[46]["Font"]=enumValue(nodes[46]["Font"].EnumType,20)
+nodes[46]["TextColor3"]=Color3.new(0.933333333333,0.917647058824,0.878431372549)
+nodes[46]["TextSize"]=21
+nodes[46]["TextWrapped"]=true
+nodes[46]["TextXAlignment"]=enumValue(nodes[46]["TextXAlignment"].EnumType,0)
+nodes[46]["TextYAlignment"]=enumValue(nodes[46]["TextYAlignment"].EnumType,1)
+nodes[46]["ZIndex"]=14
+nodes[47]=Instance.new("TextLabel")
+nodes[47]["Name"]="Description"
+nodes[47]["Text"]="이번 판 행운 +20. 희귀·영웅 카드의 추첨 가중치가 증가합니다."
+nodes[47]["Size"]=UDim2.new(1,-98,0,52)
+nodes[47]["Position"]=UDim2.new(0,84,0,64)
+nodes[47]["BackgroundTransparency"]=1
+nodes[47]["Font"]=enumValue(nodes[47]["Font"].EnumType,19)
+nodes[47]["TextColor3"]=Color3.new(0.729411764706,0.76862745098,0.83137254902)
+nodes[47]["TextSize"]=14
+nodes[47]["TextWrapped"]=true
+nodes[47]["TextXAlignment"]=enumValue(nodes[47]["TextXAlignment"].EnumType,0)
+nodes[47]["TextYAlignment"]=enumValue(nodes[47]["TextYAlignment"].EnumType,0)
+nodes[47]["ZIndex"]=14
+nodes[48]=Instance.new("TextButton")
+nodes[48]["Name"]="Reroll"
+nodes[48]["Size"]=UDim2.new(0.5,-22,0,40)
+nodes[48]["Position"]=UDim2.new(0,16,1,-66)
+nodes[48]["BackgroundColor3"]=Color3.new(0.125490196078,0.152941176471,0.2)
+nodes[48]["TextColor3"]=Color3.new(0.937254901961,0.827450980392,0.58431372549)
+nodes[48]["Font"]=enumValue(nodes[48]["Font"].EnumType,20)
+nodes[48]["TextSize"]=13
+nodes[48]["Text"]="무료 새로고침 · 2회"
+nodes[48]["TextWrapped"]=true
+nodes[48]["ZIndex"]=13
+nodes[49]=Instance.new("UICorner")
+nodes[49]["Name"]="Corner"
+nodes[49]["CornerRadius"]=UDim.new(0,8)
+nodes[50]=Instance.new("TextButton")
+nodes[50]["Name"]="InspectBuild"
+nodes[50]["Size"]=UDim2.new(0.5,-22,0,40)
+nodes[50]["Position"]=UDim2.new(0.5,6,1,-66)
+nodes[50]["BackgroundColor3"]=Color3.new(0.125490196078,0.152941176471,0.2)
+nodes[50]["TextColor3"]=Color3.new(0.811764705882,0.847058823529,0.898039215686)
+nodes[50]["Font"]=enumValue(nodes[50]["Font"].EnumType,20)
+nodes[50]["TextSize"]=13
+nodes[50]["Text"]="보유 증강 · 행운 설명"
+nodes[50]["TextWrapped"]=true
+nodes[50]["ZIndex"]=13
+nodes[51]=Instance.new("UICorner")
+nodes[51]["Name"]="Corner"
+nodes[51]["CornerRadius"]=UDim.new(0,8)
+nodes[52]=Instance.new("TextLabel")
+nodes[52]["Name"]="Status"
+nodes[52]["Text"]=""
+nodes[52]["Size"]=UDim2.new(1,-32,0,18)
+nodes[52]["Position"]=UDim2.new(0,16,1,-22)
+nodes[52]["BackgroundTransparency"]=1
+nodes[52]["Font"]=enumValue(nodes[52]["Font"].EnumType,19)
+nodes[52]["TextColor3"]=Color3.new(0.937254901961,0.827450980392,0.58431372549)
+nodes[52]["TextSize"]=11
+nodes[52]["TextWrapped"]=true
+nodes[52]["TextXAlignment"]=enumValue(nodes[52]["TextXAlignment"].EnumType,0)
+nodes[52]["TextYAlignment"]=enumValue(nodes[52]["TextYAlignment"].EnumType,1)
+nodes[52]["ZIndex"]=14
+nodes[2].Parent=nodes[1]
+nodes[6].Parent=nodes[1]
+nodes[3].Parent=nodes[2]
+nodes[4].Parent=nodes[2]
+nodes[5].Parent=nodes[2]
+nodes[7].Parent=nodes[6]
+nodes[8].Parent=nodes[6]
+nodes[9].Parent=nodes[6]
+nodes[10].Parent=nodes[6]
+nodes[11].Parent=nodes[6]
+nodes[12].Parent=nodes[6]
+nodes[13].Parent=nodes[6]
+nodes[48].Parent=nodes[6]
+nodes[50].Parent=nodes[6]
+nodes[52].Parent=nodes[6]
+nodes[14].Parent=nodes[13]
+nodes[15].Parent=nodes[13]
+nodes[26].Parent=nodes[13]
+nodes[37].Parent=nodes[13]
+nodes[16].Parent=nodes[15]
+nodes[17].Parent=nodes[15]
+nodes[18].Parent=nodes[15]
+nodes[23].Parent=nodes[15]
+nodes[24].Parent=nodes[15]
+nodes[25].Parent=nodes[15]
+nodes[19].Parent=nodes[18]
+nodes[20].Parent=nodes[18]
+nodes[21].Parent=nodes[18]
+nodes[22].Parent=nodes[21]
+nodes[27].Parent=nodes[26]
+nodes[28].Parent=nodes[26]
+nodes[29].Parent=nodes[26]
+nodes[34].Parent=nodes[26]
+nodes[35].Parent=nodes[26]
+nodes[36].Parent=nodes[26]
+nodes[30].Parent=nodes[29]
+nodes[31].Parent=nodes[29]
+nodes[32].Parent=nodes[29]
+nodes[33].Parent=nodes[32]
+nodes[38].Parent=nodes[37]
+nodes[39].Parent=nodes[37]
+nodes[40].Parent=nodes[37]
+nodes[45].Parent=nodes[37]
+nodes[46].Parent=nodes[37]
+nodes[47].Parent=nodes[37]
+nodes[41].Parent=nodes[40]
+nodes[42].Parent=nodes[40]
+nodes[43].Parent=nodes[40]
+nodes[44].Parent=nodes[43]
+nodes[49].Parent=nodes[48]
+nodes[51].Parent=nodes[50]
+local folder=Instance.new("Folder");folder.Name="SummonerUI"
+nodes[1].Parent=folder
+folder.Parent=game.ReplicatedStorage
 end
 
 -- Generated below. Edit src/ and entrypoints, then rebuild.
@@ -5838,6 +6299,126 @@ end
 
 return VFXMath
 ]====])
+-- Source: src/client/flow/AugmentChoice.luau
+addModule(modules,{"flow","AugmentChoice"},[====[
+-- Binds server offers to a script-free, Studio-authored GUI template.
+-- Layout, fonts, decorations and card backgrounds remain owned by the designer.
+return function(deps)
+    local icons = deps.icons
+    local overlay = deps.template:Clone()
+    overlay.Visible = false
+    overlay.Parent = deps.parent
+    local modal = overlay:FindFirstChild("Modal")
+    assert(modal, "Augment UI contract: missing Modal")
+    local function slot(parent, name, className)
+        local value = parent:FindFirstChild(name)
+        assert(value and value:IsA(className), "Augment UI contract: missing " .. parent:GetFullName() .. "." .. name .. " (" .. className .. ")")
+        return value
+    end
+    local hint = slot(modal, "Hint", "TextLabel")
+    local luckInfo = slot(modal, "LuckInfo", "TextLabel")
+    local status = slot(modal, "Status", "TextLabel")
+    local cards = slot(modal, "AugmentCards", "ScrollingFrame")
+    slot(cards, "Layout", "UIListLayout")
+    local reroll = slot(modal, "Reroll", "TextButton")
+    local inspect = slot(modal, "InspectBuild", "TextButton")
+    local palette = slot(overlay, "RarityPalette", "Folder")
+    local rarityNames = {common="일반", rare="희귀", epic="영웅"}
+    local buttons = {}
+    local waiting, revision, rerolls = false, nil, 0
+    -- Short landscape screens keep a full card visible. Restore authored layout on resize.
+    local normalPosition, normalSize = cards.Position, cards.Size
+    local normalLuckVisible = luckInfo.Visible
+    local function layout()
+        local compact = modal.AbsoluteSize.Y < 480
+        local gap = compact and math.max(0, normalPosition.Y.Offset - hint.Position.Y.Offset - hint.Size.Y.Offset - 8) or 0
+        luckInfo.Visible = normalLuckVisible and not compact
+        cards.Position = normalPosition - UDim2.fromOffset(0, gap)
+        cards.Size = normalSize + UDim2.fromOffset(0, gap)
+    end
+    local resizeConnection = modal:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+    overlay.Destroying:Connect(function() resizeConnection:Disconnect() end)
+    layout()
+    local function pending(value)
+        waiting = value
+        status.Text = value and "선택 처리 중…" or ""
+        reroll.Active = overlay.Visible and not value and rerolls > 0
+        reroll.Selectable = reroll.Active
+        for _, item in ipairs(buttons) do
+            item.button.Active = overlay.Visible and item.button.Visible and not value
+            item.button.Selectable = item.button.Active
+        end
+    end
+    local function choose(index)
+        local item = buttons[index]
+        if not item or not overlay.Visible or waiting or not item.button.Visible or not revision then return false end
+        local id = item.button:GetAttribute("ChoiceId")
+        if not id then return false end
+        pending(true)
+        deps.send("choose", id, revision)
+        return true
+    end
+    local function refresh()
+        if not overlay.Visible or waiting or not revision or rerolls <= 0 then return false end
+        pending(true)
+        deps.send("reroll", revision)
+        return true
+    end
+    for i = 1, 3 do
+        local button = slot(cards, "Choice" .. i, "TextButton")
+        local tile = slot(button, "IconTile", "Frame")
+        buttons[i] = {
+            button=button, title=slot(button, "Title", "TextLabel"),
+            desc=slot(button, "Description", "TextLabel"), tag=slot(button, "Tag", "TextLabel"),
+            image=slot(tile, "SkillIcon", "ImageLabel"), fallback=slot(tile, "IconFallback", "TextLabel"),
+            border=slot(button, "Border", "UIStroke"),
+        }
+        button.Activated:Connect(function() choose(i) end)
+    end
+    reroll.Activated:Connect(refresh)
+    inspect.Activated:Connect(function() if overlay.Visible then deps.inspect() end end)
+    local function render(state)
+        overlay.Visible = state.offers ~= nil and not state.over and not state.lobby
+        if not overlay.Visible then
+            revision = nil
+            rerolls = 0
+            for _, item in ipairs(buttons) do item.button:SetAttribute("ChoiceId", nil) end
+            pending(false)
+            return
+        end
+        if revision ~= state.offerRevision then
+            revision = state.offerRevision
+            waiting = false
+            cards.CanvasPosition = Vector2.zero
+        end
+        rerolls = state.rerolls or 0
+        reroll.Text = string.format("무료 새로고침 · %d회", rerolls)
+        hint.Text = state.paused and "전투 일시 정지 · 하나를 선택하세요" or "선택하는 동안 보호됩니다 · 하나를 선택하세요"
+        local odds = state.offerOdds or {common=100, rare=0, epic=0}
+        luckInfo.Text = string.format("행운 +%d · 첫 무작위 칸: 일반 %.1f%% / 희귀 %.1f%% / 영웅 %.1f%%\n다음 칸은 제외 후 재계산 · 단계 강화 1장 보장(가능 시)", state.luck or 0, odds.common, odds.rare, odds.epic)
+        for i, item in ipairs(buttons) do
+            local offer = state.offers[i]
+            item.button.Visible = offer ~= nil
+            item.button:SetAttribute("ChoiceId", offer and offer.id or nil)
+            if offer then
+                local rarity = rarityNames[offer.rarity] and offer.rarity or "common"
+                item.tag.Text = string.format("%s · %s / %d%s", rarityNames[rarity], offer.tag, offer.level, offer.kind == "level" and "단계" or "회")
+                local color = slot(palette, rarity, "Color3Value").Value
+                item.tag.TextColor3 = color
+                item.border.Color = color
+                item.title.Text = offer.title
+                item.desc.Text = offer.desc
+                -- Shared icon helper also serves the old loadout. Preserve this template's typography.
+                local scaled, wrapped = item.fallback.TextScaled, item.fallback.TextWrapped
+                icons.Apply(item.image, offer.id, item.fallback)
+                item.fallback.TextScaled, item.fallback.TextWrapped = scaled, wrapped
+            end
+        end
+        pending(waiting)
+    end
+    return {Gui=overlay, Render=render, Choose=choose, Reroll=refresh, Destroy=function() overlay:Destroy() end}
+end
+]====])
 -- Source: src/client/flow/HUD.luau
 addModule(modules,{"flow","HUD"},[====[
 -- Native editable GUI, offers and state rendering.
@@ -5846,6 +6427,13 @@ return function(deps)
 	local theme = require(script.Parent.Parent:WaitForChild("Theme"))
 	local palette, make, round, stroke, label = theme.Palette, theme.Make, theme.Round, theme.Stroke, theme.Label
 	local icons=require(script.Parent.SkillIcons)
+	local playerGui=player:WaitForChild("PlayerGui")
+	local function hideDesignPreview(child)
+		if child.Name=="AugmentDesignPreview" and child:IsA("ScreenGui") then child.Enabled=false end
+	end
+	-- StarterGui may replicate after the HUD starts. Only hide the runtime copy.
+	local previewConnection=playerGui.ChildAdded:Connect(hideDesignPreview)
+	for _,child in ipairs(playerGui:GetChildren()) do hideDesignPreview(child) end
 	local gui=Instance.new("ScreenGui"); gui.Name="SummonerHUD"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=false; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; gui.Parent=player:WaitForChild("PlayerGui")
 	local encounter=make("Frame",gui,{Name="EncounterPanel",Size=UDim2.new(.8,0,0,26),Position=UDim2.new(1,-12,0,6),AnchorPoint=Vector2.new(1,0),BackgroundColor3=palette.bg,BackgroundTransparency=.15})
 	make("UISizeConstraint",encounter,{MaxSize=Vector2.new(320,26)});round(encounter,8)
@@ -5886,7 +6474,6 @@ return function(deps)
 		skills.TextSize=width<500 and 10 or 11
 	end
 	local resizeConnection=workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutActions);layoutActions()
-	local rarityColors={common=Color3.fromRGB(190,214,222),rare=Color3.fromRGB(113,194,255),epic=Color3.fromRGB(219,154,255)}
     local rarityNames={common="일반",rare="희귀",epic="영웅"}
     local buildButton=make("TextButton",top,{Name="AugmentSummary",Size=UDim2.new(1,-24,0,25),Position=UDim2.fromOffset(12,116),BackgroundColor3=palette.card,TextColor3=palette.mint,Text="행운 +0 · 증강 0 · 보기",TextSize=12,Font=Enum.Font.GothamBold});round(buildButton,6)
     local build=make("Frame",gui,{Name="AugmentBuild",Size=UDim2.new(.9,0,.82,0),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,Visible=false,ZIndex=40});round(build,14);make("UISizeConstraint",build,{MaxSize=Vector2.new(620,570)})
@@ -5895,31 +6482,13 @@ return function(deps)
     local buildScroll=make("ScrollingFrame",build,{Name="BuildList",Size=UDim2.new(1,-32,1,-64),Position=UDim2.fromOffset(16,52),BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,ZIndex=41})
     local buildText=label(buildScroll,"",UDim2.new(1,-12,0,0),UDim2.new(),nil,palette.text);buildText.AutomaticSize=Enum.AutomaticSize.Y;buildText.TextSize=14;buildText.TextXAlignment=Enum.TextXAlignment.Left;buildText.TextYAlignment=Enum.TextYAlignment.Top;buildText.ZIndex=42
     buildButton.Activated:Connect(function()build.Visible=not build.Visible end);close.Activated:Connect(function()build.Visible=false end)
-    local overlay=make("Frame",gui,{Name="ChoiceOverlay",Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(6,12,19),BackgroundTransparency=.18,Visible=false,ZIndex=10})
-	local modal=make("Frame",overlay,{Size=UDim2.new(.88,0,.82,0),Position=UDim2.fromScale(.5,.5),AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=palette.bg,ZIndex=11}); round(modal,18); stroke(modal,palette.mint); make("UISizeConstraint",modal,{MaxSize=Vector2.new(650,620)})
-	local modalTitle=label(modal,"증강 선택",UDim2.new(1,-32,0,32),UDim2.new(0,16,0,14),Enum.Font.GothamBold,palette.mint); modalTitle.TextSize=25; modalTitle.ZIndex=12
-	local modalHint=label(modal,"이번 성장을 선택하세요",UDim2.new(1,-32,0,24),UDim2.new(0,16,0,48),nil,palette.muted); modalHint.TextSize=14; modalHint.ZIndex=12
-	local luckInfo=label(modal,"",UDim2.new(1,-32,0,38),UDim2.fromOffset(16,73),nil,palette.muted);luckInfo.Name="LuckInfo";luckInfo.TextSize=11;luckInfo.ZIndex=12
-    local cards=make("ScrollingFrame",modal,{Name="AugmentCards",Size=UDim2.new(1,-32,1,-176),Position=UDim2.new(0,16,0,116),BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,ZIndex=12})
-    local reroll=make("TextButton",modal,{Name="Reroll",Size=UDim2.new(.5,-22,0,36),Position=UDim2.new(0,16,1,-46),BackgroundColor3=palette.card,TextColor3=palette.mint,Font=Enum.Font.GothamBold,TextSize=13,Text="무료 새로고침 · 2회",ZIndex=13});round(reroll,8)
-    local inspect=make("TextButton",modal,{Name="InspectBuild",Size=UDim2.new(.5,-22,0,36),Position=UDim2.new(.5,6,1,-46),BackgroundColor3=palette.card,TextColor3=palette.text,Text="보유 증강·행운 설명",TextSize=13,ZIndex=13});round(inspect,8)
-    inspect.Activated:Connect(function()build.Visible=true end)
-	make("UIListLayout",cards,{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder})
-	local buttons={}
-	local waiting=false
-    local offerRevision=0
-    reroll.Activated:Connect(function()if not waiting and reroll.Active then waiting=true;net.Action:FireServer("reroll",offerRevision)end end)
-	for i=1,3 do
-		local b=make("TextButton",cards,{Name="Choice"..i,Size=UDim2.new(1,-8,0,112),BackgroundColor3=palette.card,Text="",LayoutOrder=i,ZIndex=13,AutoButtonColor=true}); round(b,12); stroke(b)
-		local tile=make('Frame',b,{Name='IconTile',Size=UDim2.fromOffset(68,68),Position=UDim2.fromOffset(12,22),BackgroundColor3=Color3.fromRGB(17,28,43),ZIndex=14});round(tile,9)
-		local fallback=label(tile,'✦',UDim2.fromScale(1,1),UDim2.new(),Enum.Font.GothamBold,palette.mint);fallback.Name='IconFallback';fallback.TextSize=32;fallback.ZIndex=15
-		local image=make('ImageLabel',tile,{Name='SkillIcon',Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit,Visible=false,ZIndex=15});round(image,9)
-		local tag=label(b,"마법 강화",UDim2.new(1,-108,.25,0),UDim2.new(0,94,0,4),Enum.Font.GothamBold,palette.mint); tag.TextSize=11; tag.TextXAlignment=Enum.TextXAlignment.Left; tag.ZIndex=14
-		local name=label(b,"화염탄 강화",UDim2.new(1,-108,.3,0),UDim2.new(0,94,.27,0),Enum.Font.GothamBold); name.TextSize=19; name.TextXAlignment=Enum.TextXAlignment.Left; name.ZIndex=14
-		local desc=label(b,"피해량 증가",UDim2.new(1,-108,.29,0),UDim2.new(0,94,.63,0),nil,palette.muted); desc.TextSize=13; desc.TextXAlignment=Enum.TextXAlignment.Left; desc.ZIndex=14
-		buttons[i]={button=b,tag=tag,name=name,desc=desc,image=image,fallback=fallback,border=b:FindFirstChildOfClass("UIStroke")}
-		b.Activated:Connect(function() if b:GetAttribute("ChoiceId") and not waiting then waiting=true; net.Action:FireServer("choose",b:GetAttribute("ChoiceId"),offerRevision) end end)
-	end
+    local choice = require(script.Parent.AugmentChoice)({
+        parent=gui,
+        template=game:GetService("ReplicatedStorage"):WaitForChild("SummonerUI"):WaitForChild("ChoiceOverlay"),
+        icons=icons,
+        send=function(...) net.Action:FireServer(...) end,
+        inspect=function() build.Visible=true end,
+    })
 	local ending=make("Frame",gui,{Name="Ending",Size=UDim2.fromScale(1,1),BackgroundColor3=palette.bg,BackgroundTransparency=.08,Visible=false,ZIndex=20})
 	local resultTitle=label(ending,"생존 성공!",UDim2.new(.9,0,0,70),UDim2.fromScale(.5,.32),Enum.Font.GothamBold,palette.mint); resultTitle.AnchorPoint=Vector2.new(.5,.5); resultTitle.TextSize=38; resultTitle.ZIndex=21
 	local resultInfo=label(ending,"",UDim2.new(.9,0,0,60),UDim2.fromScale(.5,.48),nil,palette.text); resultInfo.AnchorPoint=Vector2.new(.5,.5); resultInfo.TextSize=19; resultInfo.ZIndex=21
@@ -5927,7 +6496,6 @@ return function(deps)
 	again.Activated:Connect(function() net.Action:FireServer("returnToLobby") end)
 	pulse.Activated:Connect(deps.input.FireWave)
 	dashButton.Activated:Connect(deps.input.Dash)
-	local lastChoice=""
 	local stateConnection=net.State.OnClientEvent:Connect(function(s)
         returnButton.Visible=s.lobby~=true and s.over~=true
         local augments=s.augments or {};local ranks=0;local descriptions={}
@@ -5965,25 +6533,13 @@ return function(deps)
 		golemStatus.Text=(s.golemCooldown or 0)>0 and "대지 강타 · 자동 · "..s.golemCooldown.."초" or "대지 강타 · 자동 · 적 탐색 중"
 		if (s.shield or 0)>0 then golemStatus.Text="수호 결계 "..math.ceil(s.shield).." · "..golemStatus.Text end
 		pulse.BackgroundColor3=s.cooldown>0 and Color3.fromRGB(101,131,139) or palette.mint
-		ending.Visible=s.over==true; overlay.Visible=s.offers~=nil and not s.over
-		if s.offers then
-			local ids={}; for _,v in ipairs(s.offers) do table.insert(ids,v.id..v.level) end
-			local key=tostring(s.offerRevision or s.level)..table.concat(ids)
-            offerRevision=s.offerRevision or 0
-			if key~=lastChoice then waiting=false; lastChoice=key end
-			local odds=s.offerOdds or {common=100,rare=0,epic=0}
-            luckInfo.Text=string.format("행운 +%d · 첫 무작위 칸: 일반 %.1f%% / 희귀 %.1f%% / 영웅 %.1f%%\n다음 칸은 선택된 카드 제외 후 재계산 · 단계 강화 1장 보장(가능 시)",s.luck or 0,odds.common,odds.rare,odds.epic)
-            reroll.Text=string.format("무료 새로고침 · %d회",s.rerolls or 0);reroll.Active=(s.rerolls or 0)>0;reroll.TextColor3=reroll.Active and palette.mint or palette.muted
-            modalHint.Text=s.paused and "전투 일시 정지 · 하나를 선택하세요" or "선택하는 동안 보호됩니다 · 하나를 선택하세요"
-			for i,v in ipairs(buttons) do
-				local offer=s.offers[i]; v.button.Visible=offer~=nil
-				if offer then v.button:SetAttribute("ChoiceId",offer.id); v.tag.Text=(rarityNames[offer.rarity]or"일반").." · "..offer.tag.."  /  "..offer.level..(offer.kind=="level"and"단계"or"회");v.tag.TextColor3=rarityColors[offer.rarity]or palette.mint;if v.border then v.border.Color=v.tag.TextColor3;v.border.Thickness=offer.rarity=="epic"and 2 or 1 end; v.name.Text=offer.title; v.desc.Text=offer.desc;icons.Apply(v.image,offer.id,v.fallback);v.fallback.TextColor3=v.tag.TextColor3 end
-			end
-		else waiting=false; lastChoice="" end
+        ending.Visible=s.over==true
+        choice.Render(s)
+        gui.DisplayOrder=choice.Gui.Visible and 100 or 0 -- Choice modal sits above debug launchers/touch controls.
 		if s.over then resultTitle.Text=s.result=="victory" and "드래곤 격파!" or "다시 도전!"; resultInfo.Text=string.format("레벨 %d  ·  처치 %d  ·  증강 %d  ·  행운 +%d\n이번 판 증강은 로비 복귀 시 초기화됩니다.",s.level,s.kills,ranks,s.luck or 0) end
 	end)
 
-	gui.Destroying:Connect(function()resizeConnection:Disconnect();stateConnection:Disconnect()end)
+	gui.Destroying:Connect(function()resizeConnection:Disconnect();stateConnection:Disconnect();previewConnection:Disconnect()end)
 	return {
 		Gui = gui,
 	}

@@ -1,5 +1,6 @@
 -- Run in a NEW, empty Studio project's Command Bar, in edit mode.
 assert(not game:GetService("RunService"):IsRunning(), "Stop Play before installing")
+assert(not game.ReplicatedStorage:FindFirstChild("SummonerUI"), "SummonerUI already exists; installation cancelled")
 assert(not workspace:FindFirstChild("SummonerArena"), "SummonerArena already exists; installation cancelled")
 assert(not game.ReplicatedStorage:FindFirstChild("SummonerNet"), "SummonerNet already exists; installation cancelled")
 assert(not game.ServerScriptService:FindFirstChild("SummonerServer"), "SummonerServer already exists; installation cancelled")
