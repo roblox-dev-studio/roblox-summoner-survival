@@ -13,10 +13,13 @@ return function(deps)
 		gem.part.Color=value>=20 and Color3.fromRGB(125,45,200)
 			or(value>=5 and Color3.fromRGB(30,80,200)or Color3.fromRGB(72,250,212))
 	end
+	-- Session recreates player state between runs. Never reuse an offer token here.
+	local nextOfferRevision=0
 	local function need(s) return 5+(s.level-1)*3 end
 	local augments=deps.augments or require(script.Parent.Augments)
 	local function choices(s)
-        s.offerRevision=(s.offerRevision or 0)+1
+        nextOfferRevision+=1
+        s.offerRevision=nextOfferRevision
         local offers,odds=augments.Choices(s,rng)
         s.offerOdds=odds
         return offers

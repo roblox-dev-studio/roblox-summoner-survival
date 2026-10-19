@@ -137,3 +137,9 @@ Server: studio_basic_attack, studio_light_spells, studio_active_spells, studio_l
 - 실제 전투에서 처치→구슬→레벨업→선택→이동 복구를 확인합니다.
 - 통제된180개 초과 드롭에서 합계가 유지되고, 밝은 전장에서도 민트/파랑/보라가 구분되는지 확인합니다.
 - 모의 상태를 사용하는 Studio fixture와 실제 두 사람의 협동·모바일 성능 검수는 구분합니다.
+## 증강 재시작 경계
+
+- 서버 `tests/studio_augment_lifecycle.luau`: 실제 Session/Progression과 격리 참가자 상태로 퇴각 후 스택·행운·재추첨 초기화, 다른 참가자 유지, 이전 판 선택/재추첨 거부, 현재 카드1회 적용·이동 복구를 검사합니다.
+- `tests/studio_augments.luau`:25종의 전투 연결·쿨다운·추가 타격·취소 회귀. 두 실제 클라이언트 시험과 구별합니다.
+- 클라이언트 `tests/studio_skill_icon_ui.luau`: 미등록 그림은 부모 마법/공통 증강/생존 카드 대체명이 읽히고, 기존 이미지 URL을 지우는지 확인합니다.
+- 실제 일반 전투에서 레벨업 후 새로고침2회·세 번째 거부·선택·전투 재개, 로비 복귀 후0행운/0증강/2회 복구를 확인합니다. 실제 패드/터치는 별도입니다.

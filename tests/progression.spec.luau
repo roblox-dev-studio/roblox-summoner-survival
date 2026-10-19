@@ -72,3 +72,33 @@ assert(augments.Luck(s)==20 and packets[#packets].luck==20 and #packets[#packets
 s.lobby=true;s.offers={{id="aug_lucky_charm"}};progression.Choose(s,"aug_lucky_charm",s.offerRevision)
 assert(augments.Luck(s)==20,"Lobby never grants augments")
 print("PASS: stale revision rejection, reroll budget, luck packet, lobby guard")
+
+-- Session replaces player state on retreat/restart while Progression stays alive.
+-- Old requests must not match the first offer of a later run or another player.
+local function freshRun(player)
+ return {player=player,level=1,xp=5,kills=0,ice=1,meteor=1,ward=1,missile=1,golem=5,
+  loadout={'ice','meteor','ward','missile'},activeSkill='iceRush',augments={},
+  agility=0,magnet=0,cooldown=0,rerolls=2,offerRevision=0}
+end
+local samePlayer={}
+local oldRun=freshRun(samePlayer);progression.LevelCheck(oldRun)
+local oldRevision,oldCard=oldRun.offerRevision,oldRun.offers[1].id
+local newRun=freshRun(samePlayer);progression.LevelCheck(newRun)
+local newOffers,newLevel=newRun.offers,newRun[oldCard]
+progression.Choose(newRun,oldCard,oldRevision)
+local oldChoiceRejected=newRun.offers==newOffers and newRun[oldCard]==newLevel
+local anotherRun=freshRun(samePlayer);progression.LevelCheck(anotherRun)
+local anotherOffers=anotherRun.offers
+progression.Reroll(anotherRun,oldRevision)
+local oldRerollRejected=anotherRun.offers==anotherOffers and anotherRun.rerolls==2
+assert(oldChoiceRejected and oldRerollRejected,
+ string.format('Cross-run replay: old choice rejected=%s, old reroll rejected=%s',tostring(oldChoiceRejected),tostring(oldRerollRejected)))
+local teammate=freshRun({});progression.LevelCheck(teammate)
+local teammateOffers=teammate.offers
+progression.Choose(teammate,oldCard,newRun.offerRevision)
+assert(teammate.offers==teammateOffers,'Another player offer token cannot select this player card')
+progression.Choose(newRun,oldCard,newRun.offerRevision)
+assert(newRun.offers==nil and newRun[oldCard]==newLevel+1,'Current run choice still applies once')
+progression.Reroll(anotherRun,anotherRun.offerRevision)
+assert(anotherRun.rerolls==1,'Current run reroll still consumes one charge')
+print('PASS: cross-run and cross-player offer replay rejected; fresh choice/reroll accepted')
