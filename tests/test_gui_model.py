@@ -58,6 +58,15 @@ class GuiModelTests(unittest.TestCase):
         self.assertIn('ColorSequenceKeypoint.new(1,Color3.new(0,0,1))', color)
         self.assertEqual(expression(ET.fromstring('<Color3uint8 name="Color">4294901760</Color3uint8>')), 'Color3.fromRGB(255,0,0)')
 
+    def test_missing_card_layout_is_rejected_before_install(self):
+        tree = ET.parse(ASSET)
+        cards = next(item for item in tree.iter("Item")
+                     if item.findtext("Properties/string[@name='Name']") == "AugmentCards")
+        layout = next(item for item in cards.findall("Item") if item.get("class") == "UIListLayout")
+        cards.remove(layout)
+        with self.assertRaisesRegex(ValueError, "Modal/AugmentCards/Layout"):
+            self.compile_tree(tree)
+
 
 if __name__ == "__main__":
     unittest.main()

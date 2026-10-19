@@ -10,9 +10,12 @@ end
 local folder = game.ReplicatedStorage:WaitForChild("SummonerUI")
 local modules = game.StarterPlayer.StarterPlayerScripts.SummonerClient.Modules.flow
 local holder = Instance.new("Folder")
+-- Edit-mode require caches survive Source changes. Validate the current saved code.
+local validator = modules.AugmentChoice:Clone()
+local iconModule = modules.SkillIcons:Clone()
 local ok, result = pcall(function()
-    local view = require(modules.AugmentChoice)({
-        parent=holder, template=candidate, icons=require(modules.SkillIcons),
+    local view = require(validator)({
+        parent=holder, template=candidate, icons=require(iconModule),
         send=function() error("Design validation must not send actions") end, inspect=function() end,
     })
     for _, rarity in ipairs({"common", "rare", "epic"}) do
@@ -20,6 +23,8 @@ local ok, result = pcall(function()
     end
 end)
 holder:Destroy()
+validator:Destroy()
+iconModule:Destroy()
 assert(ok, result)
 local copy = candidate:Clone()
 copy.Visible = false

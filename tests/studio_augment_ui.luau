@@ -7,7 +7,24 @@ host.Name = "AugmentUIFixture"
 host.Parent = player.PlayerGui
 local template = game.ReplicatedStorage.SummonerUI.ChoiceOverlay:Clone()
 local ui
+local function awaitLayoutRender()
+    local frames = 0
+    local connection = game:GetService("RunService").PreRender:Connect(function() frames += 1 end)
+    local deadline = os.clock() + 1
+    repeat task.wait() until frames >= 2 or os.clock() >= deadline
+    connection:Disconnect()
+    assert(frames >= 2, "UI layout check blocked: no rendered frames; unlock/focus Studio before visual validation")
+end
 local ok, result = xpcall(function()
+    local invalid = template:Clone()
+    invalid.Modal.AugmentCards.Layout:Destroy()
+    local invalidHost = Instance.new("Folder")
+    local accepted, validationError = pcall(function()
+        require(modules.AugmentChoice)({parent=invalidHost, template=invalid,
+            icons=require(modules.SkillIcons), inspect=function() end, send=function() end})
+    end)
+    invalid:Destroy();invalidHost:Destroy()
+    assert(not accepted and string.find(tostring(validationError), "Layout", 1, true), "Missing card layout rejected instead of overlapping cards")
     local authored = template.Modal.AugmentCards.Choice1
     authored.BackgroundColor3 = Color3.fromRGB(46,32,61)
     authored.Title.Position = UDim2.fromOffset(88,33)
@@ -47,15 +64,15 @@ local ok, result = xpcall(function()
     -- Engine layout at phone-sized bounds; this is not a physical touch-device test.
     local bounds=Instance.new("Frame");bounds.Size=UDim2.fromOffset(844,390);bounds.Parent=host
     ui.Gui.Parent=bounds
-    state.offers={offer,offer,offer};state.offerRevision=54;ui.Render(state);task.wait();task.wait()
+    state.offers={offer,offer,offer};state.offerRevision=54;ui.Render(state);awaitLayoutRender()
     local modal=ui.Gui.Modal;local cards=modal.AugmentCards
     assert(not modal.LuckInfo.Visible and cards.AbsoluteSize.Y >= card.AbsoluteSize.Y, "Landscape keeps a full card visible")
     assert(cards.AbsolutePosition.Y+cards.AbsoluteSize.Y <= modal.Reroll.AbsolutePosition.Y, "Cards do not overlap footer")
     assert(cards.AbsoluteCanvasSize.Y > cards.AbsoluteSize.Y, "Remaining choices scroll in landscape")
-    bounds.Size=UDim2.fromOffset(390,844);task.wait();task.wait()
+    bounds.Size=UDim2.fromOffset(390,844);awaitLayoutRender()
     assert(modal.LuckInfo.Visible and cards.Position==template.Modal.AugmentCards.Position and cards.Size==template.Modal.AugmentCards.Size, "Portrait restores authored layout")
     assert(card.Title.TextBounds.Y <= card.Title.AbsoluteSize.Y and card.Description.TextBounds.Y <= card.Description.AbsoluteSize.Y, "Portrait card text fits")
-    return {designerEditsPreserved=true,rarityPalette=true,duplicateBlocked=true,ackRevision=true,zeroBudget=true,hiddenStaleBlocked=true,templateUnchanged=true,landscapeScrollable=true,portraitRestored=true}
+    return {designerEditsPreserved=true,rarityPalette=true,duplicateBlocked=true,ackRevision=true,zeroBudget=true,hiddenStaleBlocked=true,templateUnchanged=true,landscapeScrollable=true,portraitRestored=true,missingLayoutRejected=true}
 end, debug.traceback)
 if ui then ui.Destroy() end
 template:Destroy()

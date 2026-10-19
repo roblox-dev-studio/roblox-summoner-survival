@@ -1,5 +1,14 @@
 # 개발 중 플레이 점검 기록
 
+## 2026-10-19 · GUI 편집 검증의 누락·캐시 수정 (#17 후속)
+
+- PR #18 `fca21ca` 후속. `AugmentChoice.luau` SHA-256 `2b81d9e05d7232d3dfa7e4e631f21c3a9aaed208c469382befab1af50ffd4491`, `apply_augment_ui.luau` SHA-256 `f64589ca43985f4ba64309c3f6ae6765ccadb5ecda9811500844ca5d2c2968c6`. GUI 그림·배치·게임 규칙 변경 없음.
+- **재현1:** 복사한 GUI에서 `AugmentCards.Layout`을 제거해도 Python 빌드와 Edit의 바인더 생성이 모두 허용했습니다(`missing_card_layout_accepted=True`, `missingCardLayoutAccepted=true`). 필수 UIListLayout을 양쪽 계약에 추가했습니다.
+- **재현2:** 같은 Edit VM에서 바인더 Source를 수정해도 `require`가 이전 검증 함수를 반환했습니다. `editedSourceContainsLayout=true`인데 `cachedValidationStillAcceptsMissingLayout=true`였습니다. apply는 현재 바인더/아이콘 ModuleScript를 잠깐 복사해 검증한 뒤 복사본을 제거하도록 수정했습니다.
+- **실제 엔진:** 기존 독립 Studio `740ae662-a0b3-432d-bf1b-3492fee76fa5` Edit에서 `studio_augment_authoring` 통과. 오래된 허용형 모듈을 require 캐시에 남기고 Source를 최신으로 바꾼 조건에서도 정렬 누락/동봉 Script 거부, 실패 시 이전 템플릿의 동일 Instance 보존, 정상 적용 시 편집한 제목·색 복사, preview 재실행의 편집 보존을 확인했습니다. 테스트 종료 시 GUI/모듈/Selection을 복구했습니다.
+- **렌더 보류:** 사용자가 잠금 해제가 어렵다고 알려 준 Mac에서 Heartbeat30/0.5초, PreRender0을 관찰했습니다. 새 Play VM의 클라이언트 검사에서 선택/재추첨/숨김 경계 검사는 진행됐지만 배치 갱신이 멈춰 세로 복원 검사에서 중단됐습니다. 렌더 프레임을 기다리는 명시적 사전 조건을 추가한 뒤 `UI layout check blocked: no rendered frames`로 중단됨을 확인했습니다. 전체 client fixture 통과나 신규 화면 검수로 기록하지 않습니다. 이전 unlocked 시각 증거는 아래 기록의 별도 리비전입니다.
+- **검사/정리:** Python21개·Luau182개 및 변경한 편집 도구/Studio fixture3개의 별도 문법 검사, 기존 성장/증강/몬스터/점수 회귀와 설치기 일치 통과. Play 중지. Native Save to File 내보내기·새 Baseplate 최종 설치/저장·재열기·실기기 터치/패드 검수는 계속 보류합니다. Mac 잠금을 우회하거나 다른 Studio를 조작하지 않았습니다.
+
 ## 2026-10-19 · 편집 가능한 증강 GUI와 기능 연결 분리 (#17)
 
 - 기준 main `6ce8e75`, 브랜치 `feat/editable-augment-ui`. 진입점·맵·src·GUI 원본의 경로/내용을 정렬하고 각각 NUL로 구분한 SHA-256: `eae2021c973be44ebe0d623947afb4a540b190a6a09eec950d48dbbad41abc62`. 기존 결과 화면을 유지하며 별도 PR #16의 결과 요약은 포함하지 않습니다.

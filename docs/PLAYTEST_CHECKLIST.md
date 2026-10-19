@@ -141,10 +141,12 @@ Server: studio_basic_attack, studio_light_spells, studio_active_spells, studio_l
 
 - [ ] 새 Baseplate에서 GUI 원본 포함 전체 설치 성공.
 - [ ] Edit에서 preview를 두 번 실행해도 기존 편집 유지, apply 뒤 Play에서 적용.
+- [ ] Edit `studio_augment_authoring`에 실제 preview/apply 콜백을 전달: 정렬 객체 누락/스크립트 거부 시 이전 원본 보존, 유효한 편집 반영, 오래된 require 캐시 대신 현재 Source 사용.
 - [ ] 실행 중 늦게 복제된 AugmentDesignPreview도 숨겨지고 Edit 원본은 유지.
 - [ ] Client에서 `tests/studio_augment_ui.luau`: 디자인 보존/중복 선택/제안 번호/재추첨 소진/숨김 경계.
 - [ ] Client에서 `tests/studio_skill_icon_ui.luau`: 기존 로비/HUD/아이콘 표시 회귀.
 - [ ] 실제 전투 레벨업 → 재추첨 → 카드 선택 → 이동/사격 복귀 → 사망/로비/다시 시작.
 - [ ] PC·휴대폰 세로/가로에서 제목·긴 설명·하단 버튼 겹침, 스크롤·선택 가능 여부 확인.
+- [ ] 배치 검사는 실제 PreRender가 발생하는 상태에서 실행. 렌더 중단은 검수 보류로 기록하며 검사 조건을 약화하지 않음.
 - [ ] .rbxmx 내보내기 → 설치기 재생성 → 새 place 재가져오기 및 원본 이미지 ID 권한 확인.
 - [ ] 자동/엔진 fixture/실제 입력/실기기 성능/사람의 디자인 승인 구분.

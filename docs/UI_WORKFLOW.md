@@ -26,6 +26,8 @@ Rojo 도입은 이 변경에 포함하지 않습니다. 현재 원본은 편집�
 4. `tools/apply_augment_ui.luau`를 Edit Command Bar에서 실행합니다.
    구조를 검사한 뒤 로컬 `ReplicatedStorage.SummonerUI.ChoiceOverlay`를 갱신합니다.
    실패하면 기존 템플릿을 유지합니다. 기존 PlayerGui의 실행 중 복사본을 편집하지 않습니다.
+   카드 정렬용 `AugmentCards.Layout`도 필수입니다. 적용 검사는 현재 ModuleScript Source의
+   임시 복사본을 사용하므로 Edit 모드에서 예전에 실행한 `require` 캐시를 재사용하지 않습니다.
 5. Play로 들어가 레벨업을 확인합니다. 미리보기 ScreenGui의 실행 중 복사본은 HUD가 숨깁니다.
    Edit 미리보기 원본은 그대로 남습니다. 실제 카드 제목/설명은 서버 값으로 바뀝니다.
 6. Play를 멈추고 **미리보기 안의 `ChoiceOverlay` Frame만** 선택해 **Save to File**로 저장합니다.
@@ -100,6 +102,13 @@ AI는 그 시안을 원본에 적용하고 동작을 연결합니다. 승인 전
 - 실제 레벨업 → 재추첨 → 한 장 선택 → 이동/전투 복귀 → 사망/로비/재시작.
 - 변경 전후 같은 해상도/카드 상태의 실제 Studio 화면을 비교.
 - 자동 검사, 통제된 엔진 fixture, 실제 입력, 실기기 성능, 사람의 미술 승인을 따로 기록.
+
+편집 경로 회귀는 Edit의 `tests/studio_augment_authoring.luau`가 반환하는 함수에
+`tools/preview_augment_ui.luau`와 `tools/apply_augment_ui.luau`의 내용을 각각 실행하는
+`preview`/`apply` 콜백을 전달해 검사합니다. 테스트는 원본 GUI·검증 모듈·선택 상태를
+잠시 보관하고 종료 시 복구합니다. 수정 전 코드가 캐시에 남아 있는 상황도 재현합니다.
+Play의 `studio_augment_ui`는 실제 렌더 프레임을 기다린 뒤 배치를 검사합니다.
+Mac 잠금 등으로 렌더링이 없으면 명시적으로 중단하며 시각 검수 통과로 세지 않습니다.
 
 참고: [DevForum UI 제작 가이드](https://devforum.roblox.com/t/the-ultimate-ui-design-guide/1236916),
 [9-slice](https://create.roblox.com/docs/ui/9-slice),

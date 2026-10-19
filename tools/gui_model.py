@@ -23,6 +23,7 @@ def validate_contract(root):
     required.update({f"Modal/{name}": "TextLabel" for name in ("Title", "Hint", "LuckInfo", "Status")})
     required.update({f"Modal/{name}": "TextButton" for name in ("Reroll", "InspectBuild")})
     required["Modal/AugmentCards"] = "ScrollingFrame"
+    required["Modal/AugmentCards/Layout"] = "UIListLayout"
     for i in range(1, 4):
         card = f"Modal/AugmentCards/Choice{i}"
         required[card] = "TextButton"
