@@ -49,10 +49,11 @@ StarterPlayer / StarterPlayerScripts
     └── Modules (src/client)
         ├── combat: Input, Effects, SpellArt, FireArt
         ├── world: Camera, CharacterMotion, clips (4 CC0 R15 clips), DragonMesh, DragonPresentation, DragonPreview, dragon (Geometry, Rig, Idle, Walk, Attack, Die)
-        ├── flow: HUD
+        ├── flow: HUD, AugmentChoice (증강 GUI 바인더), Lobby 등
         └── Theme
 ReplicatedStorage
 ├── SummonerNet: State, Action, Effect
+├── SummonerUI / ChoiceOverlay (assets/ui/augment-choice.rbxmx)
 └── SummonerVFXAssets (선택적 외부 메시)
 Workspace
 ├── SummonerArena (arena.luau에서 편집 모드에 생성)
@@ -63,6 +64,19 @@ Workspace
 모듈은 생성 함수에 의존성을 전달합니다. `server.luau`가 같은 상태 테이블과 난수
 생성기를 연결합니다. 참조 중인 테이블을 다른 테이블로 교체하지 말고 `table.clear`로
 초기화합니다. 클라이언트는 Input → HUD → Effects → Camera 순서로 시작합니다.
+
+## 편집 가능한 증강 GUI
+
+`assets/ui/augment-choice.rbxmx`가 증강 선택창의 스크립트 없는 native GUI 원본입니다.
+설치기는 `tools/gui_model.py`로 이를 검증·변환하여 `ReplicatedStorage.SummonerUI.ChoiceOverlay`에 설치합니다.
+`flow/AugmentChoice`는 HUD 아래에 템플릿을 복사하고 서버의 제목/설명/희귀도/제안 번호를 연결합니다.
+서버 선택·재추첨 계약은 유지합니다. 일반 화면의 배치·글꼴·장식은 원본에 있으며 짧은 가로 화면만
+확률 안내를 접고 카드 영역을 늘립니다. 자세한 슬롯 계약·화면 우선순위는 [UI_WORKFLOW.md](UI_WORKFLOW.md)를 따릅니다.
+
+`tools/preview_augment_ui.luau`와 `tools/apply_augment_ui.luau`는 Edit 모드 전용입니다.
+미리보기는 재실행해도 사람의 편집을 보존하고, 적용은 구조 검증 후 로컬 템플릿을 교체합니다.
+HUD는 미리보기 GUI가 늦게 복제돼도 실행 중 복사본만 숨깁니다. 원본을 .rbxmx로 내보내고
+설치기를 재생성해야 Git/팀원에게 전달됩니다. 기존 main의 종료 화면과 별도 PR #16의 결과 화면 작업은 구분합니다.
 
 ## 서버 인터페이스
 

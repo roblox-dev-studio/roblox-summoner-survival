@@ -28,6 +28,8 @@ local ok,result=xpcall(function()
  assert(sends==0,'Catalog inspection and opening do not request gameplay changes')
  local noop=function()end
  hud=require(modules.flow.HUD)({player=player,net={State={OnClientEvent=signal.Event},Action={FireServer=function()sends+=1 end}},input={SetBasicHeld=noop,SetBasicBlocked=noop,FireWave=noop,Dash=noop}})
+ local preview=Instance.new('ScreenGui');preview.Name='AugmentDesignPreview';preview.Parent=holder;task.wait()
+ assert(not preview.Enabled,'Late StarterGui preview copy cannot cover the live HUD')
  signal:Fire({lobby=false,time=120,level=2,xp=0,need=10,hp=150,maxHp=150,kills=1,golem=1,fire=0,ice=1,lightning=0,cooldown=0,offerRevision=1,offers={
   {id='aug_meteor_echo',title='Meteor Echo',desc='Secondary impact',tag='Meteor',rarity='epic',level=1,kind='augment'},
   {id='aug_lucky_charm',title='Lucky Charm',desc='Luck +20',tag='Common',rarity='common',level=1,kind='augment'},
@@ -42,7 +44,7 @@ local ok,result=xpcall(function()
   assert(card.IconTile.IconFallback.Text==expected,'Readable fallback label: '..expected)
  end
  assert(sends==0,'Rendering cards does not choose or reroll')
- return {parentIcons=true,commonIcons=true,uploadGating=true,walkableDefault=true,loadoutOpenClose=true,combatCleanup=true,offerCards=3,transactions=0}
+ return {parentIcons=true,commonIcons=true,uploadGating=true,walkableDefault=true,loadoutOpenClose=true,combatCleanup=true,offerCards=3,transactions=0,latePreviewHidden=true}
 end,debug.traceback)
 if lobby then lobby.Gui:Destroy()end
 if hud then hud.Gui:Destroy()end

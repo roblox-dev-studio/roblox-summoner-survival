@@ -1,0 +1,1021 @@
+<roblox version="4">
+  <Item class="Frame" referent="GUI1">
+    <Properties>
+      <string name="Name">ChoiceOverlay</string>
+      <UDim2 name="Size">
+        <XS>1</XS>
+        <XO>0</XO>
+        <YS>1</YS>
+        <YO>0</YO>
+      </UDim2>
+      <Color3 name="BackgroundColor3">
+        <R>0.0196078431372549</R>
+        <G>0.03529411764705882</G>
+        <B>0.058823529411764705</B>
+      </Color3>
+      <float name="BackgroundTransparency">0.18</float>
+      <float name="BorderSizePixel">0</float>
+      <bool name="Visible">false</bool>
+      <bool name="Active">true</bool>
+      <float name="ZIndex">35</float>
+    </Properties>
+    <Item class="Folder" referent="GUI2">
+      <Properties>
+        <string name="Name">RarityPalette</string>
+      </Properties>
+      <Item class="Color3Value" referent="GUI3">
+        <Properties>
+          <string name="Name">common</string>
+          <Color3 name="Value">
+            <R>0.7450980392156863</R>
+            <G>0.8392156862745098</G>
+            <B>0.8705882352941177</B>
+          </Color3>
+        </Properties>
+      </Item>
+      <Item class="Color3Value" referent="GUI4">
+        <Properties>
+          <string name="Name">rare</string>
+          <Color3 name="Value">
+            <R>0.44313725490196076</R>
+            <G>0.7607843137254902</G>
+            <B>1.0</B>
+          </Color3>
+        </Properties>
+      </Item>
+      <Item class="Color3Value" referent="GUI5">
+        <Properties>
+          <string name="Name">epic</string>
+          <Color3 name="Value">
+            <R>0.8588235294117647</R>
+            <G>0.6039215686274509</G>
+            <B>1.0</B>
+          </Color3>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Frame" referent="GUI6">
+      <Properties>
+        <string name="Name">Modal</string>
+        <UDim2 name="Size">
+          <XS>0.94</XS>
+          <XO>0</XO>
+          <YS>0.9</YS>
+          <YO>0</YO>
+        </UDim2>
+        <UDim2 name="Position">
+          <XS>0.5</XS>
+          <XO>0</XO>
+          <YS>0.5</YS>
+          <YO>0</YO>
+        </UDim2>
+        <Vector2 name="AnchorPoint">
+          <X>0.5</X>
+          <Y>0.5</Y>
+        </Vector2>
+        <Color3 name="BackgroundColor3">
+          <R>0.0784313725490196</R>
+          <G>0.09803921568627451</G>
+          <B>0.13725490196078433</B>
+        </Color3>
+        <float name="BorderSizePixel">0</float>
+        <float name="ZIndex">11</float>
+      </Properties>
+      <Item class="UICorner" referent="GUI7">
+        <Properties>
+          <string name="Name">Corner</string>
+          <UDim name="CornerRadius">
+            <S>0</S>
+            <O>14</O>
+          </UDim>
+        </Properties>
+      </Item>
+      <Item class="UIStroke" referent="GUI8">
+        <Properties>
+          <string name="Name">Border</string>
+          <Color3 name="Color">
+            <R>0.43529411764705883</R>
+            <G>0.3843137254901961</G>
+            <B>0.2823529411764706</B>
+          </Color3>
+          <float name="Thickness">1</float>
+        </Properties>
+      </Item>
+      <Item class="UISizeConstraint" referent="GUI9">
+        <Properties>
+          <string name="Name">Bounds</string>
+          <Vector2 name="MaxSize">
+            <X>680</X>
+            <Y>660</Y>
+          </Vector2>
+        </Properties>
+      </Item>
+      <Item class="TextLabel" referent="GUI10">
+        <Properties>
+          <string name="Name">Title</string>
+          <string name="Text">새로운 힘을 선택하세요</string>
+          <UDim2 name="Size">
+            <XS>1</XS>
+            <XO>-40</XO>
+            <YS>0</YS>
+            <YO>32</YO>
+          </UDim2>
+          <UDim2 name="Position">
+            <XS>0</XS>
+            <XO>20</XO>
+            <YS>0</YS>
+            <YO>18</YO>
+          </UDim2>
+          <float name="BackgroundTransparency">1</float>
+          <token name="Font">20</token>
+          <Color3 name="TextColor3">
+            <R>0.9372549019607843</R>
+            <G>0.8274509803921568</G>
+            <B>0.5843137254901961</B>
+          </Color3>
+          <float name="TextSize">25</float>
+          <bool name="TextWrapped">true</bool>
+          <token name="TextXAlignment">0</token>
+          <token name="TextYAlignment">1</token>
+          <float name="ZIndex">14</float>
+        </Properties>
+      </Item>
+      <Item class="TextLabel" referent="GUI11">
+        <Properties>
+          <string name="Name">Hint</string>
+          <string name="Text">전투 일시 정지 · 세 가지 중 하나를 선택하세요</string>
+          <UDim2 name="Size">
+            <XS>1</XS>
+            <XO>-40</XO>
+            <YS>0</YS>
+            <YO>24</YO>
+          </UDim2>
+          <UDim2 name="Position">
+            <XS>0</XS>
+            <XO>20</XO>
+            <YS>0</YS>
+            <YO>56</YO>
+          </UDim2>
+          <float name="BackgroundTransparency">1</float>
+          <token name="Font">19</token>
+          <Color3 name="TextColor3">
+            <R>0.7372549019607844</R>
+            <G>0.7686274509803922</G>
+            <B>0.8196078431372549</B>
+          </Color3>
+          <float name="TextSize">16</float>
+          <bool name="TextWrapped">true</bool>
+          <token name="TextXAlignment">0</token>
+          <token name="TextYAlignment">1</token>
+          <float name="ZIndex">14</float>
+        </Properties>
+      </Item>
+      <Item class="TextLabel" referent="GUI12">
+        <Properties>
+          <string name="Name">LuckInfo</string>
+          <string name="Text">행운 +0 · 첫 무작위 칸: 일반 70% / 희귀 25% / 영웅 5%
+다음 칸은 제외 후 재계산 · 단계 강화 1장 보장(가능 시)</string>
+          <UDim2 name="Size">
+            <XS>1</XS>
+            <XO>-40</XO>
+            <YS>0</YS>
+            <YO>36</YO>
+          </UDim2>
+          <UDim2 name="Position">
+            <XS>0</XS>
+            <XO>20</XO>
+            <YS>0</YS>
+            <YO>88</YO>
+          </UDim2>
+          <float name="BackgroundTransparency">1</float>
+          <token name="Font">19</token>
+          <Color3 name="TextColor3">
+            <R>0.6470588235294118</R>
+            <G>0.6980392156862745</G>
+            <B>0.7607843137254902</B>
+          </Color3>
+          <float name="TextSize">11</float>
+          <bool name="TextWrapped">true</bool>
+          <token name="TextXAlignment">0</token>
+          <token name="TextYAlignment">1</token>
+          <float name="ZIndex">14</float>
+        </Properties>
+      </Item>
+      <Item class="ScrollingFrame" referent="GUI13">
+        <Properties>
+          <string name="Name">AugmentCards</string>
+          <UDim2 name="Size">
+            <XS>1</XS>
+            <XO>-32</XO>
+            <YS>1</YS>
+            <YO>-210</YO>
+          </UDim2>
+          <UDim2 name="Position">
+            <XS>0</XS>
+            <XO>16</XO>
+            <YS>0</YS>
+            <YO>136</YO>
+          </UDim2>
+          <float name="BackgroundTransparency">1</float>
+          <float name="BorderSizePixel">0</float>
+          <UDim2 name="CanvasSize">
+            <XS>0</XS>
+            <XO>0</XO>
+            <YS>0</YS>
+            <YO>0</YO>
+          </UDim2>
+          <token name="AutomaticCanvasSize">2</token>
+          <float name="ScrollBarThickness">4</float>
+          <Color3 name="ScrollBarImageColor3">
+            <R>0.43529411764705883</R>
+            <G>0.3843137254901961</G>
+            <B>0.2823529411764706</B>
+          </Color3>
+          <float name="ZIndex">12</float>
+        </Properties>
+        <Item class="UIListLayout" referent="GUI14">
+          <Properties>
+            <string name="Name">Layout</string>
+            <UDim name="Padding">
+              <S>0</S>
+              <O>12</O>
+            </UDim>
+            <token name="SortOrder">2</token>
+          </Properties>
+        </Item>
+        <Item class="TextButton" referent="GUI15">
+          <Properties>
+            <string name="Name">Choice1</string>
+            <UDim2 name="Size">
+              <XS>1</XS>
+              <XO>-8</XO>
+              <YS>0</YS>
+              <YO>126</YO>
+            </UDim2>
+            <Color3 name="BackgroundColor3">
+              <R>0.12549019607843137</R>
+              <G>0.15294117647058825</G>
+              <B>0.2</B>
+            </Color3>
+            <string name="Text" />
+            <float name="LayoutOrder">1</float>
+            <float name="ZIndex">13</float>
+            <bool name="AutoButtonColor">true</bool>
+          </Properties>
+          <Item class="UICorner" referent="GUI16">
+            <Properties>
+              <string name="Name">Corner</string>
+              <UDim name="CornerRadius">
+                <S>0</S>
+                <O>10</O>
+              </UDim>
+            </Properties>
+          </Item>
+          <Item class="UIStroke" referent="GUI17">
+            <Properties>
+              <string name="Name">Border</string>
+              <Color3 name="Color">
+                <R>0.43529411764705883</R>
+                <G>0.3843137254901961</G>
+                <B>0.2823529411764706</B>
+              </Color3>
+              <float name="Thickness">1</float>
+            </Properties>
+          </Item>
+          <Item class="Frame" referent="GUI18">
+            <Properties>
+              <string name="Name">IconTile</string>
+              <UDim2 name="Size">
+                <XS>0</XS>
+                <XO>58</XO>
+                <YS>0</YS>
+                <YO>58</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>12</XO>
+                <YS>0</YS>
+                <YO>34</YO>
+              </UDim2>
+              <Color3 name="BackgroundColor3">
+                <R>0.07058823529411765</R>
+                <G>0.09803921568627451</G>
+                <B>0.1450980392156863</B>
+              </Color3>
+              <float name="BorderSizePixel">0</float>
+              <float name="ZIndex">14</float>
+            </Properties>
+            <Item class="UICorner" referent="GUI19">
+              <Properties>
+                <string name="Name">Corner</string>
+                <UDim name="CornerRadius">
+                  <S>0</S>
+                  <O>8</O>
+                </UDim>
+              </Properties>
+            </Item>
+            <Item class="TextLabel" referent="GUI20">
+              <Properties>
+                <string name="Name">IconFallback</string>
+                <string name="Text">운석</string>
+                <UDim2 name="Size">
+                  <XS>1</XS>
+                  <XO>0</XO>
+                  <YS>1</YS>
+                  <YO>0</YO>
+                </UDim2>
+                <UDim2 name="Position">
+                  <XS>0</XS>
+                  <XO>0</XO>
+                  <YS>0</YS>
+                  <YO>0</YO>
+                </UDim2>
+                <float name="BackgroundTransparency">1</float>
+                <token name="Font">20</token>
+                <Color3 name="TextColor3">
+                  <R>0.9372549019607843</R>
+                  <G>0.8274509803921568</G>
+                  <B>0.5843137254901961</B>
+                </Color3>
+                <float name="TextSize">20</float>
+                <bool name="TextWrapped">true</bool>
+                <token name="TextXAlignment">2</token>
+                <token name="TextYAlignment">1</token>
+                <float name="ZIndex">14</float>
+              </Properties>
+            </Item>
+            <Item class="ImageLabel" referent="GUI21">
+              <Properties>
+                <string name="Name">SkillIcon</string>
+                <UDim2 name="Size">
+                  <XS>1</XS>
+                  <XO>0</XO>
+                  <YS>1</YS>
+                  <YO>0</YO>
+                </UDim2>
+                <float name="BackgroundTransparency">1</float>
+                <Content name="Image">
+                  <url />
+                </Content>
+                <token name="ScaleType">3</token>
+                <bool name="Visible">false</bool>
+                <float name="ZIndex">15</float>
+              </Properties>
+              <Item class="UICorner" referent="GUI22">
+                <Properties>
+                  <string name="Name">Corner</string>
+                  <UDim name="CornerRadius">
+                    <S>0</S>
+                    <O>8</O>
+                  </UDim>
+                </Properties>
+              </Item>
+            </Item>
+          </Item>
+          <Item class="TextLabel" referent="GUI23">
+            <Properties>
+              <string name="Name">Tag</string>
+              <string name="Text">영웅 · 메테오 / 1회</string>
+              <UDim2 name="Size">
+                <XS>1</XS>
+                <XO>-98</XO>
+                <YS>0</YS>
+                <YO>20</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>84</XO>
+                <YS>0</YS>
+                <YO>10</YO>
+              </UDim2>
+              <float name="BackgroundTransparency">1</float>
+              <token name="Font">20</token>
+              <Color3 name="TextColor3">
+                <R>0.7450980392156863</R>
+                <G>0.8392156862745098</G>
+                <B>0.8705882352941177</B>
+              </Color3>
+              <float name="TextSize">11</float>
+              <bool name="TextWrapped">true</bool>
+              <token name="TextXAlignment">0</token>
+              <token name="TextYAlignment">1</token>
+              <float name="ZIndex">14</float>
+            </Properties>
+          </Item>
+          <Item class="TextLabel" referent="GUI24">
+            <Properties>
+              <string name="Name">Title</string>
+              <string name="Text">운석의 여진</string>
+              <UDim2 name="Size">
+                <XS>1</XS>
+                <XO>-98</XO>
+                <YS>0</YS>
+                <YO>30</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>84</XO>
+                <YS>0</YS>
+                <YO>31</YO>
+              </UDim2>
+              <float name="BackgroundTransparency">1</float>
+              <token name="Font">20</token>
+              <Color3 name="TextColor3">
+                <R>0.9333333333333333</R>
+                <G>0.9176470588235294</G>
+                <B>0.8784313725490196</B>
+              </Color3>
+              <float name="TextSize">21</float>
+              <bool name="TextWrapped">true</bool>
+              <token name="TextXAlignment">0</token>
+              <token name="TextYAlignment">1</token>
+              <float name="ZIndex">14</float>
+            </Properties>
+          </Item>
+          <Item class="TextLabel" referent="GUI25">
+            <Properties>
+              <string name="Name">Description</string>
+              <string name="Text">운석이 떨어진 자리에 한 번 더 폭발합니다.</string>
+              <UDim2 name="Size">
+                <XS>1</XS>
+                <XO>-98</XO>
+                <YS>0</YS>
+                <YO>52</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>84</XO>
+                <YS>0</YS>
+                <YO>64</YO>
+              </UDim2>
+              <float name="BackgroundTransparency">1</float>
+              <token name="Font">19</token>
+              <Color3 name="TextColor3">
+                <R>0.7294117647058823</R>
+                <G>0.7686274509803922</G>
+                <B>0.8313725490196079</B>
+              </Color3>
+              <float name="TextSize">14</float>
+              <bool name="TextWrapped">true</bool>
+              <token name="TextXAlignment">0</token>
+              <token name="TextYAlignment">0</token>
+              <float name="ZIndex">14</float>
+            </Properties>
+          </Item>
+        </Item>
+        <Item class="TextButton" referent="GUI26">
+          <Properties>
+            <string name="Name">Choice2</string>
+            <UDim2 name="Size">
+              <XS>1</XS>
+              <XO>-8</XO>
+              <YS>0</YS>
+              <YO>126</YO>
+            </UDim2>
+            <Color3 name="BackgroundColor3">
+              <R>0.12549019607843137</R>
+              <G>0.15294117647058825</G>
+              <B>0.2</B>
+            </Color3>
+            <string name="Text" />
+            <float name="LayoutOrder">2</float>
+            <float name="ZIndex">13</float>
+            <bool name="AutoButtonColor">true</bool>
+          </Properties>
+          <Item class="UICorner" referent="GUI27">
+            <Properties>
+              <string name="Name">Corner</string>
+              <UDim name="CornerRadius">
+                <S>0</S>
+                <O>10</O>
+              </UDim>
+            </Properties>
+          </Item>
+          <Item class="UIStroke" referent="GUI28">
+            <Properties>
+              <string name="Name">Border</string>
+              <Color3 name="Color">
+                <R>0.43529411764705883</R>
+                <G>0.3843137254901961</G>
+                <B>0.2823529411764706</B>
+              </Color3>
+              <float name="Thickness">1</float>
+            </Properties>
+          </Item>
+          <Item class="Frame" referent="GUI29">
+            <Properties>
+              <string name="Name">IconTile</string>
+              <UDim2 name="Size">
+                <XS>0</XS>
+                <XO>58</XO>
+                <YS>0</YS>
+                <YO>58</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>12</XO>
+                <YS>0</YS>
+                <YO>34</YO>
+              </UDim2>
+              <Color3 name="BackgroundColor3">
+                <R>0.07058823529411765</R>
+                <G>0.09803921568627451</G>
+                <B>0.1450980392156863</B>
+              </Color3>
+              <float name="BorderSizePixel">0</float>
+              <float name="ZIndex">14</float>
+            </Properties>
+            <Item class="UICorner" referent="GUI30">
+              <Properties>
+                <string name="Name">Corner</string>
+                <UDim name="CornerRadius">
+                  <S>0</S>
+                  <O>8</O>
+                </UDim>
+              </Properties>
+            </Item>
+            <Item class="TextLabel" referent="GUI31">
+              <Properties>
+                <string name="Name">IconFallback</string>
+                <string name="Text">얼음</string>
+                <UDim2 name="Size">
+                  <XS>1</XS>
+                  <XO>0</XO>
+                  <YS>1</YS>
+                  <YO>0</YO>
+                </UDim2>
+                <UDim2 name="Position">
+                  <XS>0</XS>
+                  <XO>0</XO>
+                  <YS>0</YS>
+                  <YO>0</YO>
+                </UDim2>
+                <float name="BackgroundTransparency">1</float>
+                <token name="Font">20</token>
+                <Color3 name="TextColor3">
+                  <R>0.9372549019607843</R>
+                  <G>0.8274509803921568</G>
+                  <B>0.5843137254901961</B>
+                </Color3>
+                <float name="TextSize">20</float>
+                <bool name="TextWrapped">true</bool>
+                <token name="TextXAlignment">2</token>
+                <token name="TextYAlignment">1</token>
+                <float name="ZIndex">14</float>
+              </Properties>
+            </Item>
+            <Item class="ImageLabel" referent="GUI32">
+              <Properties>
+                <string name="Name">SkillIcon</string>
+                <UDim2 name="Size">
+                  <XS>1</XS>
+                  <XO>0</XO>
+                  <YS>1</YS>
+                  <YO>0</YO>
+                </UDim2>
+                <float name="BackgroundTransparency">1</float>
+                <Content name="Image">
+                  <url />
+                </Content>
+                <token name="ScaleType">3</token>
+                <bool name="Visible">false</bool>
+                <float name="ZIndex">15</float>
+              </Properties>
+              <Item class="UICorner" referent="GUI33">
+                <Properties>
+                  <string name="Name">Corner</string>
+                  <UDim name="CornerRadius">
+                    <S>0</S>
+                    <O>8</O>
+                  </UDim>
+                </Properties>
+              </Item>
+            </Item>
+          </Item>
+          <Item class="TextLabel" referent="GUI34">
+            <Properties>
+              <string name="Name">Tag</string>
+              <string name="Text">희귀 · 얼음창 / 1회</string>
+              <UDim2 name="Size">
+                <XS>1</XS>
+                <XO>-98</XO>
+                <YS>0</YS>
+                <YO>20</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>84</XO>
+                <YS>0</YS>
+                <YO>10</YO>
+              </UDim2>
+              <float name="BackgroundTransparency">1</float>
+              <token name="Font">20</token>
+              <Color3 name="TextColor3">
+                <R>0.7450980392156863</R>
+                <G>0.8392156862745098</G>
+                <B>0.8705882352941177</B>
+              </Color3>
+              <float name="TextSize">11</float>
+              <bool name="TextWrapped">true</bool>
+              <token name="TextXAlignment">0</token>
+              <token name="TextYAlignment">1</token>
+              <float name="ZIndex">14</float>
+            </Properties>
+          </Item>
+          <Item class="TextLabel" referent="GUI35">
+            <Properties>
+              <string name="Name">Title</string>
+              <string name="Text">쌍빙창</string>
+              <UDim2 name="Size">
+                <XS>1</XS>
+                <XO>-98</XO>
+                <YS>0</YS>
+                <YO>30</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>84</XO>
+                <YS>0</YS>
+                <YO>31</YO>
+              </UDim2>
+              <float name="BackgroundTransparency">1</float>
+              <token name="Font">20</token>
+              <Color3 name="TextColor3">
+                <R>0.9333333333333333</R>
+                <G>0.9176470588235294</G>
+                <B>0.8784313725490196</B>
+              </Color3>
+              <float name="TextSize">21</float>
+              <bool name="TextWrapped">true</bool>
+              <token name="TextXAlignment">0</token>
+              <token name="TextYAlignment">1</token>
+              <float name="ZIndex">14</float>
+            </Properties>
+          </Item>
+          <Item class="TextLabel" referent="GUI36">
+            <Properties>
+              <string name="Name">Description</string>
+              <string name="Text">얼음창을 두 발 발사합니다. 각 탄환 피해는 조정됩니다.</string>
+              <UDim2 name="Size">
+                <XS>1</XS>
+                <XO>-98</XO>
+                <YS>0</YS>
+                <YO>52</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>84</XO>
+                <YS>0</YS>
+                <YO>64</YO>
+              </UDim2>
+              <float name="BackgroundTransparency">1</float>
+              <token name="Font">19</token>
+              <Color3 name="TextColor3">
+                <R>0.7294117647058823</R>
+                <G>0.7686274509803922</G>
+                <B>0.8313725490196079</B>
+              </Color3>
+              <float name="TextSize">14</float>
+              <bool name="TextWrapped">true</bool>
+              <token name="TextXAlignment">0</token>
+              <token name="TextYAlignment">0</token>
+              <float name="ZIndex">14</float>
+            </Properties>
+          </Item>
+        </Item>
+        <Item class="TextButton" referent="GUI37">
+          <Properties>
+            <string name="Name">Choice3</string>
+            <UDim2 name="Size">
+              <XS>1</XS>
+              <XO>-8</XO>
+              <YS>0</YS>
+              <YO>126</YO>
+            </UDim2>
+            <Color3 name="BackgroundColor3">
+              <R>0.12549019607843137</R>
+              <G>0.15294117647058825</G>
+              <B>0.2</B>
+            </Color3>
+            <string name="Text" />
+            <float name="LayoutOrder">3</float>
+            <float name="ZIndex">13</float>
+            <bool name="AutoButtonColor">true</bool>
+          </Properties>
+          <Item class="UICorner" referent="GUI38">
+            <Properties>
+              <string name="Name">Corner</string>
+              <UDim name="CornerRadius">
+                <S>0</S>
+                <O>10</O>
+              </UDim>
+            </Properties>
+          </Item>
+          <Item class="UIStroke" referent="GUI39">
+            <Properties>
+              <string name="Name">Border</string>
+              <Color3 name="Color">
+                <R>0.43529411764705883</R>
+                <G>0.3843137254901961</G>
+                <B>0.2823529411764706</B>
+              </Color3>
+              <float name="Thickness">1</float>
+            </Properties>
+          </Item>
+          <Item class="Frame" referent="GUI40">
+            <Properties>
+              <string name="Name">IconTile</string>
+              <UDim2 name="Size">
+                <XS>0</XS>
+                <XO>58</XO>
+                <YS>0</YS>
+                <YO>58</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>12</XO>
+                <YS>0</YS>
+                <YO>34</YO>
+              </UDim2>
+              <Color3 name="BackgroundColor3">
+                <R>0.07058823529411765</R>
+                <G>0.09803921568627451</G>
+                <B>0.1450980392156863</B>
+              </Color3>
+              <float name="BorderSizePixel">0</float>
+              <float name="ZIndex">14</float>
+            </Properties>
+            <Item class="UICorner" referent="GUI41">
+              <Properties>
+                <string name="Name">Corner</string>
+                <UDim name="CornerRadius">
+                  <S>0</S>
+                  <O>8</O>
+                </UDim>
+              </Properties>
+            </Item>
+            <Item class="TextLabel" referent="GUI42">
+              <Properties>
+                <string name="Name">IconFallback</string>
+                <string name="Text">행운</string>
+                <UDim2 name="Size">
+                  <XS>1</XS>
+                  <XO>0</XO>
+                  <YS>1</YS>
+                  <YO>0</YO>
+                </UDim2>
+                <UDim2 name="Position">
+                  <XS>0</XS>
+                  <XO>0</XO>
+                  <YS>0</YS>
+                  <YO>0</YO>
+                </UDim2>
+                <float name="BackgroundTransparency">1</float>
+                <token name="Font">20</token>
+                <Color3 name="TextColor3">
+                  <R>0.9372549019607843</R>
+                  <G>0.8274509803921568</G>
+                  <B>0.5843137254901961</B>
+                </Color3>
+                <float name="TextSize">20</float>
+                <bool name="TextWrapped">true</bool>
+                <token name="TextXAlignment">2</token>
+                <token name="TextYAlignment">1</token>
+                <float name="ZIndex">14</float>
+              </Properties>
+            </Item>
+            <Item class="ImageLabel" referent="GUI43">
+              <Properties>
+                <string name="Name">SkillIcon</string>
+                <UDim2 name="Size">
+                  <XS>1</XS>
+                  <XO>0</XO>
+                  <YS>1</YS>
+                  <YO>0</YO>
+                </UDim2>
+                <float name="BackgroundTransparency">1</float>
+                <Content name="Image">
+                  <url />
+                </Content>
+                <token name="ScaleType">3</token>
+                <bool name="Visible">false</bool>
+                <float name="ZIndex">15</float>
+              </Properties>
+              <Item class="UICorner" referent="GUI44">
+                <Properties>
+                  <string name="Name">Corner</string>
+                  <UDim name="CornerRadius">
+                    <S>0</S>
+                    <O>8</O>
+                  </UDim>
+                </Properties>
+              </Item>
+            </Item>
+          </Item>
+          <Item class="TextLabel" referent="GUI45">
+            <Properties>
+              <string name="Name">Tag</string>
+              <string name="Text">일반 · 공통 / 1회</string>
+              <UDim2 name="Size">
+                <XS>1</XS>
+                <XO>-98</XO>
+                <YS>0</YS>
+                <YO>20</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>84</XO>
+                <YS>0</YS>
+                <YO>10</YO>
+              </UDim2>
+              <float name="BackgroundTransparency">1</float>
+              <token name="Font">20</token>
+              <Color3 name="TextColor3">
+                <R>0.7450980392156863</R>
+                <G>0.8392156862745098</G>
+                <B>0.8705882352941177</B>
+              </Color3>
+              <float name="TextSize">11</float>
+              <bool name="TextWrapped">true</bool>
+              <token name="TextXAlignment">0</token>
+              <token name="TextYAlignment">1</token>
+              <float name="ZIndex">14</float>
+            </Properties>
+          </Item>
+          <Item class="TextLabel" referent="GUI46">
+            <Properties>
+              <string name="Name">Title</string>
+              <string name="Text">행운의 부적</string>
+              <UDim2 name="Size">
+                <XS>1</XS>
+                <XO>-98</XO>
+                <YS>0</YS>
+                <YO>30</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>84</XO>
+                <YS>0</YS>
+                <YO>31</YO>
+              </UDim2>
+              <float name="BackgroundTransparency">1</float>
+              <token name="Font">20</token>
+              <Color3 name="TextColor3">
+                <R>0.9333333333333333</R>
+                <G>0.9176470588235294</G>
+                <B>0.8784313725490196</B>
+              </Color3>
+              <float name="TextSize">21</float>
+              <bool name="TextWrapped">true</bool>
+              <token name="TextXAlignment">0</token>
+              <token name="TextYAlignment">1</token>
+              <float name="ZIndex">14</float>
+            </Properties>
+          </Item>
+          <Item class="TextLabel" referent="GUI47">
+            <Properties>
+              <string name="Name">Description</string>
+              <string name="Text">이번 판 행운 +20. 희귀·영웅 카드의 추첨 가중치가 증가합니다.</string>
+              <UDim2 name="Size">
+                <XS>1</XS>
+                <XO>-98</XO>
+                <YS>0</YS>
+                <YO>52</YO>
+              </UDim2>
+              <UDim2 name="Position">
+                <XS>0</XS>
+                <XO>84</XO>
+                <YS>0</YS>
+                <YO>64</YO>
+              </UDim2>
+              <float name="BackgroundTransparency">1</float>
+              <token name="Font">19</token>
+              <Color3 name="TextColor3">
+                <R>0.7294117647058823</R>
+                <G>0.7686274509803922</G>
+                <B>0.8313725490196079</B>
+              </Color3>
+              <float name="TextSize">14</float>
+              <bool name="TextWrapped">true</bool>
+              <token name="TextXAlignment">0</token>
+              <token name="TextYAlignment">0</token>
+              <float name="ZIndex">14</float>
+            </Properties>
+          </Item>
+        </Item>
+      </Item>
+      <Item class="TextButton" referent="GUI48">
+        <Properties>
+          <string name="Name">Reroll</string>
+          <UDim2 name="Size">
+            <XS>0.5</XS>
+            <XO>-22</XO>
+            <YS>0</YS>
+            <YO>40</YO>
+          </UDim2>
+          <UDim2 name="Position">
+            <XS>0</XS>
+            <XO>16</XO>
+            <YS>1</YS>
+            <YO>-66</YO>
+          </UDim2>
+          <Color3 name="BackgroundColor3">
+            <R>0.12549019607843137</R>
+            <G>0.15294117647058825</G>
+            <B>0.2</B>
+          </Color3>
+          <Color3 name="TextColor3">
+            <R>0.9372549019607843</R>
+            <G>0.8274509803921568</G>
+            <B>0.5843137254901961</B>
+          </Color3>
+          <token name="Font">20</token>
+          <float name="TextSize">13</float>
+          <string name="Text">무료 새로고침 · 2회</string>
+          <bool name="TextWrapped">true</bool>
+          <float name="ZIndex">13</float>
+        </Properties>
+        <Item class="UICorner" referent="GUI49">
+          <Properties>
+            <string name="Name">Corner</string>
+            <UDim name="CornerRadius">
+              <S>0</S>
+              <O>8</O>
+            </UDim>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="TextButton" referent="GUI50">
+        <Properties>
+          <string name="Name">InspectBuild</string>
+          <UDim2 name="Size">
+            <XS>0.5</XS>
+            <XO>-22</XO>
+            <YS>0</YS>
+            <YO>40</YO>
+          </UDim2>
+          <UDim2 name="Position">
+            <XS>0.5</XS>
+            <XO>6</XO>
+            <YS>1</YS>
+            <YO>-66</YO>
+          </UDim2>
+          <Color3 name="BackgroundColor3">
+            <R>0.12549019607843137</R>
+            <G>0.15294117647058825</G>
+            <B>0.2</B>
+          </Color3>
+          <Color3 name="TextColor3">
+            <R>0.8117647058823529</R>
+            <G>0.8470588235294118</G>
+            <B>0.8980392156862745</B>
+          </Color3>
+          <token name="Font">20</token>
+          <float name="TextSize">13</float>
+          <string name="Text">보유 증강 · 행운 설명</string>
+          <bool name="TextWrapped">true</bool>
+          <float name="ZIndex">13</float>
+        </Properties>
+        <Item class="UICorner" referent="GUI51">
+          <Properties>
+            <string name="Name">Corner</string>
+            <UDim name="CornerRadius">
+              <S>0</S>
+              <O>8</O>
+            </UDim>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="TextLabel" referent="GUI52">
+        <Properties>
+          <string name="Name">Status</string>
+          <string name="Text" />
+          <UDim2 name="Size">
+            <XS>1</XS>
+            <XO>-32</XO>
+            <YS>0</YS>
+            <YO>18</YO>
+          </UDim2>
+          <UDim2 name="Position">
+            <XS>0</XS>
+            <XO>16</XO>
+            <YS>1</YS>
+            <YO>-22</YO>
+          </UDim2>
+          <float name="BackgroundTransparency">1</float>
+          <token name="Font">19</token>
+          <Color3 name="TextColor3">
+            <R>0.9372549019607843</R>
+            <G>0.8274509803921568</G>
+            <B>0.5843137254901961</B>
+          </Color3>
+          <float name="TextSize">11</float>
+          <bool name="TextWrapped">true</bool>
+          <token name="TextXAlignment">0</token>
+          <token name="TextYAlignment">1</token>
+          <float name="ZIndex">14</float>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
